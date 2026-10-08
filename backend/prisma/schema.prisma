@@ -1,0 +1,514 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id            String               @id @default(uuid())
+  email         String               @unique
+  name          String?
+  password      String
+  role          Role                 @default(STUDENT)
+  // Student's preferred medium/class, used to open the site where they left off
+  mediumId      String?
+  medium        Medium?              @relation(fields: [mediumId], references: [id], onDelete: SetNull)
+  classLevelId  String?
+  classLevel    ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
+  // Cached balance; the source of truth is the CoinTransaction ledger
+  coins         Int                  @default(0)
+  quizAttempts  QuizAttempt[]
+  coinTxns      CoinTransaction[]
+  orders        Order[]
+  noteAccess    NoteAccess[]
+  refreshTokens RefreshToken[]
+  resetTokens   PasswordResetToken[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Key/value app configuration editable from the admin panel
+// (storage, quiz rules, coins, social links, ...). Secrets inside `value`
+// are stored encrypted — see src/utils/crypto.ts.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Catalog: Medium → Class → Subject → (optional Part) → Chapter
+// ---------------------------------------------------------------------------
+
+// Admin-managed (Assamese Medium, English Medium, ...). Never hardcode the list.
+model Medium {
+  id         String    @id @default(uuid())
+  name       String
+  nativeName String?
+  slug       String    @unique
+  order      Int       @default(0)
+  isActive   Boolean   @default(true)
+  subjects   Subject[]
+  users      User[]
+  quizzes    Quiz[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// Class 1–12, shared by every medium. A class shows under a medium only when
+// that medium has active subjects in it.
+// A class / grade, shared by every medium. Fully admin-managed: "Class 5",
+// "LKG", "BA 1st Year" … The link part (slug) is used in student URLs
+// (/assamese-medium/class-5/...). Order = position on the student site.
+model ClassLevel {
+  id         String    @id @default(uuid())
+  name       String
+  nativeName String?
+  slug       String    @unique
+  order      Int       @default(0)
+  isActive   Boolean   @default(true)
+  subjects   Subject[]
+  quizzes    Quiz[]
+  users      User[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([order])
+}
+
+// Each medium has its own subject list per class.
+model Subject {
+  id           String        @id @default(uuid())
+  mediumId     String
+  medium       Medium        @relation(fields: [mediumId], references: [id], onDelete: Cascade)
+  classLevelId String
+  classLevel   ClassLevel    @relation(fields: [classLevelId], references: [id], onDelete: Restrict)
+  name         String
+  nativeName   String?
+  slug         String
+  order        Int           @default(0)
+  isActive     Boolean       @default(true)
+  parts        SubjectPart[]
+  chapters     Chapter[]
+  notes        Note[]
+  quizzes      Quiz[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([mediumId, classLevelId, slug])
+  @@index([mediumId, classLevelId, order])
+}
+
+// Optional grouping inside a subject: "Part 1", "Book 2", "Writing Skills".
+model SubjectPart {
+  id        String    @id @default(uuid())
+  subjectId String
+  subject   Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int       @default(0)
+  chapters  Chapter[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([subjectId, order])
+}
+
+// `order` is the position within its part (or within the no-part group).
+// Reading order across the subject = no-part chapters first, then each part
+// by SubjectPart.order — see src/services/catalog.service.ts.
+model Chapter {
+  id           String        @id @default(uuid())
+  subjectId    String
+  subject      Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  partId       String?
+  part         SubjectPart?  @relation(fields: [partId], references: [id], onDelete: SetNull)
+  number       Int
+  title        String
+  slug         String
+  order        Int           @default(0)
+  aboutHtml    String?
+  isPublished  Boolean       @default(true)
+  // The automatic chapter quiz (random quiz-marked MCQs). Off = only custom quizzes.
+  autoQuiz     Boolean       @default(true)
+  questions    Question[]
+  videos       Video[]
+  quizAttempts QuizAttempt[]
+  notes        Note[]
+  quizChapters QuizChapter[]
+  homeQuizzes  Quiz[]        @relation("QuizHomeChapter")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([subjectId, slug])
+  @@index([subjectId, partId, order])
+}
+
+// ---------------------------------------------------------------------------
+// Chapter content
+// ---------------------------------------------------------------------------
+
+enum QuestionKind {
+  QA
+  MCQ
+}
+
+// TEXTBOOK = from the school book; EXTRA = "extra advanced" beyond the book
+enum QuestionSource {
+  TEXTBOOK
+  EXTRA
+}
+
+// Client decision PENDING (task.md #7) — optional until decided.
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+// Rich-text fields (question, answer, explanation) hold SANITISED HTML only —
+// see src/utils/sanitizeHtml.ts. MCQ answers are never sent with the public
+// chapter payload (the quiz reuses these questions).
+model Question {
+  id           String         @id @default(uuid())
+  chapterId    String
+  chapter      Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  kind         QuestionKind
+  source       QuestionSource @default(TEXTBOOK)
+  question     String
+  // QA only
+  answer       String?
+  // MCQ only: array of 2–6 option strings (sanitised HTML) + 0-based correct index
+  options      Json?
+  correctIndex Int?
+  explanation  String?
+  difficulty   Difficulty?
+  order        Int            @default(0)
+  isPublished  Boolean        @default(true)
+  // MCQ only: may appear in quizzes (automatic ones, and random custom ones
+  // that use "quiz-marked only"). Off = practice on the chapter page only.
+  useInQuiz    Boolean        @default(true)
+  quizPicks    QuizQuestion[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([chapterId, source, kind, order])
+}
+
+// YouTube embed (Class Course channel). Order is per chapter.
+model Video {
+  id        String   @id @default(uuid())
+  chapterId String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  youtubeId String
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chapterId, order])
+}
+
+// ---------------------------------------------------------------------------
+// Quiz & coins
+// ---------------------------------------------------------------------------
+
+enum QuizStatus {
+  IN_PROGRESS
+  PAUSED
+  PASSED
+  FAILED
+  EXPIRED
+}
+
+// Server-timed quiz. A question's clock starts when the server reveals it
+// (questionDeadline); answers after the deadline count as wrong. Pausing while
+// a question is revealed forfeits that question. Unfinished attempts expire at
+// midnight Asia/Kolkata (dayKey). See src/services/quiz.service.ts.
+model QuizAttempt {
+  id                 String       @id @default(uuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Set for automatic chapter quizzes and single-chapter custom quizzes
+  chapterId          String?
+  chapter            Chapter?     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  // Custom quiz (null = the automatic chapter quiz). The title is kept so
+  // history still reads well after the quiz is deleted.
+  quizId             String?
+  quiz               Quiz?        @relation(fields: [quizId], references: [id], onDelete: SetNull)
+  quizTitle          String?
+  // IST calendar day the attempt was started, "YYYY-MM-DD"
+  dayKey             String
+  status             QuizStatus   @default(IN_PROGRESS)
+  // Question ids in the order they are asked (fixed at start)
+  questionIds        Json
+  // One entry per answered question: { optionIndex, correct, timedOut, answeredAt }
+  answers            Json         @default("[]")
+  currentIndex       Int          @default(0)
+  // Set while a question is revealed; null between questions / when paused
+  questionDeadline   DateTime?
+  score              Int          @default(0)
+  // Rules at start time, so admin edits don't change a running quiz
+  secondsPerQuestion Int
+  passMark           Int
+  coinsPerPass       Int?
+  answerReveal       AnswerReveal @default(AFTER_EACH)
+  // Shuffled options: per question, display position → original option index
+  optionOrders       Json?
+  coinsAwarded       Int          @default(0)
+  startedAt          DateTime     @default(now())
+  finishedAt         DateTime?
+  updatedAt          DateTime     @updatedAt
+
+  @@index([userId, dayKey])
+  @@index([userId, chapterId, status])
+  // Admin quiz reports (filters by day and per-chapter stats)
+  @@index([dayKey])
+  @@index([chapterId, status])
+  @@index([userId, quizId, status])
+  @@index([quizId, status])
+}
+
+enum QuizPickMode {
+  // N random questions from the chapters' pool (with filters / difficulty mix)
+  RANDOM
+  // Exactly the hand-picked questions (QuizQuestion), optionally shuffled
+  FIXED
+}
+
+enum AnswerReveal {
+  AFTER_EACH
+  AT_END
+  NEVER
+}
+
+// A quiz built by the admin from any chapters of ONE medium + class. Every
+// rule left null falls back to Settings → Quiz & coins.
+// Rules live in src/services/quizBuilder.service.ts.
+model Quiz {
+  id                    String           @id @default(uuid())
+  title                 String
+  description           String?
+  mediumId              String
+  medium                Medium           @relation(fields: [mediumId], references: [id], onDelete: Cascade)
+  classLevelId          String
+  classLevel            ClassLevel       @relation(fields: [classLevelId], references: [id], onDelete: Cascade)
+  // Where students find it: the one chapter / the one subject / else the class page
+  subjectId             String?
+  subject               Subject?         @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  chapterId             String?
+  chapter               Chapter?         @relation("QuizHomeChapter", fields: [chapterId], references: [id], onDelete: SetNull)
+  chapters              QuizChapter[]
+  questions             QuizQuestion[]
+  attempts              QuizAttempt[]
+  pickMode              QuizPickMode     @default(RANDOM)
+  questionCount         Int?
+  // RANDOM filters; empty = any
+  sources               QuestionSource[]
+  difficulties          Difficulty[]
+  // Optional exact mix, e.g. {"EASY":4,"MEDIUM":4,"HARD":2}
+  difficultyMix         Json?
+  onlyQuizMarked        Boolean          @default(true)
+  secondsPerQuestion    Int?
+  passMark              Int?
+  coinsPerPass          Int?
+  shuffleQuestions      Boolean          @default(true)
+  shuffleOptions        Boolean          @default(false)
+  answerReveal          AnswerReveal     @default(AFTER_EACH)
+  maxAttemptsPerStudent Int?
+  availableFrom         DateTime?
+  availableUntil        DateTime?
+  isPublished           Boolean          @default(false)
+  order                 Int              @default(0)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([mediumId, classLevelId])
+  @@index([subjectId])
+  @@index([chapterId])
+}
+
+model QuizChapter {
+  quizId    String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@id([quizId, chapterId])
+  @@index([chapterId])
+}
+
+// Hand-picked questions of a FIXED quiz, in order
+model QuizQuestion {
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  order      Int      @default(0)
+
+  @@id([quizId, questionId])
+  @@index([questionId])
+}
+
+enum CoinReason {
+  QUIZ_PASS
+  // Coins held when a note order is created (refId = Order id)
+  NOTE_DISCOUNT
+  // Held coins returned when that order is cancelled/abandoned (refId = Order id)
+  NOTE_DISCOUNT_REFUND
+  ADMIN_ADJUST
+}
+
+// Append-only coin ledger. User.coins is a cache of the running total.
+// (reason, refId) is unique so the same quiz/order can never pay out twice.
+model CoinTransaction {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delta        Int
+  balanceAfter Int
+  reason       CoinReason
+  // QuizAttempt id / Order id; null for admin adjustments
+  refId        String?
+  note         String?
+  createdById  String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([reason, refId])
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Premium notes & payments (Razorpay)
+// ---------------------------------------------------------------------------
+
+// A PDF attached to a chapter or a whole subject. The file lives in the
+// PRIVATE R2 bucket and is only ever served through short-lived signed URLs.
+model Note {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  chapterId   String?
+  chapter     Chapter?     @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  subjectId   String?
+  subject     Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  // Price in paise (₹49 = 4900). Ignored when isFree.
+  pricePaise  Int          @default(0)
+  isFree      Boolean      @default(false)
+  // Object key in the private bucket; null until a PDF is uploaded
+  fileKey     String?
+  fileSize    Int?
+  isPublished Boolean      @default(false)
+  order       Int          @default(0)
+  orders      Order[]
+  access      NoteAccess[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([chapterId])
+  @@index([subjectId])
+}
+
+enum OrderStatus {
+  CREATED
+  PAID
+  // Abandoned or replaced before payment; held coins were refunded
+  CANCELLED
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  noteId            String
+  note              Note        @relation(fields: [noteId], references: [id], onDelete: Restrict)
+  listPricePaise    Int
+  coinsUsed         Int         @default(0)
+  discountPaise     Int         @default(0)
+  // What the student actually pays (listPrice − discount); 0 = fully covered by coins
+  amountPaise       Int
+  currency          String      @default("INR")
+  status            OrderStatus @default(CREATED)
+  razorpayOrderId   String?     @unique
+  razorpayPaymentId String?     @unique
+  paidAt            DateTime?
+  // How the payment was confirmed: "verify" | "webhook" | "reconcile" | "coins"
+  confirmedVia      String?
+  lastError         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  access            NoteAccess?
+
+  @@index([userId, noteId, status])
+  @@index([status, createdAt])
+}
+
+// Who may download which note. One row per user+note, created only when an
+// order is confirmed PAID (or by an admin grant).
+model NoteAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  orderId   String?  @unique
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  grantedAt DateTime @default(now())
+
+  @@unique([userId, noteId])
+}
+
+// ---------------------------------------------------------------------------
+// Static pages (About, Contact, Privacy, Terms, Refund policy) and FAQ
+// ---------------------------------------------------------------------------
+
+// One row per known page slug (see src/services/pages.service.ts). bodyHtml is
+// sanitised on save and may contain {{tokens}} filled from live settings.
+model Page {
+  slug        String   @id
+  title       String
+  bodyHtml    String
+  isPublished Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+model FaqItem {
+  id          String   @id @default(uuid())
+  question    String
+  answerHtml  String
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}

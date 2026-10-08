@@ -1,0 +1,93 @@
+name: classcourse
+
+# Host-side settings come from the root .env (see .env.example):
+#   POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB — defaults are for local dev
+#   only; production MUST set a strong POSTGRES_PASSWORD before first start.
+#   POSTGRES_PORT / BACKEND_PORT — host ports.
+#   BIND_ADDRESS — 127.0.0.1 (default) keeps both ports private to the host;
+#   put nginx/Caddy in front of the API. Never expose Postgres publicly.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-classcourse_db}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-classcourse_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    memswap_limit: 512m
+    logging: *logging
+
+  # One-shot: applies pending Prisma migrations, then exits. Runs the `build`
+  # stage (which still has the Prisma CLI — the production stage strips it).
+  # `backend` won't start until this exits 0, so a plain `docker compose up`
+  # never boots against an unmigrated database.
+  # Also used for one-off admin tasks, e.g.:
+  #   docker compose run --rm migrate npm run seed
+  #   docker compose run --rm migrate npm run create-admin -- you@example.com 'password'
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: build
+    command: npx prisma migrate deploy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-classcourse_db}
+      NODE_OPTIONS: --max-old-space-size=192
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 384m
+    memswap_limit: 640m
+    logging: *logging
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-classcourse_db}
+      PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # Lets in-flight requests (e.g. a payment verify) finish on deploys.
+    stop_grace_period: 15s
+    mem_limit: 512m
+    memswap_limit: 768m
+    logging: *logging
+
+volumes:
+  postgres_data:

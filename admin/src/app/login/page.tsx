@@ -1,0 +1,365 @@
+"use client";
+
+import { FormEvent, KeyboardEvent, Suspense, useId, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { clearTokens, setTokens } from "@/lib/auth";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+// Brand colours from the client's requirements document (navy / indigo / amber).
+const NAVY = "#1f1d4a";
+
+// ---------------------------------------------------------------------------
+// Icons (inline, decorative — the controls that use them carry their own labels)
+// ---------------------------------------------------------------------------
+
+const MailIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <path d="m4 7 8 6 8-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+    <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" strokeLinecap="round" />
+  </svg>
+);
+
+const EyeIcon = ({ open }: { open: boolean }) =>
+  open ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+      <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+      <path d="M3 3l18 18" strokeLinecap="round" />
+      <path d="M10.6 5.1A9.7 9.7 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.2 4.1M6.2 6.7C3.9 8.3 2.5 12 2.5 12S6 19 12 19a9.4 9.4 0 0 0 4.4-1.1" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" strokeLinecap="round" />
+    </svg>
+  );
+
+const AlertIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.5v5.5M12 16.5h.01" strokeLinecap="round" />
+  </svg>
+);
+
+const Spinner = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity={0.3} strokeWidth={3} />
+    <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+  </svg>
+);
+
+// ---------------------------------------------------------------------------
+// Brand panel: the stacked "3D" cards from the client's document cover
+// ---------------------------------------------------------------------------
+
+function CardStack({ compact = false }: { compact?: boolean }) {
+  const size = compact ? "w-44 h-24 sm:w-52 sm:h-28" : "w-72 h-40 xl:w-80 xl:h-44";
+  const card = `absolute inset-0 rounded-2xl motion-safe:animate-[cc-deal_700ms_cubic-bezier(.2,.8,.2,1)_both]`;
+  return (
+    <div className={`relative ${size}`} aria-hidden="true">
+      <div
+        className={`${card} bg-[#312e81] shadow-[0_18px_40px_-12px_rgba(0,0,0,.6)]`}
+        style={{ transform: "translate(22px, 22px) rotate(6deg)", ["--cc-rot" as string]: "6deg", ["--cc-rot-from" as string]: "16deg", animationDelay: "60ms" }}
+      />
+      <div
+        className={`${card} bg-[#4338ca] shadow-[0_18px_40px_-12px_rgba(0,0,0,.55)]`}
+        style={{ transform: "translate(11px, 11px) rotate(3deg)", ["--cc-rot" as string]: "3deg", ["--cc-rot-from" as string]: "11deg", animationDelay: "140ms" }}
+      />
+      <div
+        className={`${card} flex flex-col justify-between bg-gradient-to-br from-[#6366f1] to-[#4f46e5] p-4 text-white shadow-[0_24px_50px_-14px_rgba(0,0,0,.6),inset_0_1px_0_rgba(255,255,255,.25)] ${compact ? "" : "xl:p-6"}`}
+        style={{ ["--cc-rot-from" as string]: "-6deg", animationDelay: "220ms" }}
+      >
+        <span className={`font-[family-name:var(--font-display)] font-bold leading-none ${compact ? "text-lg" : "text-2xl xl:text-3xl"}`}>
+          Class 1 – 12
+        </span>
+        <span className={`flex items-center gap-x-2 whitespace-nowrap font-medium text-indigo-100 ${compact ? "text-[11px]" : "text-sm"}`}>
+          Q&amp;A <span className="text-indigo-300">·</span> MCQ <span className="text-indigo-300">·</span> Notes
+          {!compact && (
+            <>
+              <span className="text-indigo-300">·</span> Quiz
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BrandMark({ light = true }: { light?: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-400 font-[family-name:var(--font-display)] text-sm font-extrabold text-[#1f1d4a] shadow-[0_4px_0_#b45309]">
+        CC
+      </span>
+      <span className="leading-tight">
+        <span className={`block font-[family-name:var(--font-display)] text-lg font-bold ${light ? "text-white" : "text-[#1f1d4a]"}`}>
+          Class Course
+        </span>
+        <span className={`block text-xs font-medium uppercase tracking-[0.18em] ${light ? "text-indigo-200" : "text-indigo-600"}`}>
+          Admin panel
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// Subtle dot grid + glow so the navy panel has depth instead of a flat fill.
+const panelBackground = {
+  backgroundColor: NAVY,
+  backgroundImage: [
+    "radial-gradient(circle at 85% 15%, rgba(99,102,241,.45), transparent 45%)",
+    "radial-gradient(circle at 10% 90%, rgba(245,158,11,.18), transparent 40%)",
+    "radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)",
+  ].join(","),
+  backgroundSize: "auto, auto, 22px 22px",
+};
+
+// ---------------------------------------------------------------------------
+// Form
+// ---------------------------------------------------------------------------
+
+const friendlyError = (status: number, message?: string) => {
+  if (status === 401) return "That email and password don't match. Check them and try again.";
+  if (status === 429) return "Too many sign-in attempts. Please wait 15 minutes and try again.";
+  if (status === 400) return "Enter a valid email address and your password.";
+  return message || "Sign-in failed. Please try again.";
+};
+
+function LoginForm() {
+  const router = useRouter();
+  const denied = useSearchParams().get("denied");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0); // re-triggers the shake on each failure
+  const [loading, setLoading] = useState(false);
+
+  const ids = { email: useId(), password: useId(), error: useId(), caps: useId() };
+  // `?denied=1` is set by the (panel) layout when a non-admin token is rejected.
+  const message = error ?? (denied ? "This account doesn't have admin access." : null);
+
+  const fail = (text: string) => {
+    setError(text);
+    setAttempt((n) => n + 1);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        fail(friendlyError(res.status, data.error));
+        return;
+      }
+      if (data.user?.role !== "ADMIN") {
+        clearTokens();
+        fail("This account doesn't have admin access.");
+        return;
+      }
+
+      setTokens(data.accessToken, data.refreshToken);
+      router.push("/dashboard");
+    } catch {
+      fail("Can't reach the server. Check your internet connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const trackCapsLock = (e: KeyboardEvent<HTMLInputElement>) => setCapsLock(e.getModifierState("CapsLock"));
+
+  const inputBase =
+    "peer h-12 w-full rounded-xl border bg-white pl-11 text-base text-slate-900 placeholder:text-slate-400 outline-none transition " +
+    "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 " +
+    "dark:bg-white/[0.04] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/20 " +
+    "aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-500/15";
+  const inputBorder = "border-slate-200 dark:border-white/10";
+  const iconBox =
+    "pointer-events-none absolute inset-y-0 left-0 grid w-11 place-items-center text-slate-400 transition peer-focus:text-indigo-500 dark:text-slate-500";
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      noValidate={false}
+      className="motion-safe:animate-[cc-rise_600ms_cubic-bezier(.2,.8,.2,1)_both] [animation-delay:120ms]"
+      aria-describedby={message ? ids.error : undefined}
+    >
+      <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight text-[#1f1d4a] sm:text-4xl dark:text-white">
+        Welcome back
+      </h1>
+      <p className="mt-2 text-[15px] text-slate-500 dark:text-slate-400">Sign in to manage classes, content, quizzes and notes.</p>
+
+      {message && (
+        <div
+          key={attempt}
+          id={ids.error}
+          role="alert"
+          className="mt-6 flex gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-800 motion-safe:animate-[cc-shake_400ms_ease-in-out] dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
+        >
+          <AlertIcon />
+          <span>{message}</span>
+        </div>
+      )}
+
+      <div className="mt-7 space-y-5">
+        <div>
+          <label htmlFor={ids.email} className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Email
+          </label>
+          <div className="relative">
+            <input
+              id={ids.email}
+              type="email"
+              name="email"
+              autoComplete="username"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={Boolean(error)}
+              className={`${inputBase} ${inputBorder} pr-4`}
+            />
+            <span className={iconBox}>
+              <MailIcon />
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={ids.password} className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id={ids.password}
+              type={showPassword ? "text" : "password"}
+              name="password"
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyUp={trackCapsLock}
+              onKeyDown={trackCapsLock}
+              onBlur={() => setCapsLock(false)}
+              aria-invalid={Boolean(error)}
+              aria-describedby={capsLock ? ids.caps : undefined}
+              className={`${inputBase} ${inputBorder} pr-14`}
+            />
+            <span className={iconBox}>
+              <LockIcon />
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              aria-controls={ids.password}
+              title={showPassword ? "Hide password" : "Show password"}
+              className="absolute inset-y-1 right-1 grid w-11 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              <EyeIcon open={!showPassword} />
+            </button>
+          </div>
+          {capsLock && (
+            <p id={ids.caps} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] dark:bg-amber-400/15">⇪</span>
+              Caps Lock is on
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Pressable "3D" button, matching the site's depth style */}
+      <button
+        type="submit"
+        disabled={loading}
+        className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-base font-semibold text-white shadow-[0_5px_0_#312e81,0_12px_24px_-8px_rgba(67,56,202,.6)] transition-[transform,box-shadow,background-color] hover:bg-indigo-500 active:translate-y-[3px] active:shadow-[0_2px_0_#312e81,0_6px_14px_-8px_rgba(67,56,202,.6)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 disabled:cursor-wait disabled:opacity-80 disabled:active:translate-y-0"
+      >
+        {loading ? (
+          <>
+            <Spinner />
+            <span>Signing in…</span>
+          </>
+        ) : (
+          <span>Sign in</span>
+        )}
+      </button>
+
+      <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
+        Admin access only · Students sign in on the main Class Course site
+      </p>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <main className="min-h-dvh bg-[#f7f6f2] lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] dark:bg-[#0d0c22]">
+      {/* Brand panel: full-height column on large screens, header band on phones/tablets */}
+      <section
+        style={panelBackground}
+        className="relative overflow-hidden px-6 pb-24 pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-10 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-12 xl:px-20"
+      >
+        <BrandMark />
+
+        {/* Large screens: headline + big card stack */}
+        <div className="hidden lg:block">
+          <CardStack />
+          <h2 className="mt-16 max-w-md font-[family-name:var(--font-display)] text-4xl font-bold leading-[1.1] tracking-tight text-white xl:text-5xl">
+            Every class. Every chapter.{" "}
+            <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">One place.</span>
+          </h2>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-indigo-100/80">
+            Manage Assamese and English medium content, quizzes, coins and premium notes for students across Assam.
+          </p>
+        </div>
+
+        <div className="hidden items-center gap-3 lg:flex">
+          <span className="h-1 w-10 rounded-full bg-amber-400" />
+          <span className="text-sm text-indigo-200/80">Classes 1–12 · Q&amp;A · MCQ · Notes</span>
+        </div>
+
+        {/* Phones / tablets: compact stack in the header band */}
+        <div className="mt-6 flex justify-end pr-6 sm:pr-10 lg:hidden">
+          <CardStack compact />
+        </div>
+      </section>
+
+      {/* Form: overlaps the header band on small screens, centred column on large ones */}
+      <section className="relative -mt-16 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-6 lg:mt-0 lg:flex lg:items-center lg:justify-center lg:px-12 lg:py-12">
+        <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-200/70 bg-white p-6 shadow-[0_24px_60px_-20px_rgba(31,29,74,.35)] sm:p-9 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none dark:border-white/10 dark:bg-[#15143a] lg:dark:bg-transparent">
+          <Suspense>
+            <LoginForm />
+          </Suspense>
+        </div>
+      </section>
+    </main>
+  );
+}
