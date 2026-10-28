@@ -6,7 +6,10 @@ import {
   getSubject,
   listMediums,
   checkAnswer,
+  featuredVideos,
+  search,
 } from "../controllers/catalog.controller";
+import { checkAnswerLimiter, searchLimiter } from "../middleware/rateLimiter";
 import { validateBody } from "../middleware/validate.middleware";
 import { available as availableQuizzes } from "../controllers/quiz.controller";
 import { checkAnswerSchema } from "../validations/content.validation";
@@ -15,6 +18,8 @@ import { checkAnswerSchema } from "../validations/content.validation";
 const router = Router();
 
 router.get("/mediums", listMediums);
+router.get("/search", searchLimiter, search);
+router.get("/videos/featured", featuredVideos);
 router.get("/mediums/:medium", getMediumClasses);
 router.get("/mediums/:medium/classes/:classSlug", getClassSubjects);
 router.get("/mediums/:medium/classes/:classSlug/subjects/:subject", getSubject);
@@ -23,6 +28,6 @@ router.get("/mediums/:medium/classes/:classSlug/subjects/:subject/chapters/:chap
 // Quizzes on a page: ?chapterId= | ?subjectId= | ?mediumId=&classId= (or &classSlug=)
 router.get("/quizzes", availableQuizzes);
 
-router.post("/questions/:id/check", validateBody(checkAnswerSchema), checkAnswer);
+router.post("/questions/:id/check", checkAnswerLimiter, validateBody(checkAnswerSchema), checkAnswer);
 
 export default router;

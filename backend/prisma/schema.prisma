@@ -223,16 +223,26 @@ model Question {
   @@index([chapterId, source, kind, order])
 }
 
+enum VideoFormat {
+  LANDSCAPE
+  SHORT
+}
+
 // YouTube embed (Class Course channel). Order is per chapter.
 model Video {
-  id        String   @id @default(uuid())
-  chapterId String
-  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
-  youtubeId String
-  title     String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String      @id @default(uuid())
+  chapterId  String
+  chapter    Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  youtubeId  String
+  // SHORT = vertical 9:16 YouTube Short, LANDSCAPE = normal 16:9 video.
+  // Detected from a /shorts/ link on save; the admin can change it.
+  format     VideoFormat @default(LANDSCAPE)
+  // Set = shown in the home page "Videos" row (newest first); null = not.
+  featuredAt DateTime?
+  title      String
+  order      Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@index([chapterId, order])
 }
@@ -499,6 +509,20 @@ model Page {
   isPublished Boolean  @default(false)
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
+}
+
+// "Latest news" links on the home page (external sites, admin-managed).
+model NewsLink {
+  id        String   @id @default(uuid())
+  source    String
+  title     String
+  url       String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
 }
 
 model FaqItem {

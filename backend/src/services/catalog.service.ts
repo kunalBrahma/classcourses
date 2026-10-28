@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 
@@ -24,6 +25,22 @@ export const classSlugFrom = (raw: string): string => {
   const v = String(raw ?? "").trim().toLowerCase();
   return /^\d+$/.test(v) ? `class-${Number(v)}` : v;
 };
+
+// What the public site may show: active subject in an active medium and class,
+// and (for chapters) published. Reuse these instead of re-listing the rules.
+export const publicSubjectWhere = {
+  isActive: true,
+  medium: { isActive: true },
+  classLevel: { isActive: true },
+} satisfies Prisma.SubjectWhereInput;
+
+export const publicChapterWhere = {
+  isPublished: true,
+  subject: publicSubjectWhere,
+} satisfies Prisma.ChapterWhereInput;
+
+// Site link for a catalog level: /medium[/class[/subject[/chapter]]]
+export const catalogHref = (...slugs: string[]) => `/${slugs.join("/")}`;
 
 // The public shape of a class wherever it appears in an API response.
 export const classSelect = { id: true, name: true, nativeName: true, slug: true } as const;

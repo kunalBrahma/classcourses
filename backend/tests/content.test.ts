@@ -282,6 +282,80 @@ describe("videos", () => {
     }
   });
 
+  it("detects Shorts from the link and lets the admin change the format", async () => {
+    const short = await post(`/api/admin/chapters/${chapterId}/videos`, {
+      url: "https://youtube.com/shorts/ccccccccccc?feature=share",
+      title: "Short",
+    });
+    expect(short.body.video).toMatchObject({ youtubeId: "ccccccccccc", format: "SHORT" });
+
+    const long = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "https://youtu.be/ddddddddddd", title: "Long" });
+    expect(long.body.video.format).toBe("LANDSCAPE");
+
+    // A youtu.be link can't say it's a Short, so the admin can say so.
+    const picked = await post(`/api/admin/chapters/${chapterId}/videos`, {
+      url: "https://youtu.be/eeeeeeeeeee",
+      title: "Picked",
+      format: "SHORT",
+    });
+    expect(picked.body.video.format).toBe("SHORT");
+    expect((await post(`/api/admin/chapters/${chapterId}/videos`, { url: "eeeeeeeeeee", title: "x", format: "SQUARE" })).status).toBe(400);
+
+    const patch = (id: string, body: object) => api().patch(`/api/admin/videos/${id}`).set("Authorization", admin).send(body);
+    expect((await patch(long.body.video.id, { format: "SHORT" })).body.video.format).toBe("SHORT");
+    // Title-only edits keep the format; a new link without a format re-detects it.
+    expect((await patch(long.body.video.id, { title: "Renamed" })).body.video.format).toBe("SHORT");
+    expect((await patch(long.body.video.id, { url: "https://www.youtube.com/watch?v=fffffffffff" })).body.video).toMatchObject({
+      youtubeId: "fffffffffff",
+      format: "LANDSCAPE",
+    });
+
+    const pub = await api().get(`${CHAPTER_URL}/chapter-1`);
+    expect(pub.body.videos.map((v: { format: string }) => v.format)).toEqual(["SHORT", "LANDSCAPE", "SHORT"]);
+
+    for (const v of [short, long, picked]) {
+      await api().delete(`/api/admin/videos/${v.body.video.id}`).set("Authorization", admin);
+    }
+  });
+
+  it("puts chosen videos on the home page, newest first, from visible chapters only", async () => {
+    const featured = async () =>
+      (await api().get("/api/catalog/videos/featured")).body.videos as { id: string; format: string; chapter: { href: string } }[];
+    const a = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "https://youtube.com/shorts/ggggggggggg", title: "Home short", featured: true });
+    const b = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "hhhhhhhhhhh", title: "Not on home" });
+    expect(a.body.video.featuredAt).not.toBeNull();
+    expect(b.body.video.featuredAt).toBeNull();
+
+    let list = await featured();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: a.body.video.id,
+      youtubeId: "ggggggggggg",
+      format: "SHORT",
+      title: "Home short",
+      chapter: { number: 1, href: "/english-medium/class-9/english/chapter-1" },
+      subject: { name: "English" },
+      classLevel: { name: "Class 9" },
+    });
+
+    // The most recently featured comes first; editing the title doesn't move it.
+    await patch(`/api/admin/videos/${b.body.video.id}`, { featured: true });
+    await patch(`/api/admin/videos/${a.body.video.id}`, { title: "Home short (renamed)" });
+    expect((await featured()).map((v) => v.id)).toEqual([b.body.video.id, a.body.video.id]);
+
+    // Hidden while the chapter is unpublished.
+    await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: false } });
+    expect(await featured()).toEqual([]);
+    await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: true } });
+
+    await patch(`/api/admin/videos/${b.body.video.id}`, { featured: false });
+    list = await featured();
+    expect(list.map((v) => v.id)).toEqual([a.body.video.id]);
+
+    for (const v of [a, b]) await api().delete(`/api/admin/videos/${v.body.video.id}`).set("Authorization", admin);
+    expect(await featured()).toEqual([]);
+  });
+
   it("adds, reorders and shows videos on the chapter page", async () => {
     const a = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "https://youtu.be/aaaaaaaaaaa", title: "Part A" });
     const b = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "bbbbbbbbbbb", title: "Part B" });

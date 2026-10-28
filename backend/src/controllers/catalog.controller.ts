@@ -3,11 +3,15 @@ import { QuestionKind, QuestionSource } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
+import { z } from "zod";
 import {
   findPublicSubject,
   getPublishedChapters,
+  catalogHref,
   classSelect,
   classSlugFrom,
+  publicChapterWhere,
+  publicSubjectWhere,
   sortChaptersInReadingOrder,
 } from "../services/catalog.service";
 import { publicNoteWhere } from "../services/order.service";
@@ -172,7 +176,7 @@ export const getChapter = asyncHandler(async (req: Request, res: Response) => {
     prisma.video.findMany({
       where: { chapterId: chapter.id },
       orderBy: { order: "asc" },
-      select: { id: true, youtubeId: true, title: true },
+      select: { id: true, youtubeId: true, format: true, title: true },
     }),
     prisma.note.findMany({
       where: { AND: [publicNoteWhere, { OR: [{ chapterId: chapter.id }, { subjectId: subject.id, chapterId: null }] }] },
@@ -284,3 +288,150 @@ const groupByPart = (parts: PartLite[], chapters: ChapterLite[]) => {
   }
   return groups;
 };
+
+// ===========================================================================
+// Home page videos
+// ===========================================================================
+
+// Videos the admin put on the home page, newest first, from visible chapters only.
+export const featuredVideos = asyncHandler(async (_req: Request, res: Response) => {
+  const videos = await prisma.video.findMany({
+    where: { featuredAt: { not: null }, chapter: publicChapterWhere },
+    orderBy: { featuredAt: "desc" },
+    take: 12,
+    select: {
+      id: true,
+      youtubeId: true,
+      format: true,
+      title: true,
+      chapter: {
+        select: {
+          title: true,
+          number: true,
+          slug: true,
+          subject: {
+            select: {
+              name: true,
+              nativeName: true,
+              slug: true,
+              medium: { select: { slug: true } },
+              classLevel: { select: { name: true, slug: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  res.json({
+    videos: videos.map(({ chapter: { subject, ...chapter }, ...v }) => ({
+      ...v,
+      chapter: {
+        title: chapter.title,
+        number: chapter.number,
+        href: catalogHref(subject.medium.slug, subject.classLevel.slug, subject.slug, chapter.slug),
+      },
+      subject: { name: subject.name, nativeName: subject.nativeName },
+      classLevel: { name: subject.classLevel.name },
+    })),
+  });
+});
+
+// ===========================================================================
+// Search
+// ===========================================================================
+
+const searchQuery = z.object({ q: z.string().trim().min(2).max(60) });
+const SEARCH_LIMIT = 20;
+
+type SearchResult = {
+  type: "medium" | "class" | "subject" | "chapter";
+  label: string;
+  nativeLabel: string | null;
+  context: string;
+  href: string;
+};
+
+// Names in English or Assamese, broad matches first (medium → class → subject → chapter).
+export const search = asyncHandler(async (req: Request, res: Response) => {
+  const { q } = searchQuery.parse(req.query);
+  const match = { contains: q, mode: "insensitive" } as const;
+  const named = { OR: [{ name: match }, { nativeName: match }] };
+
+  const [mediums, classes, subjects, chapters] = await Promise.all([
+    prisma.medium.findMany({
+      where: { isActive: true, ...named },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      take: SEARCH_LIMIT,
+      select: { name: true, nativeName: true, slug: true },
+    }),
+    // A class appears once per medium that teaches it (the class page is per medium).
+    prisma.subject.findMany({
+      where: { ...publicSubjectWhere, classLevel: { isActive: true, ...named } },
+      distinct: ["mediumId", "classLevelId"],
+      orderBy: [{ medium: { order: "asc" } }, { classLevel: { order: "asc" } }],
+      take: SEARCH_LIMIT,
+      select: {
+        medium: { select: { name: true, slug: true } },
+        classLevel: { select: { name: true, nativeName: true, slug: true } },
+      },
+    }),
+    prisma.subject.findMany({
+      where: { ...publicSubjectWhere, ...named },
+      orderBy: [{ medium: { order: "asc" } }, { classLevel: { order: "asc" } }, { order: "asc" }],
+      take: SEARCH_LIMIT,
+      select: {
+        name: true,
+        nativeName: true,
+        slug: true,
+        medium: { select: { name: true, slug: true } },
+        classLevel: { select: { name: true, slug: true } },
+      },
+    }),
+    prisma.chapter.findMany({
+      where: { ...publicChapterWhere, title: match },
+      orderBy: [{ subject: { medium: { order: "asc" } } }, { subject: { classLevel: { order: "asc" } } }, { number: "asc" }],
+      take: SEARCH_LIMIT,
+      select: {
+        number: true,
+        title: true,
+        slug: true,
+        subject: {
+          select: {
+            name: true,
+            slug: true,
+            medium: { select: { name: true, slug: true } },
+            classLevel: { select: { name: true, slug: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const results: SearchResult[] = [
+    ...mediums.map((m) => ({ type: "medium" as const, label: m.name, nativeLabel: m.nativeName, context: "Medium", href: catalogHref(m.slug) })),
+    ...classes.map(({ medium, classLevel }) => ({
+      type: "class" as const,
+      label: classLevel.name,
+      nativeLabel: classLevel.nativeName,
+      context: medium.name,
+      href: catalogHref(medium.slug, classLevel.slug),
+    })),
+    ...subjects.map((s) => ({
+      type: "subject" as const,
+      label: s.name,
+      nativeLabel: s.nativeName,
+      context: `${s.medium.name} · ${s.classLevel.name}`,
+      href: catalogHref(s.medium.slug, s.classLevel.slug, s.slug),
+    })),
+    ...chapters.map(({ subject: s, ...c }) => ({
+      type: "chapter" as const,
+      label: `Chapter ${c.number}: ${c.title}`,
+      nativeLabel: null,
+      context: `${s.medium.name} · ${s.classLevel.name} · ${s.name}`,
+      href: catalogHref(s.medium.slug, s.classLevel.slug, s.slug, c.slug),
+    })),
+  ];
+
+  res.json({ q, results: results.slice(0, SEARCH_LIMIT) });
+});

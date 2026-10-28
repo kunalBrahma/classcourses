@@ -333,6 +333,66 @@ visible 10 s countdown on each question.
   targets for young students.
 - Respect `prefers-reduced-motion`.
 
+## 9b. Client home-page mock (28 Oct 2026) — review and design direction
+
+Source: `docs/design/home-page-mock.html`. It's a
+single-file click-through prototype, so it shows **look and layout**, not
+behaviour. Move it to `docs/design/` (anything in `public/` is served on the
+live site).
+
+### What we adopt
+- **Palette:** amber/cream replaces navy/indigo on the student site:
+  amber `#F5A623`, light amber `#FFBE4D`, dark amber `#C9780C`, cream
+  background `#FFF7E8`, ink `#3A2A00`, and footer brown `#2E2000`. This
+  partly answers "colour scheme" (#13). Because everything is a token in
+  `frontend/src/app/globals.css`, only the tokens change. The admin keeps its
+  navy look.
+- **"3D" means accents** (#12, to be confirmed): soft layered amber-tinted
+  shadows, gradient surfaces, inset highlights, a 3D coin and pressable
+  buttons. These map onto the existing `card-3d` / `press-3d` tokens. It is
+  not full 3D.
+- **Header:** sticky amber gradient bar with the logo, coin chip, search,
+  🌐 switcher and a right-hand menu.
+- **Home sections, in this order:** coin card → quiz card → class grid
+  (book icons) → notes → videos row → news row → "What is Class Course?" →
+  dark footer.
+- **Card types:** class tiles, row cards (subject or chapter with ›),
+  note cards (FREE/PREMIUM badge, price, "use coins"), video cards and news
+  cards. The rows scroll sideways.
+
+### What we change (and why)
+| Mock | Problem | Our build |
+|---|---|---|
+| One page that swaps "screens" with JS | No URLs, so no SEO, no back button, no sharing | Real routes: `/[medium]/[class]/[subject]/[chapter]` |
+| No medium step; the 🌐 menu offers English/Assamese/Hindi/Bengali | Mixes up *medium* (content) with *site language* (UI translation, which isn't in scope) | 🌐 = **medium switcher** read from the DB (remembered in a cookie). The class grid shows the classes of the chosen medium. Ask the client (#34). |
+| Subject → separate chapter-list screen | The requirements ask for a **chapter accordion on the class page** | Accordion on the class page, plus a subject page for SEO |
+| Text is 9.5–13.5 px | Too small for Class 1 readers, and Assamese conjuncts need more size | Body text ≥ 16 px, labels ≥ 13 px, Assamese at 17–18 px |
+| White text on `#F5A623`, `#b08347` and `#9a7a3f` on white | Contrast is 2–3.9:1, which fails WCAG AA | Buttons use dark ink on amber or white on `#B45309`. Muted text darkened to ≥ 4.5:1. |
+| Clickable `div`s, 30 px icon buttons, no focus ring | Not usable by keyboard or screen reader; tap targets too small | Real `<a>`/`<button>` elements, 44 px targets, visible focus ring |
+| Emoji as icons (📝📚🎥) | They look different on Android, iOS and Windows | Lucide/SVG icons in the same style as the book tiles |
+| "★ 120" coins for everyone; "Redeem" | Guests have no coins, and coins have no "redeem" step (they are a discount on notes) | Guests see "Sign in to earn coins". Signed-in students see their live balance. "Use coins" links to `/notes`. |
+| Static 7/10 ring and "Daily Chapter Quiz" | There is no single daily quiz, because quizzes start from a chapter | Signed in: quizzes left today (daily limit), paused quizzes to resume and the last score. Guest: the rules. All numbers come from the `quiz` setting. |
+| Quiz rules text | Wrong for our rules: it doesn't say that leaving **mid-question forfeits that question** | Generated from settings, with the pause rule worded as the backend enforces it |
+| Coin maths in the browser (10 coins = ₹1) | Must never be computed client-side | `GET /api/notes/:id/quote` |
+| Hard-coded notes, videos and news | Need admin control | Notes: `/api/notes`. Videos: new "featured" list. News: new admin-managed links. |
+| Videos are a fixed 190×106 frame, autoplay `youtube.com` | Shorts get squashed, and the embed loads cookies | Shorts as 9:16 cards, long videos as 16:9. A thumbnail first, then a `youtube-nocookie` embed on tap. |
+| News includes Al Jazeera (international) | Questionable for children, and the client should own this list | The admin picks the sources. Ask the client (#35). |
+| Footer: About / Privacy / Terms / Contact | **Razorpay needs the Refund policy linked**; FAQ is missing | Footer lists every published page (as now) |
+| `Segoe UI` font | Has no Assamese glyphs on Android | Geist + Noto Sans Bengali (already set up) |
+| Light only | — | Keep dark mode with a warm brown variant, or drop it. Ask the client (#36). Default: keep it. |
+
+### Missing backend pieces (they come first, by the phase rule)
+1. **News links:** a `NewsLink` model (source, title, url, order, active)
+   with admin CRUD and reorder, plus public `GET /api/content/news`.
+2. **Home videos:** `Video.featured` (bool), an admin "Show on home page"
+   switch and a public `GET /api/catalog/videos/featured` (published chapters
+   only, with chapter link and `format`).
+3. **Search:** public `GET /api/catalog/search?q=` over medium, class,
+   subject and chapter names (English and Assamese), limited and
+   rate-limited, returning links.
+4. **Home notes teaser:** no backend work. `GET /api/notes` already returns
+   notes in admin order, so the home shows the first 4 plus "See all notes".
+
 ## 9a. Development order
 
 Work goes **phase by phase** (Phase 0 → 6 in `task.md`). Inside each phase

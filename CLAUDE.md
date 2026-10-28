@@ -61,7 +61,21 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 ### Chapter content backend (Phase 2, built)
 - **Models:** `Question` has kind QA|MCQ and source TEXTBOOK|EXTRA; MCQs store
   `options` (JSON string[]) and a 0-based `correctIndex`. `Video` stores a
-  YouTube ID.
+  YouTube ID plus `format` (LANDSCAPE 16:9 | SHORT 9:16; a `/shorts/` link
+  sets SHORT, otherwise the admin picks). `parseYouTubeLink()` in
+  `src/utils/youtube.ts` is the parser; the admin's copy in `lib/content.ts`
+  is preview-only. `Video.featuredAt` (admin sends `featured: true/false`)
+  puts a video in the home page row: public `GET /api/catalog/videos/featured`.
+- **Medium links** can't use a site page's word (`RESERVED_TOP_LEVEL` in
+  `src/utils/slug.ts`). When the frontend gets a new top-level route, add its
+  word there.
+- **Public visibility:** use `publicSubjectWhere` / `publicChapterWhere` and
+  `catalogHref()` from `catalog.service.ts` for any new public query, never
+  re-list the active/published rules.
+- **Search:** public `GET /api/catalog/search?q=` (2–60 chars, max 20 results,
+  `searchLimiter`). Prisma `contains` + `mode: "insensitive"`, no raw SQL.
+- Practice check `POST /api/catalog/questions/:id/check` has `checkAnswerLimiter`
+  (40/min per IP): it reveals answers that quizzes reuse.
 - **Ordering:** questions are ordered **per section** (chapter + source +
   kind), which matches the page sections Textbook Q&A / Extra Q&A / Extra MCQs.
 - **Rich text is HTML, sanitised on write** by
@@ -156,8 +170,10 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 
 ### Static pages & FAQ backend (Phase 5, built)
 - **Models:** `Page` (slugs are fixed in `src/services/pages.service.ts`
-  `PAGE_SLUGS`) and `FaqItem`. Public routes under `/api/content`; admin
-  routes under `/api/admin/pages` and `/api/admin/faq`.
+  `PAGE_SLUGS`), `FaqItem` and `NewsLink` (home page "Latest news", http(s)
+  links only, no seed: the client picks sources). Public routes under
+  `/api/content` (`/news` = active links in order); admin routes under
+  `/api/admin/pages`, `/api/admin/faq` and `/api/admin/news`.
 - **Tokens:** page and FAQ text may contain `{{tokens}}` (`PAGE_TOKEN_NAMES`),
   filled from live settings at read time by `renderTokens()`.
   - Values are escaped in HTML and left raw in plain-text FAQ questions.
@@ -350,6 +366,8 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - SMTP tests run a local `smtp-server`. Live R2 tests run only when `R2_*`
     env vars exist.
   - The auth rate limiter is skipped when `NODE_ENV=test`.
+  - `tests/setup.ts` turns HTTP keep-alive off: with Node 19+ and supertest's
+    per-request servers it caused random "socket hang up" failures.
 
 ### Admin UI (shadcn, sidebar-07)
 - **Setup:** shadcn is initialised (`admin/components.json`: Radix base, Nova
@@ -451,14 +469,73 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   (no auth), `logout()` in `src/lib/api.ts`. Login state:
   `useSignedIn()` / `useMe()` in `components/site/account-menu.tsx`. Tokens
   fire the `cc-auth` event so every component updates.
-- **Look:**
-  - use `card-3d` (+ `lift` for links) for cards and `press-3d` for primary buttons
-  - headings `font-heading`; mark Assamese text with `lang="as"`
-  - inputs `h-12 text-base` (no iOS zoom)
+- **Look (client mock, `docs/design/home-page-mock.html`, review in `plan.md §9b`):**
+  - amber/cream palette + warm dark mode, all tokens in `src/app/globals.css`.
+    Text on amber is **ink** (`text-brand-ink`), never white (2:1). Amber
+    text/links use `text-brand-amber-text`, not `text-primary` (amber on cream fails).
+  - corner radii are the mock's: `rounded-lg` 10 (logo, badges, socials),
+    `rounded-xl` 14 (cards, main buttons), `rounded-2xl` 16 (class tiles,
+    about), `rounded-3xl` 18 (reward/quiz boxes), `rounded-4xl` 20 (Start Quiz);
+    news/video cards `rounded-[15px]`, small buttons `rounded-[12px]`
+  - use `card-3d` (+ `lift` for links) for cards, `press-3d` for primary buttons
+    (it sets its own gradient + ink text), `scroll-row` / `ScrollRow` for sideways rows
+  - reuse the kit in `src/components/kit/` (SectionTitle, ClassTile, RowCard,
+    NoteCard, VideoCard, NewsCard, Coin3D, LogoMark); preview it at `/kit` (dev only)
+  - icons are Lucide/SVG, never emoji; headings `font-heading`; mark Assamese
+    text with `lang="as"` (+ `as-text` for body-size Assamese)
+  - inputs `h-12 text-base` (no iOS zoom); tap targets ≥ 44 px in content
+  - the chosen medium is the `cc_medium` cookie (`src/lib/medium.ts`)
   - keep it simple for Class 1 students
 - **Page width:** use one shared container for every page (`max-w-7xl`,
   gutters `px-4 sm:px-6 lg:px-8`), the same idea as the admin. Don't give
-  pages their own widths.
+  pages their own widths. It is `<Container>` (`components/site/container.tsx`).
+- **Catalog routes** (`app/[medium]/[classSlug]/[subject]/[chapter]`):
+  - the default export is sync and renders `<Suspense>`; an inner `*Content`
+    component awaits `params` (so unlisted URLs still get an instant shell)
+  - `generateStaticParams` lists the **full path** from `src/lib/catalog-params.ts`
+    (pages, not layouts, so parents don't pass params down) with a `__none__`
+    placeholder if the API is down at build
+  - readers return `null` on 404 → `notFound()` (renders with `noindex`);
+    other API errors throw → `app/error.tsx`
+  - link with `catalogHref()`, label chapters with `chapterName()` /
+    `isPlaceholderTitle()` from `src/lib/catalog.ts`
+  - chapter page parts live in `components/chapter/` (QaList, McqPractice,
+    ChapterSection, JumpBar). Stored HTML renders as-is inside `.rich`
+    (sanitised on write); MCQ practice only ever learns the answer from
+    `POST /api/catalog/questions/:id/check`
+  - `app/sitemap.ts` / `app/robots.ts` use the same cached readers
+- **Quiz & profile (client-rendered, login required):** `/quiz/[attemptId]`
+  (`components/quiz/quiz-runner.tsx`) and `/profile`. Types and helpers in
+  `src/lib/quiz.ts` (`startQuiz`, `pauseOnLeave` = keepalive pause,
+  `attemptLabel`). The runner follows the server's attempt state and never
+  decides anything itself. Guard login by reading `getAccessToken()` in an
+  effect (the `useSignedIn` hook is `false` on the first render). After a
+  balance change call `announceCoinsChanged()` (`account-menu.tsx`) so every
+  coin display reloads.
+- **Notes & checkout (client):** `src/lib/notes.ts` (`useOwnedNotes`,
+  `downloadNote`, `loadRazorpay`, `announceNotesChanged`), components in
+  `components/notes/` (`NoteList`, `NoteActions`, `BuyDialog`, `NotesStore`;
+  `placeLine` is a plain module so server components can call it). The
+  browser never unlocks a note: it waits for the server's PAID (verify, or
+  polling while PENDING). Without Razorpay keys, browser tests stub
+  `checkout.razorpay.com` and the payment endpoints with request interception.
+- **Page weight:** the header's search, medium switcher and menu (Radix) and
+  the buy window load on first tap (`components/site/lazy-header.tsx`,
+  `next/dynamic`). Keep new heavy UI out of the first load the same way.
+  Lighthouse mobile medians are 90–92; re-check after big changes.
+- **Static pages:** `components/pages/static-page.tsx` + one tiny page file per
+  slug; `/faq` has its own page. A new top-level route also needs its word in
+  the backend's `RESERVED_TOP_LEVEL`.
+- **Home = the client's mock** (`docs/design/home-page-mock.html`): keep its
+  order, wording and card styles. Sections never disappear: no admin content
+  → a "coming soon" placeholder (`components/home/placeholders.tsx`) or the
+  mock's news sources (`DEFAULT_NEWS`). Footer/menu links come from
+  `siteLinks()` (`src/lib/site-links.ts`); unpublished pages say "Coming soon".
+- Overflow checks: compare `document.documentElement.scrollWidth` with the
+  **device** width; mobile emulation widens `innerWidth` to fit wide content.
+  `.scroll-row` must stay `position: relative` (it clips sr-only text in cards).
+- Browser tests: Next keeps hidden copies of earlier screens in the DOM, so
+  match **visible** elements only (`offsetParent !== null`), not page text.
 - **Auth pages** take `?next=`. Only same-site paths are allowed (`safeNext`).
 
 ### Roles

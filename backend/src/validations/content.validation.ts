@@ -45,6 +45,10 @@ export const importQuestionsSchema = z.object({
 export const createVideoSchema = z.object({
   url: z.string().trim().min(1).max(500),
   title: z.string().trim().min(1).max(200),
+  // Omitted = detect from the link (a /shorts/ link → SHORT, else LANDSCAPE).
+  format: z.enum(["LANDSCAPE", "SHORT"]).optional(),
+  // Show in the home page "Videos" row.
+  featured: z.boolean().optional(),
 });
 export const updateVideoSchema = createVideoSchema.partial();
 export const reorderVideosSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });

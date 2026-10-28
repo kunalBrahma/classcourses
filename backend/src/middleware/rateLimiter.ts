@@ -37,3 +37,26 @@ export const paymentLimiter = rateLimit({
   message: { error: "Too many requests, slow down a little" },
   skip: () => env.NODE_ENV === "test",
 });
+
+// Public search runs a few LIKE queries per call; this caps scripted scraping
+// while leaving room for search-as-you-type.
+export const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many searches, slow down a little" },
+  skip: () => env.NODE_ENV === "test",
+});
+
+// Practice "check my answer" reveals an MCQ's answer, and quizzes reuse those
+// MCQs: cap it so answers can't be scraped or looked up quickly mid-quiz.
+// 40/min is plenty for a student working through a chapter by hand.
+export const checkAnswerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "You're checking answers very fast. Take a breath and try again in a minute." },
+  skip: () => env.NODE_ENV === "test",
+});

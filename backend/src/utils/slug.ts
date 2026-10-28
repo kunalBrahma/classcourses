@@ -27,3 +27,12 @@ export const uniqueSlug = async (base: string, isTaken: (slug: string) => Promis
 
 // Automatic chapter links are "chapter-<number>" (plus "-2"… on a clash).
 export const isAutoChapterSlug = (slug: string, number: number) => new RegExp(`^chapter-${number}(-\\d+)?$`).test(slug);
+
+// Medium links sit at the top of the student site (/<medium>), next to the
+// site's own pages. These words are taken by those pages, so a medium can't
+// use them (keep in sync with frontend/src/app).
+export const RESERVED_TOP_LEVEL = new Set([
+  "about", "contact", "faq", "privacy", "terms", "refund-policy",
+  "notes", "profile", "quiz", "login", "register", "forgot-password", "reset-password",
+  "kit", "search", "api", "admin", "sitemap.xml", "robots.txt",
+]);

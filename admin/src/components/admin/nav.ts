@@ -47,11 +47,12 @@ export const NAV: NavGroup[] = [
         ],
       },
       {
-        title: "Pages & FAQ",
+        title: "Pages, FAQ & News",
         icon: NewspaperIcon,
         items: [
           { title: "Site pages", url: "/pages" },
           { title: "FAQ", url: "/faq" },
+          { title: "News links", url: "/news" },
         ],
       },
     ],

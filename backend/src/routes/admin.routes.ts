@@ -50,15 +50,28 @@ import {
 } from "../validations/notes.validation";
 import {
   createFaq,
+  createNews,
   deleteFaq,
+  deleteNews,
   getPageAdmin,
   listFaqAdmin,
+  listNewsAdmin,
   listPagesAdmin,
   reorderFaq,
+  reorderNews,
   updateFaq,
+  updateNews,
   updatePage,
 } from "../controllers/pages.controller";
-import { createFaqSchema, reorderFaqSchema, updateFaqSchema, updatePageSchema } from "../validations/pages.validation";
+import {
+  createFaqSchema,
+  createNewsSchema,
+  reorderFaqSchema,
+  reorderNewsSchema,
+  updateFaqSchema,
+  updateNewsSchema,
+  updatePageSchema,
+} from "../validations/pages.validation";
 import adminCatalogRoutes from "./adminCatalog.routes";
 import adminContentRoutes from "./adminContent.routes";
 import { getQuizAttempt, getQuizStatsHandler, listQuizAttempts } from "../controllers/adminQuiz.controller";
@@ -170,5 +183,12 @@ router.post("/faq", validateBody(createFaqSchema), createFaq);
 router.put("/faq/reorder", validateBody(reorderFaqSchema), reorderFaq);
 router.patch("/faq/:id", validateBody(updateFaqSchema), updateFaq);
 router.delete("/faq/:id", deleteFaq);
+
+// Home page "Latest news" links
+router.get("/news", listNewsAdmin);
+router.post("/news", validateBody(createNewsSchema), createNews);
+router.put("/news/reorder", validateBody(reorderNewsSchema), reorderNews);
+router.patch("/news/:id", validateBody(updateNewsSchema), updateNews);
+router.delete("/news/:id", deleteNews);
 
 export default router;

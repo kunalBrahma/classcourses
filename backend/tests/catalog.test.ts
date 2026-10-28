@@ -208,6 +208,20 @@ describe("admin catalog", () => {
     expect(badSlug.status).toBe(400);
   });
 
+  it("never gives a medium the link of a site page (/notes, /about …)", async () => {
+    const notes = await api().post("/api/admin/mediums").set("Authorization", admin).send({ name: "Notes" });
+    expect(notes.status).toBe(201);
+    expect(notes.body.medium.slug).toBe("notes-2");
+
+    const manual = await api().post("/api/admin/mediums").set("Authorization", admin).send({ name: "About Medium", slug: "about" });
+    expect(manual.status).toBe(400);
+    expect(manual.body.error).toMatch(/link of a page on the site/);
+
+    const change = await api().patch(`/api/admin/mediums/${notes.body.medium.id}`).set("Authorization", admin).send({ slug: "profile" });
+    expect(change.status).toBe(400);
+    await prisma.medium.delete({ where: { id: notes.body.medium.id } });
+  });
+
   it("builds a subject, parts and placeholder chapters from scratch", async () => {
     const hindi = await prisma.medium.findUniqueOrThrow({ where: { slug: "hindi-medium" } });
     const created = await api()

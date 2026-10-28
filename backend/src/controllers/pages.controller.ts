@@ -41,6 +41,15 @@ export const getPublicPage = asyncHandler(async (req: Request, res: Response) =>
   });
 });
 
+export const getPublicNews = asyncHandler(async (_req: Request, res: Response) => {
+  const items = await prisma.newsLink.findMany({
+    where: { isActive: true },
+    orderBy: { order: "asc" },
+    select: { id: true, source: true, title: true, url: true },
+  });
+  res.json({ items });
+});
+
 export const getPublicFaq = asyncHandler(async (_req: Request, res: Response) => {
   const [items, tokens] = await Promise.all([
     prisma.faqItem.findMany({ where: { isPublished: true }, orderBy: { order: "asc" } }),
@@ -148,4 +157,46 @@ export const reorderFaq = asyncHandler(async (req: Request, res: Response) => {
   }
   await prisma.$transaction(ids.map((id, order) => prisma.faqItem.update({ where: { id }, data: { order } })));
   res.json({ message: "FAQ reordered" });
+});
+
+// ===========================================================================
+// News links (home page "Latest news")
+// ===========================================================================
+
+type NewsBody = { source: string; title: string; url: string; isActive?: boolean };
+
+export const listNewsAdmin = asyncHandler(async (_req: Request, res: Response) => {
+  const items = await prisma.newsLink.findMany({ orderBy: { order: "asc" } });
+  res.json({ items });
+});
+
+export const createNews = asyncHandler(async (req: Request, res: Response) => {
+  const { source, title, url, isActive } = req.body as NewsBody;
+  const last = await prisma.newsLink.findFirst({ orderBy: { order: "desc" }, select: { order: true } });
+  const item = await prisma.newsLink.create({
+    data: { source, title, url, isActive: isActive ?? true, order: (last?.order ?? -1) + 1 },
+  });
+  res.status(201).json({ item });
+});
+
+export const updateNews = asyncHandler(async (req: Request, res: Response) => {
+  const { source, title, url, isActive } = req.body as Partial<NewsBody>;
+  const item = await prisma.newsLink.update({ where: { id: req.params.id }, data: { source, title, url, isActive } });
+  res.json({ item });
+});
+
+export const deleteNews = asyncHandler(async (req: Request, res: Response) => {
+  await prisma.newsLink.delete({ where: { id: req.params.id } });
+  res.json({ message: "News link deleted" });
+});
+
+export const reorderNews = asyncHandler(async (req: Request, res: Response) => {
+  const { ids } = req.body as { ids: string[] };
+  const all = await prisma.newsLink.findMany({ select: { id: true } });
+  const set = new Set(all.map((i) => i.id));
+  if (ids.length !== set.size || new Set(ids).size !== ids.length || ids.some((id) => !set.has(id))) {
+    throw new AppError(400, "Send every news link exactly once, in the new order");
+  }
+  await prisma.$transaction(ids.map((id, order) => prisma.newsLink.update({ where: { id }, data: { order } })));
+  res.json({ message: "News links reordered" });
 });

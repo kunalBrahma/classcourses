@@ -136,11 +136,11 @@ current one is fully ticked.
 - [x] Verified end-to-end through the UI with temporary data, then cleaned up: medium create/delete; subject → 3 chapters + part + 2 chapters → Assamese rename → move → unpublish (the API confirms the reading order) → force delete. No phone overflow, no console errors.
 
 ### Frontend
-- [ ] `/` with medium picker and class grid
-- [ ] `/[medium]` class grid
-- [ ] `/[medium]/class-[n]` subject cards with an **accordion dropdown of chapters**, grouped by part
-- [ ] `/[medium]/class-[n]/[subject]` subject page
-- [ ] Chapter page shell with **Previous / Next Chapter buttons** (disabled on the first and last chapter)
+- [x] `/` with medium picker and class grid (FD-2)
+- [x] `/[medium]` class grid (FD-2)
+- [x] `/[medium]/[class]` subject cards with an **accordion dropdown of chapters**, grouped by part (FD-2)
+- [x] `/[medium]/[class]/[subject]` subject page (FD-2)
+- [x] Chapter page shell with **Previous / Next Chapter buttons** (disabled on the first and last chapter) (FD-2)
 
 ## Phase 2 — Chapter content
 ### Backend
@@ -157,6 +157,7 @@ current one is fully ticked.
   - [x] dry-run preview by default, with every bad row reported by spreadsheet row number
   - [x] commit is all-or-nothing, in `append` or `replace` mode; max 500 rows; JSON body limit raised to 3 MB
 - [x] Videos: CRUD and reorder. Accepts any YouTube URL form (watch, youtu.be, shorts, embed, live) or a bare ID.
+- [x] Video `format` (LANDSCAPE 16:9 / SHORT 9:16, migration `video_format`, 28 Oct 2026). A `/shorts/` link sets SHORT automatically; the admin can pick it for other links. A new link without a format re-detects it. The public chapter payload includes `format`. Tests in `content.test.ts`.
 - [x] Image upload `POST /uploads/images`: presigned PUT to the public bucket that **signs the exact type and size** (png/jpg/webp/gif, ≤5 MB; SVG refused). It returns the public URL. Verified live on R2.
 - [x] Public chapter payload now includes `content.{textbook,extra}.{qa,mcq}` and `videos`. **MCQ answers are not included**; `POST /api/catalog/questions/:id/check` reveals one answer and its explanation.
 - [x] Tests: 28 new (80 total), including XSS cases and a live R2 upload.
@@ -175,6 +176,7 @@ current one is fully ticked.
   - [x] the question dialog has rich question/answer/explanation, 2–6 MCQ options with a correct-answer picker, difficulty, a section/type switch, and checks before saving
   - [x] the MCQ tab shows **"Quiz ready" once there are ≥10 published MCQs**
 - [x] **Videos:** paste any YouTube link; thumbnails, rename, reorder, remove
+- [x] Videos: "Long video / Short" shape picker (switches to Short on a Shorts link), shape badge, tall thumbnail for Shorts, edit dialog (title, link, shape), and a watch preview in the real shape
 - [x] **Import:** CSV/JSON templates (Excel-friendly UTF-8 BOM), column guide, file upload or paste, `.xlsx` rejected with "save as CSV UTF-8" advice
   - [x] the dry-run preview table shows errors per spreadsheet row, and Import is disabled until all rows are valid
   - [x] append or replace (replace asks to confirm)
@@ -187,9 +189,9 @@ current one is fully ticked.
 - [ ] **Browser image upload needs an R2 bucket CORS rule.** It was blocked in the test (handled with a clear message). Settings → Storage now shows the exact policy for this origin with a Copy button. Apply it to both buckets in the Cloudflare dashboard. Phase 4 note PDF uploads need the same rule.
 
 ### Frontend
-- [ ] Chapter page sections: About the lesson/author, Textbook Q&A, Extra Q&A, Extra MCQs (tap to reveal via `POST /api/catalog/questions/:id/check`), Videos (lazy YouTube embed)
-- [ ] Render stored HTML as-is. The backend already sanitised it, so don't double-escape. Style `sub`/`sup`/tables for math.
-- [ ] ISR plus `generateMetadata` for the content pages, a sitemap and robots.txt
+- [x] Chapter page sections: About the lesson/author, Textbook Q&A, Extra Q&A, Extra MCQs (tap to reveal via `POST /api/catalog/questions/:id/check`), Videos (lazy YouTube embed; `format: "SHORT"` → 9:16 frame capped in width, `LANDSCAPE` → 16:9) (FD-3)
+- [x] Render stored HTML as-is. The backend already sanitised it, so don't double-escape. Style `sub`/`sup`/tables for math. (FD-3)
+- [x] ISR plus `generateMetadata` for the content pages, a sitemap and robots.txt (FD-2/FD-3)
 - [ ] Check that Assamese script renders correctly on Android Chrome and iOS Safari
 
 ## Phase 3 — Quiz & coins
@@ -250,12 +252,12 @@ current one is fully ticked.
   - [x] verified end-to-end with 3 temporary students and 10 temporary MCQs (deleted afterwards): totals, status tabs, detail marks, 404 state, stats, profile links, no phone overflow
 
 ### Frontend
-- [ ] Quiz guidelines screen (PDF §5.1 text)
-- [ ] Timed question UI. Flow: `POST /api/quiz/start` → guidelines → `POST …/next` → show the question with a countdown from `remainingMs` → `POST …/answer` (send `optionIndex: null` when time runs out) → show the correct answer → "Next".
-  - [ ] Call `…/pause` on `visibilitychange`/`pagehide` (use `fetch` with `keepalive`).
-  - [ ] Tell students that leaving mid-question forfeits that question.
-- [ ] Result screen: score, pass/fail, coins earned (0 on a repeat pass under the default rule; explain why)
-- [ ] `/profile`: coin balance and history, today's paused quizzes (resume), purchased notes
+- [x] Quiz guidelines screen (PDF §5.1 text) (FD-4)
+- [x] Timed question UI. Flow: `POST /api/quiz/start` → guidelines → `POST …/next` → show the question with a countdown from `remainingMs` → `POST …/answer` (send `optionIndex: null` when time runs out) → show the correct answer → "Next". (FD-4)
+  - [x] Call `…/pause` on `visibilitychange`/`pagehide` (use `fetch` with `keepalive`).
+  - [x] Tell students that leaving mid-question forfeits that question.
+- [x] Result screen: score, pass/fail, coins earned (0 on a repeat pass under the default rule; explain why) (FD-4)
+- [x] `/profile`: coin balance and history, today's paused quizzes (resume) (FD-4); purchased notes (FD-5)
 
 ## Phase 4 — Premium notes & Razorpay
 ### Backend
@@ -317,14 +319,14 @@ current one is fully ticked.
 - [ ] **Blocked until you set it up:** a real PDF upload (needs the private bucket + CORS) and a real test purchase (needs `rzp_test_` keys + webhook on a public URL)
 
 ### Frontend
-- [ ] `/notes` store, notes section on the chapter page
-- [ ] Razorpay Checkout with a "use coins" toggle.
-  - [ ] Show `/api/notes/:id/quote`.
-  - [ ] `POST /api/payments/orders` → open Checkout with `checkout.*` → handler → `POST /api/payments/verify`.
-  - [ ] If PENDING, poll `GET /api/payments/orders/:id`.
-  - [ ] Never unlock in the browser itself.
-- [ ] "My notes" downloads
-- [ ] Test the full flow in Razorpay test mode: success, failure, closed tab (webhook-only)
+- [x] `/notes` store, notes section on the chapter page (FD-5)
+- [x] Razorpay Checkout with a "use coins" toggle. (FD-5)
+  - [x] Show `/api/notes/:id/quote`.
+  - [x] `POST /api/payments/orders` → open Checkout with `checkout.*` → handler → `POST /api/payments/verify`.
+  - [x] If PENDING, poll `GET /api/payments/orders/:id`.
+  - [x] Never unlock in the browser itself.
+- [x] "My notes" downloads (FD-5)
+- [ ] Test the full flow in Razorpay test mode: success, failure, closed tab (webhook-only). Blocked on keys, webhook URL and the private bucket (#21, #24, #28)
 
 ## Phase 5 — Static & legal pages
 ### Backend
@@ -363,8 +365,8 @@ current one is fully ticked.
 
 ### Frontend
 - [x] Draft content: mission/vision, contact, FAQ, Privacy, Terms and Refund are all written (backend seed). **Send them to the client for approval.**
-- [ ] Render `/about`, `/contact`, `/faq`, `/privacy`, `/terms`, `/refund-policy` from `/api/content/*`, showing "Last updated" on legal pages. Put the footer links in `GET /api/content/pages` order.
-- [ ] Contact page: email only (no phone, WhatsApp or address)
+- [x] Render `/about`, `/contact`, `/faq`, `/privacy`, `/terms`, `/refund-policy` from `/api/content/*`, showing "Last updated" on legal pages. Put the footer links in `GET /api/content/pages` order. (FD-6)
+- [x] Contact page: email only (no phone, WhatsApp or address) (FD-6)
 
 ## Phase 6 — Polish & launch
 ### Backend
@@ -388,9 +390,9 @@ current one is fully ticked.
 - [ ] Deploy admin (and add its production domain to the backend `CORS_ORIGIN` and the R2 CORS policy), final QA
 
 ### Frontend
-- [ ] Final 3D design pass once the client clarifies what "3D" means. Respect `prefers-reduced-motion`.
-- [ ] Mobile QA at 360 px, plus an accessibility pass (contrast, tap targets, keyboard)
-- [ ] Performance: image optimisation, font subsetting, Lighthouse ≥ 90 on mobile
+- [ ] Final 3D design pass once the client clarifies what "3D" means. `prefers-reduced-motion` is respected (FD-6).
+- [x] Mobile QA at 360 px, plus an accessibility pass (contrast, tap targets, keyboard) (FD-6)
+- [x] Performance: font loading, lazy header, Lighthouse ≥ 90 on mobile (medians 90–92) (FD-6)
 - [ ] Deploy frontend, set up domain and SSL
 - [ ] Create the business email and replace the Gmail in the `contact` setting
 
@@ -449,6 +451,128 @@ current one is fully ticked.
 - [x] Tests: new class CRUD test (add LKG, Class 13, Assamese-only, rename, reorder, URLs, delete rules). Backend 178 green
 - [x] Admin tsc, lint and build pass. Browser tests (add/rename/reorder/hide/delete class, subject in a new class, quiz builder) pass, phone and desktop
 
+## Frontend redesign (client mock, 28 Oct 2026)
+The client's home-page mock (`docs/design/home-page-mock.html`)
+sets the look. The review and every change from the mock are in `plan.md §9b`.
+These steps carry out the open **Frontend** items of Phases 1–6 above in that
+look. Tick both places as you go. Each step: build, then check at 360/390 and
+1440 px (light + dark) with puppeteer, then stop for review.
+
+### FD-0 Prerequisites (backend → admin, by the phase rule) — done 28 Oct 2026
+- [x] Moved the mock out of `frontend/public/` (it was served publicly) to `docs/design/home-page-mock.html`
+- [x] **News links**:
+  - [x] backend: `NewsLink` model (migration `news_links_featured_videos`), admin `GET/POST /api/admin/news`, `PUT /news/reorder`, `PATCH/DELETE /news/:id`; public `GET /api/content/news` (active only, in order); http(s) links only. Tests: `tests/news.test.ts`
+  - [x] admin: Content → Pages, FAQ & News → **News links** (add/edit dialog, reorder, show/hide switch, delete); "https://" is added if missing
+- [x] **Featured videos**:
+  - [x] backend: `Video.featuredAt` (`featured: true/false` on create/PATCH); public `GET /api/catalog/videos/featured` (12 newest, visible chapters only, with chapter link, subject, class and `format`). Tests in `content.test.ts`
+  - [x] admin: house button per video ("On home page" badge), optimistic with rollback
+- [x] **Search**:
+  - [x] backend: public `GET /api/catalog/search?q=` (2–60 chars; mediums, classes per medium, subjects by English/Assamese name, chapters by title; visible only; max 20, broad first; `searchLimiter` 60/min). Tests: `tests/search.test.ts`
+- [x] Shared visibility rules `publicSubjectWhere` / `publicChapterWhere` + `catalogHref()` in `catalog.service.ts`
+- [x] Verified: backend tsc + 188 tests green; admin tsc + lint clean; live API smoke test (incl. Assamese query); puppeteer at 1440 light and 390 dark (add, hide, reorder, delete news; video on/off home page reflected in the public API; no console errors; test data deleted)
+
+### FD-1 Design system re-skin (no new pages) — done 28 Oct 2026
+- [x] Tokens in `globals.css`: the mock's amber/cream palette, warm dark mode (#36: kept by default), surface tokens (`--header-bg`, `--card-surface`, footer colours). Contrast checked: ink on amber 5.7–8.4:1, muted 6.4:1, amber text `#A3570A` 5:1, footer ≥ 8.7:1. The mock's white-on-amber (2:1) is not used for text.
+- [x] 3D tokens retuned (`--depth-edge`, `--depth-shadow(-hover)`, `--depth-highlight`, `--press-edge`); `card-3d` / `lift` / `press-3d` keep their names; new `scroll-row` utility
+- [x] Type: body 16 px, `.as-text` bumps Assamese to 17 px, one global 3 px focus ring, tap targets ≥ 40 px (header) / 44 px (content)
+- [x] Kit (`src/components/kit/`): `LogoMark`, `Coin3D`, `SectionTitle`, `ClassTile` + `BookIcon`, `RowCard`, `NoteCard` (+ `rupees()`), `VideoCard` (thumbnail → youtube-nocookie on tap, 9:16 / 16:9), `NewsCard`, `ScrollRow`. Dev-only preview at **`/kit`** (404 in production)
+- [x] Logo: `logo.webp` has an opaque amber box, so the "C" mark is an inline SVG (`LogoMark`); `logo.webp` is the Open Graph image
+- [x] Header: amber band; name shown from 360 px (guests) / 400 px (signed in); coin chip = account menu (guests: Sign in, icon-only < 420 px); search sheet (live, English + Assamese); 🌐 medium switcher (cookie `cc_medium`, `src/lib/medium.ts`); menu sheet (only existing pages, dark mode switch, account)
+- [x] Footer: dark brown, amber social buttons, every published page, email only
+- [x] Existing home hero and auth panel moved off navy/indigo; auth links use the AA amber
+- [x] Verified: tsc, lint, `next build` (Cache Components) pass; puppeteer at 360/375/390/414/1440, light + dark: no horizontal overflow, header fits signed in and out, search returns Assamese results, medium cookie set, video tap plays, no console errors
+- Note: search results link to catalog pages that FD-2 builds
+
+### FD-2 Home + catalog (Phase 1 frontend) — done 28 Oct 2026
+- [x] Home in the mock's order:
+  - [x] coin card: live balance (signed in) or "Join free / Sign in" (guest); no made-up numbers
+  - [x] quiz card: rules from the `quiz`/`coins` settings, the forfeit + midnight rules worded as enforced, pass-mark ring; signed in: "N more quizzes today" (`/api/quiz/today`). "Pick a chapter" → class grid
+  - [x] class grid for the chosen medium (cookie, read inside `<Suspense>`) with medium tabs above it
+  - [ ] ~~notes teaser~~ → **moved to FD-5** (the public notes list has no catalog links and `/notes` doesn't exist yet)
+  - [x] featured videos row (hidden when empty)
+  - [x] news row (hidden when empty)
+  - [x] "What is Class Course?" (+ "More about us" once the About page is published)
+- [x] `/[medium]` class grid
+- [x] `/[medium]/[class]` subjects as a **dropdown of chapters** (native `<details>`, one open at a time), grouped by part, + "Open the subject page"
+- [x] `/[medium]/[class]/[subject]` subject page (all chapters by part, SEO)
+- [x] Chapter page shell: breadcrumb (phones: "‹ Subject"), number badge, part, "Chapter x of y", About the lesson, **Prev / Next** (disabled at the ends, `rel=prev/next`)
+- [x] Empty states in plain words; friendly `not-found.tsx` and `error.tsx` (`retry()`)
+- [x] Menu: Quizzes / Videos / Latest news anchors (videos/news only when present)
+- [x] Metadata (title, description, canonical) on every catalog page
+- [x] Build: `generateStaticParams` lists full paths (`src/lib/catalog-params.ts`): **393 pages prerendered** (mediums, classes, subjects, first chapter of each subject); others stream on first visit, then cached. Params are read inside `<Suspense>` (Cache Components). Unknown links render the not-found page with `noindex` (HTTP 200: streamed)
+- [x] Verified: tsc, lint, `next build`, `next start` smoke test; puppeteer 390 + 1440, light + dark, guest + signed in: no overflow, no console errors, medium tabs switch the grid, Previous disabled on chapter 1; test content deleted afterwards
+- Follow-up: admin edits reach the site within ~1 minute (`cacheLife("minutes")`). An instant refresh needs a backend → frontend revalidate hook (`revalidateTag("catalog")`); plan it with deploy
+
+### FD-3 Chapter page (Phase 2 frontend) — done 28 Oct 2026
+- [x] Sections as cards (each hidden when empty): About the lesson, Textbook Q&A, Extra Q&A, Textbook MCQs, Extra MCQs, Videos; sticky "jump to" chips with counts
+- [x] Q&A: numbered question + answer box; difficulty badge only when set (#7)
+- [x] MCQ practice: tap an option → `POST /api/catalog/questions/:id/check` → right/wrong colours + icons, the correct answer, the explanation, "Try again". No answer key in the page HTML (checked)
+- [x] Videos: thumbnail first, youtube-nocookie on tap; Shorts 9:16 (w-44), long videos 16:9 (full width on phones, 384 px on desktop)
+- [x] Rich HTML rendered as stored (`.rich`: sub/sup, tables scroll sideways, lists, images)
+- [ ] ~~Notes on the chapter page~~ → FD-5 (with buying). ~~Quiz card~~ → FD-4 (with the quiz screens)
+- [x] SEO: metadata + canonical (FD-2), `BreadcrumbList` JSON-LD, `sitemap.xml` (every medium/class/subject/chapter + published pages; 1,126 URLs now), `robots.txt` (account pages + `/kit` disallowed)
+- [x] Verified: tsc, lint, build (395 pages); puppeteer 390 + 1440, light + dark: no overflow, no console errors, wrong/right/try-again, jump bar lands below the sticky bars; test content deleted
+- [ ] Check Assamese on a real Android phone (Chrome) and iPhone (Safari): needs real devices (renders correctly in desktop Chrome with Noto Sans Bengali)
+- [x] Backend follow-up done in FD-4: `checkAnswerLimiter` on `POST /api/catalog/questions/:id/check`
+
+### FD-4 Quiz + profile (Phase 3 frontend) — done 28 Oct 2026
+- [x] Backend: `checkAnswerLimiter` (40/min per IP) on `POST /api/catalog/questions/:id/check` (FD-3 follow-up). Backend tsc + 188 tests green (one earlier full run hit a flaky "socket hang up" while the machine was busy; quiz tests alone and two full re-runs were green)
+- [x] Chapter page **Quiz** section: each quiz with its own rules (pass ring, questions, seconds, coins); Start / **Resume** (today's unfinished attempt) / attempts left; guests get "Sign in to take the quiz" (returns to `#quiz`)
+- [x] `/quiz/[attemptId]` (`components/quiz/quiz-runner.tsx`), all rules from the server:
+  - [x] rules screen (the attempt's own numbers, the reveal mode, the forfeit and midnight rules)
+  - [x] timed question: countdown ring from the server's `remainingMs` (device clock doesn't matter), red for the last 3 s; at 0 it sends `optionIndex: null`
+  - [x] feedback after each answer when the quiz reveals answers (right/wrong, correct option, explanation); "Answer saved" otherwise; "Time's up!"
+  - [x] leaving pauses with `fetch(..., { keepalive: true })` on `visibilitychange` / `pagehide` / navigating away; coming back shows "Quiz paused" + "You left during a question, so that one counted as wrong."
+  - [x] "Pause and finish later today" between questions
+  - [x] result: score ring, pass/fail, **+N coins** or why 0 (`coins.awardRule`), "ended at midnight" for expired, review of every answer, Try again / Back to the chapter
+  - [x] the header coin chip updates right after a pass (`announceCoinsChanged()`)
+- [x] Home quiz card: "N more quizzes today" + **Resume** links for today's paused quizzes
+- [x] `/profile`: coins + coin history (plain-English reasons), today's unfinished quizzes (Resume), quiz history (score, coins, answers, chapter link). "My profile" in the account menu and the menu sheet. `/profile` and `/quiz/` are `noindex` and disallowed in robots
+- [x] Attempts are labelled "Assamese · Chapter 2 · Class 3" (`attemptLabel()`), not a bare chapter title
+- [x] Verified end to end with temporary students on a chapter with 10 quiz MCQs: right, wrong, timeout, leave mid-question → 7/10 pass, +10 coins (chip updates); repeat pass → 0 coins with the reason; Resume from home, chapter and profile; guest sign-in link; no console errors; tsc, lint, build (397 pages). Test MCQs and students deleted
+- [x] Purchased notes on the profile (done in FD-5)
+
+### FD-5 Notes + payments (Phase 4 frontend) — done 28 Oct 2026
+- [x] Backend: notes listings (`/api/notes`, `/api/notes/:id`, `/api/users/me/notes`) now include `place` (medium, class, subject, chapter and the site link) via `withPlace()`. New test; backend 189 green
+- [x] `/notes` store: medium tabs (starts on the remembered medium), class chips, All / Free / Premium; note cards say "Class 3 · Assamese · Chapter 2"
+- [x] Buttons (`NoteActions`): **Download** (free, or already owned) → signed link from `GET /api/notes/:id/download`; **Buy ₹X**; guests: "Sign in to download / buy" (free notes need an account too, #27)
+- [x] Buy window (`BuyDialog`):
+  - [x] server quote (`/api/notes/:id/quote`) with a "Use N coins · save ₹X" switch and the struck-through price
+  - [x] `POST /api/payments/orders` → Razorpay Checkout (script loaded only on Pay) → `POST /api/payments/verify` → PAID, or PENDING → polls `GET /api/payments/orders/:id` (2.5 s, ~2 min) until the server says PAID
+  - [x] fully coin-covered note: server grants it, no Razorpay
+  - [x] closed window: "No money was taken. Coins come back on their own"; failed payment: Razorpay's reason
+  - [x] the note never unlocks in the browser; after PAID the owned list and coin chip reload (`announceNotesChanged()`, `announceCoinsChanged()`)
+- [x] Home: notes preview (first 4, "See all" / "Open the notes store"); chapter page: **Notes** section (chapter + whole-subject notes); menu: Notes; profile: **My notes** with Download
+- [x] Verified with temporary notes + a student with 100 coins: real store/quote/ownership APIs; Razorpay Checkout, order, verify, polling and download were stand-ins in the browser (no keys or private bucket in dev): free download, pay with coins → pending → paid → Download, closed window, failed payment, coins-only, guest view, home/chapter/profile; no console errors; tsc, lint, build (398 pages). Test data deleted
+- [ ] **Real test-mode purchase** (Razorpay `rzp_test_` keys + webhook on a public URL + the private R2 bucket with its CORS rule): success, failure, closed tab (webhook-only). Blocked on #21, #24, #28
+
+### FD-6 Static pages + polish (Phases 5–6 frontend) — done 28 Oct 2026
+- [x] Backend: medium links can't take a site page's word (`RESERVED_TOP_LEVEL` in `utils/slug.ts`: about, notes, profile, quiz, login …). The automatic link skips them (`notes-2`); a manual "Change link" gets a plain 400. New test
+- [x] Backend tests: fixed the flaky "socket hang up" failures (about 1 run in 3): supertest's short-lived servers + Node 26 keep-alive sockets. `tests/setup.ts` turns keep-alive off; 5 full runs in a row green (190 tests)
+- [x] `/about`, `/contact`, `/privacy`, `/terms`, `/refund-policy` from `/api/content/pages/:slug` (shared `StaticPage`), "Last updated" on the three legal pages, 404 until published
+- [x] Contact: email card only (no phone, WhatsApp or address); the address wraps only after the "@"
+- [x] `/faq` from `/api/content/faq` (native `<details>`, `FAQPage` JSON-LD); FAQ linked in the footer and menu when items are published; `/notes` + `/faq` in the sitemap
+- [x] Profile **My orders** (note, date, amount, coins, status, selectable order ID): the Contact and Refund drafts tell students to quote it. Checked every other promise in the drafts against the site (paused quizzes, My notes)
+- [x] Reduced motion: transitions/animations drop to ~0 with `prefers-reduced-motion: reduce` (checked)
+- [x] 360 / 390 / 1440 px, light + dark, 15 routes: no horizontal overflow
+- [x] Accessibility: axe-core (WCAG 2.1 A/AA) on 15 routes. One issue fixed: amber text on the amber chip was 4.49:1, so `--brand-amber-text` is now `#9A5208` (≥ 4.9:1 on every light surface). Zero violations after
+- [x] Performance (Lighthouse mobile, production build): accessibility, best practices and SEO **100** on every audited page; performance medians **90–92**
+  - [x] Assamese and mono fonts no longer preloaded (they swap in when ready)
+  - [x] header search, medium switcher and menu, and the buy window, load on first tap (`components/site/lazy-header.tsx`); the coin chip links to My profile (Sign out moved there + menu); unused toaster removed. JS per page about 221 → 172 KB
+- [x] Pages and FAQ were published only for the test, then set back to draft (owner approval still needed, #29)
+- [ ] Final 3D design pass once the client clarifies what "3D" means (#12/#37). Tokens are ready
+- [ ] Assamese check on a real Android phone and iPhone
+- [ ] Deploy frontend, domain + SSL (with the backend deploy, `DEPLOY.md`). Add a backend → frontend revalidate hook so admin edits show instantly (now up to ~1 minute)
+
+### Home page matched to the client mock (28 Oct 2026, after FD-6)
+- [x] Home follows `docs/design/home-page-mock.html` section by section: coin strip ("N Coins Earned · Win quizzes, get discounts" + white Redeem pill → `/notes`; guests "Earn Coins" + Join Free), quiz box ("Chapter Quiz · 10 sec/question • Pass: 7/10", Start Quiz on the right, one paragraph of rules worded as enforced), 4-across class tiles, inline section titles (title case), notes, videos, Latest News, "What is Class Course?" (mock text), mock footer (socials, one row of links, email). No visible heading above the coin strip (an `sr-only` h1 stays for screen readers and search)
+- [x] Note cards as in the mock: free notes "₹0" + Download; premium "Use coins for discount" (opens the buy window with coins on) + "Pay & Download"
+- [x] Coin chip moved next to the name in the header, as in the mock
+- [x] **Placeholders until the admin adds content:** notes and videos show "coming soon" cards (nothing priced or clickable); Latest News shows the mock's four sources (`DEFAULT_NEWS` in `src/lib/site-links.ts`, #35) until Admin → News links has any; footer and menu always link About / Privacy / Terms & Conditions / Refund Policy / Contact, and an unpublished page shows "Coming soon" (noindex) instead of a 404
+- [x] **Bug fixed (since FD-1):** pages with a sideways row (home, `/kit`) were 709 px wide on a 390 px phone: the hidden "(opens in a new tab)" text in the cards escaped the row. `scroll-row` is now `position: relative`. Earlier overflow checks missed it because mobile emulation widens the viewport to fit; checks now compare against the device width
+- [x] Verified: tsc, lint, build; 360/390/1440, light + dark, guest + signed in: page exactly device-wide on all routes, axe (WCAG 2.1 AA) zero violations on the home page, no console errors from the site
+- [x] Corner radii set to the mock's exact values (radius scale in `globals.css` + per element); all 15 measured home elements match
+
 ## Waiting on client
 | # | Item | Who |
 |---|---|---|
@@ -485,3 +609,7 @@ current one is fully ticked.
 | 31 | **New:** VPS and domain(s) for the API, site and admin, plus SSH access for the deploy preflight | Client and developer |
 | 32 | **New:** Add the CORS policy (Settings → Storage → "Uploads from this panel need a CORS rule", Copy) to the public and private R2 buckets, and later add the production admin domain | Developer |
 | 33 | **New:** Confirm with the owner that custom quizzes are wanted, and whether some MCQs should be practice-only. The FAQ and guideline drafts quote the 10 / 10 s / 7 defaults, and a custom quiz can use different rules (the guidelines screen should show each quiz's own rules) | Client |
+| 34 | **New:** The mock's 🌐 menu lists English/Assamese/Hindi/Bengali. Is that the **medium** (content) or a **translated website**? We build it as a medium switcher. Translating the whole site is a separate, larger job. | Client |
+| 35 | **New:** Which news sources to list (the mock includes Al Jazeera, international news for children). The admin can edit the list. | Client |
+| 36 | **New:** The mock is light only. Keep a dark mode (warm brown) or drop it? Default: keep it. | Client |
+| 37 | **New:** Confirm "3D" = accents (layered shadows, gradients, 3D coin, pressable buttons) as in the mock, not a full 3D style. This would close #12. | Client |

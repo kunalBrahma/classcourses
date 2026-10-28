@@ -69,6 +69,16 @@ export interface Page {
   updatedAt: string;
 }
 
+// Home page "Latest news" link (/api/admin/news).
+export interface NewsLink {
+  id: string;
+  source: string;
+  title: string;
+  url: string;
+  order: number;
+  isActive: boolean;
+}
+
 export interface FaqItem {
   id: string;
   question: string;

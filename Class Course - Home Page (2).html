@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Class Course</title>
+<style>
+:root{--amber:#F5A623;--amber2:#FFBE4D;--amber-dark:#C9780C;--cream:#FFF7E8;--ink:#3A2A00;--white:#fff;box-sizing:border-box;}
+*{box-sizing:inherit;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);color:var(--ink);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);overflow-x:hidden;}
+a{text-decoration:none;color:inherit;}
+.header{background:linear-gradient(160deg,var(--amber2),var(--amber-dark) 120%);
+  display:flex;align-items:center;gap:7px;padding:12px 14px;position:sticky;top:0;z-index:30;
+  box-shadow:0 10px 24px rgba(201,120,12,.4);}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--amber);position:relative;flex-shrink:0;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.5),0 4px 8px rgba(0,0,0,.3);}
+.logo:before{content:"";position:absolute;inset:6px;background:var(--white);border-radius:50%;
+  clip-path:polygon(60% 0%,100% 25%,70% 50%,100% 75%,60% 100%,0 100%,0 0);}
+.brand{color:var(--white);font-weight:800;font-size:14px;flex-shrink:0;}
+.hdr-coins{display:flex;align-items:center;gap:3px;background:rgba(255,255,255,.22);padding:5px 8px;border-radius:13px;
+  color:#fff;font-size:10px;font-weight:800;cursor:pointer;flex-shrink:0;}
+.iconbtn{width:30px;height:30px;border-radius:50%;background:var(--white);flex-shrink:0;cursor:pointer;position:relative;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.2);font-size:12px;}
+.searchicon{margin-left:auto;}
+.burger{width:30px;height:30px;border-radius:10px;background:rgba(255,255,255,.22);
+  display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 8px;flex-shrink:0;cursor:pointer;}
+.burger span{height:2.5px;background:#fff;border-radius:2px;}
+.menu{position:fixed;top:0;right:-260px;width:230px;height:100%;background:#fff;z-index:40;
+  box-shadow:-8px 0 24px rgba(0,0,0,.25);transition:right .3s;padding:70px 20px 20px;}
+.menu.open{right:0;}
+.menu a{display:block;padding:11px 4px;font-size:13px;font-weight:700;color:var(--amber-dark);border-bottom:1px solid #ffe7bb;cursor:pointer;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:35;display:none;}
+.overlay.show{display:block;}
+.searchbar{display:none;padding:10px 16px;background:var(--amber-dark);}
+.searchbar.show{display:block;}
+.searchbar input{width:100%;border:none;border-radius:16px;padding:10px 14px;font-size:13px;}
+.langdrop{display:none;position:absolute;top:36px;right:0;background:#fff;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.3);
+  overflow:hidden;z-index:50;min-width:130px;}
+.langdrop.show{display:block;}
+.langdrop div{padding:10px 14px;font-size:12.5px;font-weight:700;color:var(--amber-dark);cursor:pointer;}
+.langdrop div:hover{background:#fff3dc;}
+
+.screen{display:none;} .screen.active{display:block;}
+.backbar{display:flex;align-items:center;gap:8px;padding:14px 16px;font-weight:800;color:var(--amber-dark);cursor:pointer;font-size:14px;}
+
+.reward-top{margin:14px 16px 4px;background:linear-gradient(160deg,var(--amber2),var(--amber-dark));border-radius:18px;
+  padding:14px 16px;color:#fff;display:flex;align-items:center;gap:12px;box-shadow:0 9px 20px rgba(201,120,12,.4);}
+.coin3d{width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#FFF0C4,#C9780C 85%);
+  box-shadow:0 4px 8px rgba(0,0,0,.3),inset 0 1px 2px rgba(255,255,255,.5);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-weight:800;color:#6b4400;font-size:15px;}
+.reward-redeem{margin-left:auto;background:#fff;color:var(--amber-dark);font-weight:800;padding:9px 16px;
+  border-radius:18px;font-size:12.5px;cursor:pointer;flex-shrink:0;}
+
+section{padding:16px 16px;}
+h2{font-size:15px;color:var(--amber-dark);margin-bottom:12px;font-weight:800;}
+
+.quiz-box{background:linear-gradient(145deg,#fff,#fff1d6);border-radius:18px;padding:16px;
+  box-shadow:0 9px 20px rgba(201,120,12,.18);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.ring{width:50px;height:50px;border-radius:50%;background:conic-gradient(var(--amber-dark) 70%,#ffe3ac 0);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ring span{width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;
+  font-size:10.5px;font-weight:800;color:var(--amber-dark);}
+.startquiz{margin-left:auto;background:linear-gradient(160deg,var(--amber2),var(--amber-dark));color:#fff;font-weight:800;
+  padding:10px 18px;border-radius:20px;font-size:12.5px;cursor:pointer;}
+.quiz-info{margin-top:10px;font-size:11.5px;color:#9a7a3f;line-height:1.6;padding-left:2px;}
+
+.class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:11px;}
+.class-card{background:linear-gradient(160deg,#fff,#fff3dc);border-radius:16px;padding:14px 4px 10px;text-align:center;
+  box-shadow:0 7px 16px rgba(201,120,12,.2);cursor:pointer;border:1px solid #ffe8bd;}
+.class-card:active{transform:scale(.93);}
+.class-card svg{width:28px;height:28px;margin:0 auto 4px;}
+.class-card .lbl{font-size:10.5px;font-weight:800;color:var(--amber-dark);}
+
+.subject-list,.chapter-list{display:flex;flex-direction:column;gap:9px;padding:0 16px 20px;}
+.row-card{background:#fff;border-radius:14px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 5px 14px rgba(201,120,12,.15);cursor:pointer;}
+.row-card .nm{font-weight:700;font-size:13.5px;}
+.row-card .sub{font-size:11px;color:#b08347;}
+.row-card .arrow{color:var(--amber-dark);font-weight:800;}
+
+.qa-box{background:#fff;border-radius:14px;padding:16px;margin:0 16px 16px;box-shadow:0 5px 14px rgba(201,120,12,.15);}
+.qa-box h3{font-size:13px;color:var(--amber-dark);margin-bottom:8px;}
+.qa-box p{font-size:12.5px;color:#6b5330;line-height:1.5;}
+.navbtns{display:flex;justify-content:space-between;padding:0 16px 24px;}
+.navbtns div{background:var(--amber);color:#fff;font-weight:800;font-size:12px;padding:10px 16px;border-radius:14px;cursor:pointer;}
+
+.news-row{display:flex;gap:11px;overflow-x:auto;padding-bottom:4px;}
+.news-card{min-width:190px;background:#fff;border-radius:15px;padding:12px;flex-shrink:0;display:block;
+  box-shadow:0 7px 16px rgba(0,0,0,.08);border-top:3px solid var(--amber);cursor:pointer;}
+.news-card .src{font-size:9.5px;color:#c9780c;font-weight:800;}
+.news-card .ttl{font-size:12.5px;font-weight:700;margin:6px 0 9px;}
+.readmore{font-size:10.5px;background:linear-gradient(160deg,var(--amber2),var(--amber-dark));color:#fff;
+  padding:6px 12px;border-radius:12px;font-weight:800;display:inline-block;}
+
+.note-card{background:#fff;border-radius:14px;padding:13px 15px;box-shadow:0 5px 14px rgba(201,120,12,.15);}
+.note-top{display:flex;align-items:center;justify-content:space-between;}
+.note-nm{font-weight:700;font-size:13.5px;}
+.note-sub{font-size:11px;color:#b08347;margin-top:2px;}
+.badge{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:10px;flex-shrink:0;}
+.badge.free{background:#dff5e0;color:#2c8a3c;}
+.badge.premium{background:#ffe9bd;color:var(--amber-dark);}
+.note-bottom{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.price{font-weight:800;font-size:13px;color:var(--ink);}
+.price .strike{text-decoration:line-through;color:#b08347;font-weight:600;font-size:11.5px;margin-right:5px;}
+.applycoin{font-size:10.5px;font-weight:700;color:var(--amber-dark);border:1.5px solid var(--amber);
+  padding:6px 10px;border-radius:12px;cursor:pointer;}
+.paybtn,.dlbtn{margin-left:auto;background:linear-gradient(160deg,var(--amber2),var(--amber-dark));color:#fff;
+  font-weight:800;font-size:11.5px;padding:8px 14px;border-radius:14px;cursor:pointer;}
+.dlbtn{background:linear-gradient(160deg,#6fcf7a,#2c8a3c);}
+.video-card{min-width:190px;background:#fff;border-radius:15px;overflow:hidden;flex-shrink:0;cursor:pointer;
+  box-shadow:0 7px 16px rgba(0,0,0,.1);}
+.video-thumb{position:relative;width:190px;height:106px;background:#000;}
+.video-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.playbtn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+.playbtn span{width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 10px rgba(0,0,0,.4);}
+.video-ttl{font-size:12px;font-weight:700;padding:9px 11px;}
+.video-card iframe{width:190px;height:106px;border:0;display:block;}
+.about-box{background:#fff;border-radius:16px;padding:16px;box-shadow:0 6px 16px rgba(201,120,12,.12);}
+.about-box p{font-size:12.5px;color:#6b5330;line-height:1.6;}
+
+footer{background:#2E2000;color:#ffe9c2;padding:24px 16px 32px;margin-top:6px;}
+.socials{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap;}
+.soc{width:34px;height:34px;border-radius:10px;background:linear-gradient(160deg,var(--amber2),var(--amber-dark));
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 9px rgba(0,0,0,.35);font-size:13px;}
+.flinks{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:#ffd889;margin-bottom:12px;font-weight:600;}
+.contact{font-size:11.5px;color:#c9a865;}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(100px);background:#2E2000;color:#fff;
+  padding:11px 20px;border-radius:14px;font-size:12.5px;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.4);
+  z-index:50;transition:transform .3s;max-width:86%;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo"></div>
+  <div class="brand">Class Course</div>
+  <div class="hdr-coins" onclick="document.getElementById('rewardTop').scrollIntoView({behavior:'smooth'})">★ 120</div>
+  <div class="iconbtn searchicon" onclick="toggleSearch()">🔍</div>
+  <div class="iconbtn" onclick="toggleLang(event)">🌐
+    <div class="langdrop" id="langdrop">
+      <div onclick="setLang('English')">English</div>
+      <div onclick="setLang('অসমীয়া')">Assamese</div>
+      <div onclick="setLang('हिन्दी')">Hindi</div>
+      <div onclick="setLang('বাংলা')">Bengali</div>
+    </div>
+  </div>
+  <div class="burger" onclick="toggleMenu()"><span></span><span></span><span></span></div>
+</div>
+<div class="searchbar" id="searchbar"><input placeholder="Search subject, chapter..."></div>
+<div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="menu" id="menu">
+  <a onclick="goto('rewardTop')">🏆 Rewards</a>
+  <a onclick="goto('quizSec')">📝 Quizzes</a>
+  <a onclick="goto('classSec')">📚 Classes</a>
+  <a onclick="goto('notesSec')">📄 Notes</a>
+  <a onclick="goto('videoSec')">🎥 Videos</a>
+  <a onclick="goto('newsSec')">📰 News</a>
+  <a onclick="goto('aboutSec')">ℹ️ About Us</a>
+  <a onclick="goto('footerSec')">📞 Contact / Privacy / Terms</a>
+</div>
+
+<div class="screen active" id="home">
+  <div class="reward-top" id="rewardTop">
+    <div class="coin3d">★</div>
+    <div><div style="font-weight:800;font-size:13.5px;">120 Coins Earned</div>
+    <div style="font-size:11px;opacity:.9;">Win quizzes, get discounts</div></div>
+    <div class="reward-redeem" onclick="toast('Coin redeem screen will open')">Redeem</div>
+  </div>
+
+  <section id="quizSec">
+    <h2>📝 Quizzes</h2>
+    <div class="quiz-box">
+      <div class="ring"><span>7/10</span></div>
+      <div><div style="font-weight:800;font-size:13px;">Daily Chapter Quiz</div>
+      <div style="font-size:11.5px;color:#9a7a3f;">10 sec/question • Pass: 7/10</div></div>
+      <div class="startquiz" onclick="toast('Quiz will start from the chapter page')">Start Quiz</div>
+      <div class="quiz-info">Every quiz has 10 questions, 10 seconds each — so you answer from your own knowledge, not by searching Google. Score 7 or more correct to earn coins. If you leave a quiz midway, it stays paused only for that day; once the day ends, it can't be resumed.</div>
+    </div>
+  </section>
+
+  <section id="classSec">
+    <h2>📚 Choose Your Class</h2>
+    <div class="class-grid" id="classGrid"></div>
+  </section>
+
+  <section id="notesSec">
+    <h2>📄 Notes & Study Material</h2>
+    <div class="subject-list" id="notesList"></div>
+  </section>
+
+  <section id="videoSec">
+    <h2>🎥 Videos</h2>
+    <div class="news-row" id="videoRow"></div>
+  </section>
+
+  <section id="newsSec">
+    <h2>📰 Latest News</h2>
+    <div class="news-row">
+      <a class="news-card" href="https://www.indiatoday.in/education-today" target="_blank">
+        <div class="src">INDIA TODAY</div><div class="ttl">Education & school updates</div><div class="readmore">Read More →</div></a>
+      <a class="news-card" href="https://indianexpress.com/section/education/" target="_blank">
+        <div class="src">INDIAN EXPRESS</div><div class="ttl">National education news</div><div class="readmore">Read More →</div></a>
+      <a class="news-card" href="https://justrangaloothings.in" target="_blank">
+        <div class="src">JUST RANGALOO THINGS</div><div class="ttl">Assam & NE India local news</div><div class="readmore">Read More →</div></a>
+      <a class="news-card" href="https://www.aljazeera.com" target="_blank">
+        <div class="src">AL JAZEERA</div><div class="ttl">International news</div><div class="readmore">Read More →</div></a>
+    </div>
+  </section>
+
+  <section id="aboutSec">
+    <div class="about-box">
+      <h2 style="margin-bottom:8px;">ℹ️ What is Class Course?</h2>
+      <p>Class Course is an online learning platform for students from Class 2 to Class 12 in Assam. Every subject has chapter-wise textbook Q&A, extra advanced Q&A, and practice MCQs. Students can test their knowledge through quizzes, earn coins, and use those coins to get a discount on premium notes. Education videos and the latest education-related news are also available in one place — so students don't need to go anywhere else to study.</p>
+    </div>
+  </section>
+</div>
+
+<div class="screen" id="subjects">
+  <div class="backbar" onclick="showScreen('home')">← Back to Classes</div>
+  <h2 style="padding:0 16px;" id="subjectsTitle">Subjects</h2>
+  <div class="subject-list" id="subjectList"></div>
+</div>
+
+<div class="screen" id="chapters">
+  <div class="backbar" onclick="showScreen('subjects')">← Back to Subjects</div>
+  <h2 style="padding:0 16px;" id="chaptersTitle">Chapters</h2>
+  <div class="chapter-list" id="chapterList"></div>
+</div>
+
+<div class="screen" id="chapterpage">
+  <div class="backbar" onclick="showScreen('chapters')">← Back to Chapters</div>
+  <h2 style="padding:0 16px;" id="chapterPageTitle">Chapter</h2>
+  <div class="qa-box"><h3>📖 Textbook Q&A</h3><p>Textbook questions and their answers for this chapter will be here.</p></div>
+  <div class="qa-box"><h3>⭐ Extra Advanced Q&A</h3><p>Advanced questions beyond the textbook will be here.</p></div>
+  <div class="qa-box"><h3>📝 Extra MCQs</h3><p>Extra MCQ practice questions for this chapter will be here.</p></div>
+  <div class="qa-box"><h3>🎯 Quiz</h3><p>10 questions • 10 sec/question • Pass 7/10</p>
+    <div class="startquiz" style="margin-top:10px;display:inline-block;" onclick="toast('Quiz will start right here')">Start Quiz</div></div>
+  <div class="navbtns"><div onclick="toast('Goes to previous chapter')">← Previous</div><div onclick="toast('Goes to next chapter')">Next →</div></div>
+</div>
+
+<footer id="footerSec">
+  <div class="socials">
+    <a class="soc" href="https://yt.openinapp.co/classcourse" target="_blank">▶</a>
+    <a class="soc" href="https://insta.openinapp.co/classcourse" target="_blank">📸</a>
+    <a class="soc" href="https://fb.openinapp.co/classcourse" target="_blank">f</a>
+    <a class="soc" href="https://linkedin.openinapp.co/classcourse" target="_blank">in</a>
+    <a class="soc" href="https://twtr.openinapp.co/classcourse" target="_blank">𝕏</a>
+  </div>
+  <div class="flinks">
+    <span onclick="goto('aboutSec')">About Us</span>
+    <span onclick="toast('Privacy Policy page will open')">Privacy Policy</span>
+    <span onclick="toast('Terms & Conditions page will open')">Terms & Conditions</span>
+    <span onclick="toast('Contact page will open')">Contact Us</span>
+  </div>
+  <div class="contact">about.classcourse@gmail.com</div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = {
+ "Class 2":{Assamese:10,English:18,Math:15},
+ "Class 3":{Assamese:20,English:6,Math:14},
+ "Class 4":{Assamese:20,English:9,Math:17,Environment:12},
+ "Class 5":{Assamese:14,English:8,Math:14,Environment:16},
+ "Class 6":{Assamese:15,English:8,"Social Science":15,"General Science":13,Math:10,Hindi:16,Charitra:14},
+ "Class 7":{Assamese:15,English:18,"Social Science":15,"General Science":6,Math:8,Hindi:16,IT:7},
+ "Class 8":{Assamese:15,English:8,"Social Science":25,"General Science":18,Math:16,Hindi:14,IT:9},
+ "Class 9":{Assamese:16,English:12,"Social Science":13,"General Science":15,Math:13,Hindi:16,Geography:8},
+ "Class 10":{Assamese:16,English:12,"Social Science":13,"General Science":16,Math:14,Hindi:12,"English Grammar":15,"Hindi Grammar":15},
+ "Class 11":{Assamese:16,"Advance Assamese":11,English:20,Education:7,Economics:5,Geography:7,History:11,"Logic & Philosophy":15,"Political Science":20},
+ "Class 12":{Assamese:18,English:15,History:16,Economics:6,"Advance Assamese":11,"Logic & Philosophy":8,Education:7,"Political Science":19,Geography:28}
+};
+function bookIcon(id,c1,c2){
+ return `<svg viewBox="0 0 48 48"><defs><linearGradient id="g${id}" x1="0" y1="0" x2="1" y2="1">
+ <stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
+ <path d="M8 10c0-2 2-3 4-3h12v30H12c-2 0-4-1-4-3z" fill="url(#g${id})"/>
+ <path d="M24 7h12c2 0 4 1 4 3v24c0 2-2 3-4 3H24z" fill="${c2}" opacity=".85"/>
+ <rect x="22" y="7" width="4" height="30" fill="#fff" opacity=".5"/></svg>`;
+}
+const palette=["#F5A623,#C9780C","#FF8A3D,#C9780C","#F5A623,#8a5a00","#FFBE4D,#C9780C","#F5A623,#D98A0F","#FF9E2C,#8a5a00","#F5A623,#C9780C","#FFBE4D,#8a5a00","#F5A623,#D98A0F","#C9780C,#6b4400","#8a5a00,#4a2e00"];
+const NOTES=[
+ {name:"Class 10 Math - Full Notes",sub:"Class 10 • Mathematics",type:"free"},
+ {name:"Class 12 Political Science - Premium Notes",sub:"Class 12 • Political Science",type:"premium",price:49},
+ {name:"Class 8 Science - Chapter Notes",sub:"Class 8 • General Science",type:"free"},
+ {name:"Class 10 English Grammar - Premium Notes",sub:"Class 10 • English Grammar",type:"premium",price:39}
+];
+let userCoins=120;
+const notesList=document.getElementById('notesList');
+NOTES.forEach((n,idx)=>{
+  const row=document.createElement('div'); row.className='note-card'; row.id='note'+idx;
+  if(n.type==='free'){
+    row.innerHTML=`<div class="note-top"><div><div class="note-nm">${n.name}</div><div class="note-sub">${n.sub}</div></div>
+      <div class="badge free">FREE</div></div>
+      <div class="note-bottom"><div class="price">₹0</div><div class="dlbtn" onclick="toast('PDF download will start')">Download</div></div>`;
+  } else {
+    row.innerHTML=`<div class="note-top"><div><div class="note-nm">${n.name}</div><div class="note-sub">${n.sub}</div></div>
+      <div class="badge premium">PREMIUM</div></div>
+      <div class="note-bottom" id="notebtm${idx}">
+        <div class="price">₹${n.price}</div>
+        <div class="applycoin" onclick="applyCoin(${idx},${n.price})">Use coins for discount</div>
+        <div class="paybtn" onclick="toast('Razorpay payment screen will open')">Pay & Download</div>
+      </div>`;
+  }
+  notesList.appendChild(row);
+});
+function applyCoin(idx,price){
+  const discount=Math.min(price-1,Math.floor(userCoins/10));
+  const finalPrice=Math.max(1,price-discount);
+  document.getElementById('notebtm'+idx).innerHTML=
+   `<div class="price"><span class="strike">₹${price}</span>₹${finalPrice}</div>
+    <div style="font-size:10px;color:#2c8a3c;font-weight:700;">${discount*10} coins applied</div>
+    <div class="paybtn" onclick="toast('Razorpay payment screen will open for ₹${finalPrice}')">Pay ₹${finalPrice} & Download</div>`;
+}
+const VIDEOS=[
+ {id:"dQw4w9WgXcQ",title:"Class 10 Math - Chapter 1 Explained"},
+ {id:"M7lc1UVf-VE",title:"Class 8 Science - Easy Trick"},
+ {id:"ysz5S6PUM-U",title:"Class 12 History - Full Revision"}
+];
+const vrow=document.getElementById('videoRow');
+VIDEOS.forEach(v=>{
+  const c=document.createElement('div'); c.className='video-card';
+  c.innerHTML=`<div class="video-thumb"><img src="https://img.youtube.com/vi/${v.id}/hqdefault.jpg"><div class="playbtn"><span>▶</span></div></div><div class="video-ttl">${v.title}</div>`;
+  c.onclick=()=>{
+    c.querySelector('.video-thumb').innerHTML=`<iframe src="https://www.youtube.com/embed/${v.id}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+  };
+  vrow.appendChild(c);
+});
+const grid=document.getElementById('classGrid');
+Object.keys(DATA).forEach((cls,i)=>{
+  const [c1,c2]=palette[i%palette.length].split(',');
+  const d=document.createElement('div');
+  d.className='class-card';
+  d.innerHTML=`${bookIcon(i,c1,c2)}<div class="lbl">${cls}</div>`;
+  d.onclick=()=>openSubjects(cls);
+  grid.appendChild(d);
+});
+let curClass='',curSubj='';
+function openSubjects(cls){
+  curClass=cls;
+  document.getElementById('subjectsTitle').textContent=cls+' — Subjects';
+  const list=document.getElementById('subjectList'); list.innerHTML='';
+  Object.entries(DATA[cls]).forEach(([subj,ch])=>{
+    const r=document.createElement('div'); r.className='row-card';
+    r.innerHTML=`<div><div class="nm">${subj}</div><div class="sub">${ch} chapters</div></div><div class="arrow">›</div>`;
+    r.onclick=()=>openChapters(subj,ch);
+    list.appendChild(r);
+  });
+  showScreen('subjects');
+}
+function openChapters(subj,count){
+  curSubj=subj;
+  document.getElementById('chaptersTitle').textContent=curClass+' — '+subj;
+  const list=document.getElementById('chapterList'); list.innerHTML='';
+  for(let i=1;i<=count;i++){
+    const r=document.createElement('div'); r.className='row-card';
+    r.innerHTML=`<div><div class="nm">Chapter ${i}</div><div class="sub">Q&A • Extra Q&A • MCQs</div></div><div class="arrow">›</div>`;
+    r.onclick=()=>openChapterPage(i);
+    list.appendChild(r);
+  }
+  showScreen('chapters');
+}
+function openChapterPage(i){
+  document.getElementById('chapterPageTitle').textContent=curClass+' • '+curSubj+' • Chapter '+i;
+  showScreen('chapterpage');
+}
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function goto(id){
+  showScreen('home');
+  toggleMenu(true);
+  setTimeout(()=>document.getElementById(id).scrollIntoView({behavior:'smooth'}),50);
+}
+function toggleMenu(forceClose){
+  const m=document.getElementById('menu'), o=document.getElementById('overlay');
+  if(forceClose){m.classList.remove('open');o.classList.remove('show');return;}
+  m.classList.toggle('open'); o.classList.toggle('show');
+}
+function toggleSearch(){document.getElementById('searchbar').classList.toggle('show');}
+function toggleLang(e){e.stopPropagation();document.getElementById('langdrop').classList.toggle('show');}
+function setLang(l){document.getElementById('langdrop').classList.remove('show');toast('Website language switched to '+l);}
+document.addEventListener('click',()=>document.getElementById('langdrop').classList.remove('show'));
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),1900);
+}
+</script>
+</body>
+</html>

@@ -198,6 +198,26 @@ describe("store & visibility", () => {
     expect(JSON.stringify(anon.body)).not.toContain("fileKey");
   });
 
+  it("says where each note belongs (medium, class, subject, chapter) with a link", async () => {
+    const chapterNote = await makeNote({ title: "Chapter note" });
+    const subjectNote = await makeNote({ title: "Whole-subject note", subjectLevel: true });
+    const { body } = await api().get(`/api/notes?medium=english-medium&classSlug=class-10&subject=social-science`);
+    const byId = new Map(body.notes.map((n: { id: string }) => [n.id, n]));
+    expect(byId.get(chapterNote.id)).toMatchObject({
+      place: {
+        medium: { slug: "english-medium" },
+        classLevel: { name: "Class 10", slug: "class-10" },
+        subject: { slug: "social-science" },
+        chapter: { number: 1, slug: "chapter-1" },
+        href: "/english-medium/class-10/social-science/chapter-1",
+      },
+    });
+    expect(byId.get(subjectNote.id)).toMatchObject({
+      place: { chapter: null, href: "/english-medium/class-10/social-science" },
+    });
+    await prisma.note.deleteMany({ where: { id: { in: [chapterNote.id, subjectNote.id] } } });
+  });
+
   it("the chapter page lists chapter notes and whole-subject notes", async () => {
     await makeNote();
     await makeNote({ title: "Full subject guide", subjectLevel: true });

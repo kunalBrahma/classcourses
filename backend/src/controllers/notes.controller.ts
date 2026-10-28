@@ -5,13 +5,21 @@ import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
-import { classSlugFrom } from "../services/catalog.service";
+import { catalogHref, classSlugFrom } from "../services/catalog.service";
 import { requireSetting } from "../services/settings.service";
 import { getSignedDownloadUrl } from "../services/storage.service";
 import { hasNoteAccess, publicNoteWhere, quotePrice, requirePublicNote } from "../services/order.service";
 
 // Premium / free notes for students. Files are only ever handed out as
 // short-lived signed URLs from the PRIVATE bucket.
+
+const placeSubjectSelect = {
+  name: true,
+  nativeName: true,
+  slug: true,
+  medium: { select: { name: true, slug: true } },
+  classLevel: { select: { name: true, slug: true } },
+} as const;
 
 export const noteListSelect = {
   id: true,
@@ -20,9 +28,27 @@ export const noteListSelect = {
   pricePaise: true,
   isFree: true,
   fileSize: true,
-  chapter: { select: { id: true, title: true, slug: true, number: true } },
-  subject: { select: { id: true, name: true, slug: true } },
+  chapter: { select: { id: true, title: true, slug: true, number: true, subject: { select: placeSubjectSelect } } },
+  subject: { select: { id: true, ...placeSubjectSelect } },
 } as const;
+
+type NoteRow = Prisma.NoteGetPayload<{ select: typeof noteListSelect }>;
+
+// Adds `place`: where the note belongs (medium, class, subject, chapter) and
+// the site link to that page, so the store can label and link each note.
+const withPlace = <T extends NoteRow>(n: T) => {
+  const subject = n.chapter?.subject ?? n.subject;
+  const place = subject
+    ? {
+        medium: subject.medium,
+        classLevel: subject.classLevel,
+        subject: { name: subject.name, nativeName: subject.nativeName, slug: subject.slug },
+        chapter: n.chapter ? { number: n.chapter.number, title: n.chapter.title, slug: n.chapter.slug } : null,
+        href: catalogHref(subject.medium.slug, subject.classLevel.slug, subject.slug, ...(n.chapter ? [n.chapter.slug] : [])),
+      }
+    : null;
+  return { ...n, place };
+};
 
 const listQuery = z.object({
   medium: z.string().max(80).optional(),
@@ -64,13 +90,13 @@ export const listNotes = asyncHandler(async (req: AuthRequest, res: Response) =>
     take: 200,
     select: noteListSelect,
   });
-  res.json({ notes: await withOwned(notes, req.user?.userId) });
+  res.json({ notes: await withOwned(notes.map(withPlace), req.user?.userId) });
 });
 
 export const getNote = asyncHandler(async (req: AuthRequest, res: Response) => {
   await requirePublicNote(req.params.id);
   const note = await prisma.note.findUniqueOrThrow({ where: { id: req.params.id }, select: noteListSelect });
-  const [withFlag] = await withOwned([note], req.user?.userId);
+  const [withFlag] = await withOwned([withPlace(note)], req.user?.userId);
   res.json({ note: withFlag });
 });
 
@@ -105,5 +131,5 @@ export const myNotes = asyncHandler(async (req: AuthRequest, res: Response) => {
     orderBy: { grantedAt: "desc" },
     select: { grantedAt: true, note: { select: noteListSelect } },
   });
-  res.json({ notes: access.map((a) => ({ ...a.note, owned: true, grantedAt: a.grantedAt })) });
+  res.json({ notes: access.map((a) => ({ ...withPlace(a.note), owned: true, grantedAt: a.grantedAt })) });
 });

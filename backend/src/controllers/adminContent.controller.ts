@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { Prisma, QuestionKind, QuestionSource } from "@prisma/client";
+import { Prisma, QuestionKind, QuestionSource, VideoFormat } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
-import { parseYouTubeId } from "../utils/youtube";
+import { parseYouTubeLink } from "../utils/youtube";
 import { normalizeQuestion, QuestionInput } from "../services/question.service";
 import { parseQuestionImport } from "../services/questionImport.service";
 import { getPublicUrl, getSignedUploadUrl } from "../services/storage.service";
@@ -203,27 +203,47 @@ export const importQuestions = asyncHandler(async (req: Request, res: Response) 
 // Videos
 // ===========================================================================
 
-const youtubeIdOrFail = (url: string) => {
-  const id = parseYouTubeId(url);
-  if (!id) throw new AppError(400, "That doesn't look like a YouTube link or video ID");
-  return id;
+const youtubeLinkOrFail = (url: string) => {
+  const link = parseYouTubeLink(url);
+  if (!link) throw new AppError(400, "That doesn't look like a YouTube link or video ID");
+  return link;
 };
+
+type VideoBody = { url: string; title: string; format?: VideoFormat; featured?: boolean };
+
+// featured → featuredAt (when it went on the home page); omitted = unchanged.
+const featuredAtFrom = (featured?: boolean) => (featured === undefined ? undefined : featured ? new Date() : null);
 
 export const createVideo = asyncHandler(async (req: Request, res: Response) => {
   const { id: chapterId } = await requireChapter(req.params.chapterId);
-  const { url, title } = req.body as { url: string; title: string };
+  const { url, title, format, featured } = req.body as VideoBody;
+  const link = youtubeLinkOrFail(url);
   const last = await prisma.video.findFirst({ where: { chapterId }, orderBy: { order: "desc" }, select: { order: true } });
   const video = await prisma.video.create({
-    data: { chapterId, youtubeId: youtubeIdOrFail(url), title, order: (last?.order ?? -1) + 1 },
+    data: {
+      chapterId,
+      youtubeId: link.id,
+      format: format ?? (link.isShort ? "SHORT" : "LANDSCAPE"),
+      featuredAt: featuredAtFrom(featured),
+      title,
+      order: (last?.order ?? -1) + 1,
+    },
   });
   res.status(201).json({ video });
 });
 
+// A new link without a format re-detects it; a format alone just changes it.
 export const updateVideo = asyncHandler(async (req: Request, res: Response) => {
-  const { url, title } = req.body as { url?: string; title?: string };
+  const { url, title, format, featured } = req.body as Partial<VideoBody>;
+  const link = url !== undefined ? youtubeLinkOrFail(url) : null;
   const video = await prisma.video.update({
     where: { id: req.params.id },
-    data: { title, ...(url !== undefined ? { youtubeId: youtubeIdOrFail(url) } : {}) },
+    data: {
+      title,
+      ...(link ? { youtubeId: link.id } : {}),
+      format: format ?? (link ? (link.isShort ? "SHORT" : "LANDSCAPE") : undefined),
+      featuredAt: featuredAtFrom(featured),
+    },
   });
   res.json({ video });
 });

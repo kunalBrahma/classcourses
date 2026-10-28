@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
-import { isAutoChapterSlug, slugOr, uniqueSlug } from "../utils/slug";
+import { isAutoChapterSlug, slugOr, uniqueSlug, RESERVED_TOP_LEVEL } from "../utils/slug";
 import { sanitizeOptional } from "../utils/sanitizeHtml";
 import { nextChapterNumber, nextChapterOrder, sortChaptersInReadingOrder } from "../services/catalog.service";
 
@@ -41,8 +41,16 @@ export const listMediumsAdmin = asyncHandler(async (_req: Request, res: Response
   });
 });
 
+// A medium's link can't be one of the site's own pages (/about, /notes …).
+const assertMediumLinkFree = (slug?: string) => {
+  if (slug && RESERVED_TOP_LEVEL.has(slug)) {
+    throw new AppError(400, `"${slug}" is the link of a page on the site. Pick a different link for this medium.`);
+  }
+};
+
 export const createMedium = asyncHandler(async (req: Request, res: Response) => {
   const { name, nativeName, slug, isActive } = req.body;
+  assertMediumLinkFree(slug);
   if (await prisma.medium.findFirst({ where: sameName(name), select: { id: true } })) {
     throw new AppError(409, `A medium called "${name.trim()}" already exists.`);
   }
@@ -50,7 +58,7 @@ export const createMedium = asyncHandler(async (req: Request, res: Response) => 
   const finalSlug =
     slug ??
     (await uniqueSlug(slugOr(name, `medium-${(await prisma.medium.count()) + 1}`), async (s) =>
-      Boolean(await prisma.medium.findUnique({ where: { slug: s }, select: { id: true } }))
+      RESERVED_TOP_LEVEL.has(s) || Boolean(await prisma.medium.findUnique({ where: { slug: s }, select: { id: true } }))
     ));
   const medium = await prisma.medium.create({
     data: {
@@ -65,6 +73,7 @@ export const createMedium = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const updateMedium = asyncHandler(async (req: Request, res: Response) => {
+  assertMediumLinkFree(req.body.slug);
   if (req.body.name && (await prisma.medium.findFirst({ where: { ...sameName(req.body.name), NOT: { id: req.params.id } }, select: { id: true } }))) {
     throw new AppError(409, `A medium called "${req.body.name.trim()}" already exists.`);
   }
