@@ -36,7 +36,7 @@ export function SocialIcons({ links, className }: { links: SocialLinks; classNam
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${PATHS[k].label} (opens in a new tab)`}
-            className="grid size-10 place-items-center rounded-xl bg-white/10 text-white transition hover:-translate-y-0.5 hover:bg-white/20"
+            className="press-3d grid size-11 place-items-center rounded-lg transition hover:-translate-y-0.5"
           >
             <svg viewBox="0 0 24 24" className="size-[18px] fill-current" aria-hidden="true">
               <path d={PATHS[k].d} />

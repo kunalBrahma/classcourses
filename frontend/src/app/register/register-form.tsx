@@ -56,7 +56,7 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
 
   const legal = (slug: string, label: string, published: boolean) =>
     published ? (
-      <Link href={`/${slug}`} className="font-medium text-primary hover:underline">{label}</Link>
+      <Link href={`/${slug}`} className="font-medium text-brand-amber-text hover:underline">{label}</Link>
     ) : (
       label
     );

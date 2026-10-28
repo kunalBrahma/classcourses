@@ -1,16 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, Noto_Sans_Bengali } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
 import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
 import { getSiteSettings } from "@/lib/server-api";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Mono is only for inline code in rich text: no preload.
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], preload: false });
 // Assamese is written in the Bengali–Assamese script; Noto Sans Bengali covers ৰ and ৱ.
-const bengali = Noto_Sans_Bengali({ variable: "--font-bengali", subsets: ["bengali"], weight: ["400", "500", "600", "700"] });
+// Not preloaded (it's the biggest file): it swaps in as soon as it arrives, so
+// it doesn't hold up the first paint of the page.
+const bengali = Noto_Sans_Bengali({ variable: "--font-bengali", subsets: ["bengali"], weight: ["400", "500", "600", "700"], preload: false });
 const display = Bricolage_Grotesque({ variable: "--font-display", subsets: ["latin"], weight: ["600", "700", "800"] });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,14 +23,14 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       "Free chapter-wise question-answers, MCQs, quizzes and notes for students of Assam, Class 1 to 12, in Assamese and English medium.",
     applicationName: site.name,
-    openGraph: { type: "website", siteName: site.name, locale: "en_IN" },
+    openGraph: { type: "website", siteName: site.name, locale: "en_IN", images: ["/logo.webp"] },
   };
 }
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f6f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#121130" },
+    { media: "(prefers-color-scheme: light)", color: "#f5a623" },
+    { media: "(prefers-color-scheme: dark)", color: "#241805" },
   ],
 };
 
@@ -53,7 +55,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {children}
           </main>
           <SiteFooter />
-          <Toaster richColors closeButton position="top-center" />
         </ThemeProvider>
       </body>
     </html>

@@ -15,6 +15,17 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// For pages: 404 → null (the page calls notFound()); any other failure throws,
+// so an API outage shows the error page instead of a wrong "not found".
+async function getJsonOrNull<T>(path: string): Promise<T | null> {
+  const res = await fetch(`${API}${path}`, { headers: { Accept: "application/json" } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+const seg = encodeURIComponent;
+
 export interface SocialLinks {
   youtube: string | null;
   facebook: string | null;
@@ -28,7 +39,7 @@ export interface PublicSettings {
   contact: { email: string };
   social: SocialLinks;
   quiz: { questionsPerQuiz: number; secondsPerQuestion: number; passMark: number; dailyLimit: number };
-  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number };
+  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number; awardRule?: "firstPassPerChapter" | "firstPassPerChapterPerDay" | "everyPass" };
 }
 
 const FALLBACK_SETTINGS: PublicSettings = {
@@ -36,7 +47,7 @@ const FALLBACK_SETTINGS: PublicSettings = {
   contact: { email: "about.classcourse@gmail.com" },
   social: { youtube: null, facebook: null, instagram: null, twitter: null, linkedin: null },
   quiz: { questionsPerQuiz: 10, secondsPerQuestion: 10, passMark: 7, dailyLimit: 10 },
-  coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50 },
+  coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50, awardRule: "firstPassPerChapter" },
 };
 
 export async function getSiteSettings(): Promise<PublicSettings> {
@@ -86,6 +97,266 @@ export async function getMediums(): Promise<Medium[]> {
     const { mediums } = await getJson<{ mediums: Medium[] }>("/api/catalog/mediums");
     cacheLife("minutes");
     return mediums;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Static pages & FAQ (published only; {{tokens}} already filled in) -----
+
+export interface SitePage {
+  slug: string;
+  title: string;
+  bodyHtml: string;
+  updatedAt: string;
+}
+
+export async function getPage(slug: string): Promise<SitePage | null> {
+  "use cache";
+  cacheTag("pages");
+  cacheLife("minutes");
+  const data = await getJsonOrNull<{ page: SitePage }>(`/api/content/pages/${seg(slug)}`);
+  return data?.page ?? null;
+}
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answerHtml: string;
+}
+
+export async function getFaq(): Promise<FaqItem[]> {
+  "use cache";
+  cacheTag("pages");
+  try {
+    const { items } = await getJson<{ items: FaqItem[] }>("/api/content/faq");
+    cacheLife("minutes");
+    return items;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Catalog (Medium → Class → Subject → Chapter) -------------------------
+// Cached for minutes and tagged "catalog"; a missing/hidden item is null.
+
+export interface ClassLevel {
+  id: string;
+  name: string;
+  nativeName: string | null;
+  slug: string;
+}
+
+export interface ChapterLink {
+  id: string;
+  number: number;
+  title: string;
+  slug: string;
+}
+
+/** Chapters in reading order; `part: null` = chapters outside any part (first). */
+export interface ChapterGroup {
+  part: { id: string; title: string } | null;
+  chapters: ChapterLink[];
+}
+
+export interface MediumClasses {
+  medium: Medium;
+  classes: (ClassLevel & { subjectCount: number })[];
+}
+
+export async function getMediumClasses(medium: string): Promise<MediumClasses | null> {
+  "use cache";
+  cacheTag("catalog");
+  cacheLife("minutes");
+  return getJsonOrNull<MediumClasses>(`/api/catalog/mediums/${seg(medium)}`);
+}
+
+export interface ClassSubjects {
+  medium: Medium;
+  classLevel: ClassLevel;
+  subjects: { id: string; name: string; nativeName: string | null; slug: string; chapterCount: number; groups: ChapterGroup[] }[];
+}
+
+export async function getClassSubjects(medium: string, classSlug: string): Promise<ClassSubjects | null> {
+  "use cache";
+  cacheTag("catalog");
+  cacheLife("minutes");
+  return getJsonOrNull<ClassSubjects>(`/api/catalog/mediums/${seg(medium)}/classes/${seg(classSlug)}`);
+}
+
+export interface SubjectDetail {
+  id: string;
+  name: string;
+  nativeName: string | null;
+  slug: string;
+  medium: Medium;
+  classLevel: ClassLevel;
+  chapterCount: number;
+  groups: ChapterGroup[];
+}
+
+export async function getSubject(medium: string, classSlug: string, subject: string): Promise<SubjectDetail | null> {
+  "use cache";
+  cacheTag("catalog");
+  cacheLife("minutes");
+  const data = await getJsonOrNull<{ subject: SubjectDetail }>(
+    `/api/catalog/mediums/${seg(medium)}/classes/${seg(classSlug)}/subjects/${seg(subject)}`
+  );
+  return data?.subject ?? null;
+}
+
+export interface NeighbourChapter {
+  number: number;
+  title: string;
+  slug: string;
+  partTitle: string | null;
+}
+
+export type Difficulty = "EASY" | "MEDIUM" | "HARD" | null;
+
+/** Rich text is HTML, already sanitised by the backend (sanitizeHtml.ts). */
+export interface QaItem {
+  id: string;
+  question: string;
+  answer: string;
+  difficulty: Difficulty;
+}
+
+/** No correct answer here: practice checks via POST /api/catalog/questions/:id/check. */
+export interface McqItem {
+  id: string;
+  question: string;
+  options: string[];
+  difficulty: Difficulty;
+}
+
+export interface ChapterContent {
+  textbook: { qa: QaItem[]; mcq: McqItem[] };
+  extra: { qa: QaItem[]; mcq: McqItem[] };
+}
+
+export interface ChapterPage {
+  chapter: { id: string; number: number; title: string; slug: string; aboutHtml: string | null; part: { id: string; title: string } | null; updatedAt: string };
+  content: ChapterContent;
+  subject: { id: string; name: string; nativeName: string | null; slug: string };
+  medium: Medium;
+  classLevel: ClassLevel;
+  videos: { id: string; youtubeId: string; format: "LANDSCAPE" | "SHORT"; title: string }[];
+  /** This chapter's notes + whole-subject notes. */
+  notes: { id: string; title: string; description: string | null; pricePaise: number; isFree: boolean; scope: "chapter" | "subject" }[];
+  /** null on the first / last chapter → that button is disabled. */
+  prev: NeighbourChapter | null;
+  next: NeighbourChapter | null;
+  position: { index: number; total: number };
+}
+
+export async function getChapter(medium: string, classSlug: string, subject: string, chapter: string): Promise<ChapterPage | null> {
+  "use cache";
+  cacheTag("catalog");
+  cacheLife("minutes");
+  return getJsonOrNull<ChapterPage>(
+    `/api/catalog/mediums/${seg(medium)}/classes/${seg(classSlug)}/subjects/${seg(subject)}/chapters/${seg(chapter)}`
+  );
+}
+
+// Quizzes a guest can see on a chapter page (public list; the signed-in
+// student's attempts are fetched in the browser).
+export interface PublicQuiz {
+  id: string;
+  kind: "CHAPTER" | "CUSTOM";
+  title: string;
+  description: string | null;
+  questions: number;
+  secondsPerQuestion: number;
+  passMark: number;
+  coinsPerPass: number;
+}
+
+export async function getChapterQuizzes(chapterId: string): Promise<PublicQuiz[]> {
+  "use cache";
+  cacheTag("catalog");
+  try {
+    const { quizzes } = await getJson<{ quizzes: PublicQuiz[] }>(`/api/catalog/quizzes?chapterId=${seg(chapterId)}`);
+    cacheLife("minutes");
+    return quizzes;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Notes (public store list; ownership is checked in the browser) --------
+
+export interface StoreNote {
+  id: string;
+  title: string;
+  description: string | null;
+  pricePaise: number;
+  isFree: boolean;
+  place: {
+    medium: { name: string; slug: string };
+    classLevel: { name: string; slug: string };
+    subject: { name: string; nativeName: string | null; slug: string };
+    chapter: { number: number; title: string; slug: string } | null;
+    href: string;
+  } | null;
+}
+
+export async function getStoreNotes(): Promise<StoreNote[]> {
+  "use cache";
+  cacheTag("catalog");
+  try {
+    const { notes } = await getJson<{ notes: StoreNote[] }>("/api/notes");
+    cacheLife("minutes");
+    return notes;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Home page rows ---------------------------------------------------------
+
+export interface FeaturedVideo {
+  id: string;
+  youtubeId: string;
+  format: "LANDSCAPE" | "SHORT";
+  title: string;
+  chapter: { title: string; number: number; href: string };
+  subject: { name: string; nativeName: string | null };
+  classLevel: { name: string };
+}
+
+export async function getFeaturedVideos(): Promise<FeaturedVideo[]> {
+  "use cache";
+  cacheTag("catalog");
+  try {
+    const { videos } = await getJson<{ videos: FeaturedVideo[] }>("/api/catalog/videos/featured");
+    cacheLife("minutes");
+    return videos;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+export interface NewsLink {
+  id: string;
+  source: string;
+  title: string;
+  url: string;
+}
+
+export async function getNews(): Promise<NewsLink[]> {
+  "use cache";
+  cacheTag("pages");
+  try {
+    const { items } = await getJson<{ items: NewsLink[] }>("/api/content/news");
+    cacheLife("minutes");
+    return items;
   } catch {
     cacheLife("seconds");
     return [];

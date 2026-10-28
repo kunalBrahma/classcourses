@@ -59,7 +59,7 @@ export function ResetForm() {
     <form onSubmit={submit} className="grid gap-5">
       <FormError message={error} />
       {error?.includes("expired") && (
-        <Link href="/forgot-password" className="-mt-2 text-sm font-semibold text-primary hover:underline">Send me a new link</Link>
+        <Link href="/forgot-password" className="-mt-2 text-sm font-semibold text-brand-amber-text hover:underline">Send me a new link</Link>
       )}
       <div className="grid gap-2">
         <Label htmlFor={`${id}-pw`} className="text-sm font-semibold">New password</Label>

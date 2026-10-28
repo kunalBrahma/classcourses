@@ -74,7 +74,7 @@ export function LoginForm() {
       <div className="grid gap-2">
         <div className="flex items-center justify-between">
           <Label htmlFor={`${id}-pw`} className="text-sm font-semibold">Password</Label>
-          <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">Forgot password?</Link>
+          <Link href="/forgot-password" className="text-sm font-medium text-brand-amber-text hover:underline">Forgot password?</Link>
         </div>
         <PasswordInput id={`${id}-pw`} value={password} onChange={setPassword} autoComplete="current-password" placeholder="Your password" />
       </div>
