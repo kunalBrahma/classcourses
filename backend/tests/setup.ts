@@ -13,6 +13,7 @@ export const resetDatabase = async () => {
   await prisma.page.deleteMany();
   await prisma.faqItem.deleteMany();
   await prisma.newsLink.deleteMany();
+  await prisma.contactMessage.deleteMany();
   await prisma.noteAccess.deleteMany();
   await prisma.order.deleteMany();
   await prisma.note.deleteMany();
@@ -28,6 +29,7 @@ export const resetDatabase = async () => {
   await prisma.subject.deleteMany();
   await prisma.classLevel.deleteMany();
   await prisma.passwordResetToken.deleteMany();
+  await prisma.emailVerificationCode.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
   await prisma.setting.deleteMany();

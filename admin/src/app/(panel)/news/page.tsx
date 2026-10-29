@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useId, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ExternalLinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ExternalLinkIcon, ImageIcon, ImagePlusIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { formCard, inputClass, pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { move } from "@/lib/catalog";
 import { NewsLink } from "@/lib/pages";
+import { uploadImage } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
 // Shown as the link text under the title, e.g. "indiatoday.in".
@@ -40,6 +41,9 @@ function NewsDialog({ target, onClose, onSaved }: {
   const [source, setSource] = useState("");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [isActive, setIsActive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +55,7 @@ function NewsDialog({ target, onClose, onSaved }: {
       setSource(target.item?.source ?? "");
       setTitle(target.item?.title ?? "");
       setUrl(target.item?.url ?? "");
+      setImageUrl(target.item?.imageUrl ?? null);
       setIsActive(target.item?.isActive ?? true);
       setError(null);
     }
@@ -63,7 +68,7 @@ function NewsDialog({ target, onClose, onSaved }: {
     try {
       // A link pasted without https:// still works.
       const link = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
-      const body = { source: source.trim(), title: title.trim(), url: link, isActive };
+      const body = { source: source.trim(), title: title.trim(), url: link, imageUrl, isActive };
       if (target?.item) await apiJson(`/api/admin/news/${target.item.id}`, { method: "PATCH", json: body });
       else await apiJson("/api/admin/news", { method: "POST", json: body });
       toast.success(target?.item ? "News link saved" : "News link added");
@@ -73,6 +78,19 @@ function NewsDialog({ target, onClose, onSaved }: {
       setError((err as ApiError).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      setImageUrl(await uploadImage(file));
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -103,6 +121,46 @@ function NewsDialog({ target, onClose, onSaved }: {
               required
             />
           </Field>
+          <div className="grid gap-2">
+            <span className="text-sm font-semibold">Picture <span className="font-normal text-muted-foreground">(optional)</span></span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                disabled={uploading}
+                className="relative grid aspect-video w-40 shrink-0 place-items-center overflow-hidden rounded-xl border-2 border-dashed bg-muted/40 text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5"
+                aria-label={imageUrl ? "Change picture" : "Add a picture"}
+              >
+                {imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- uploaded image on the public bucket
+                  <img src={imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+                ) : uploading ? (
+                  <Loader2Icon className="size-6 animate-spin" />
+                ) : (
+                  <ImagePlusIcon className="size-6" />
+                )}
+                {imageUrl && uploading && <Loader2Icon className="absolute size-6 animate-spin text-white" />}
+              </button>
+              <div className="grid gap-1.5 text-xs text-muted-foreground">
+                <span>Shown on the news card. A wide picture (16:9) looks best. PNG, JPG or WebP, up to 5 MB.</span>
+                {imageUrl && (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-fit px-2 text-destructive hover:text-destructive" onClick={() => setImageUrl(null)}>
+                    <XIcon /> Remove picture
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  void pickImage(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          </div>
           <label htmlFor={`${id}-on`} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">
             <span className="text-sm font-semibold">Show on the home page</span>
             <Switch id={`${id}-on`} checked={isActive} onCheckedChange={setIsActive} />
@@ -110,7 +168,7 @@ function NewsDialog({ target, onClose, onSaved }: {
           {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
           <DialogFooter>
             <Button type="button" variant="outline" className="h-10" onClick={onClose}>Cancel</Button>
-            <Button type="submit" className={pressable} disabled={busy}>
+            <Button type="submit" className={pressable} disabled={busy || uploading}>
               {busy && <Loader2Icon className="animate-spin" />} {target?.item ? "Save" : "Add link"}
             </Button>
           </DialogFooter>
@@ -174,7 +232,7 @@ export default function NewsPage() {
     <div className="space-y-6">
       <PageHeader
         title="News links"
-        description="The “Latest news” row on the home page. Each card opens the news site in a new tab. Shown in this order; switch one off to hide it."
+        description="The “Latest news” row on the home page and the News page. Each card opens the news site in a new tab. Shown in this order; switch one off to hide it."
         actions={<Button className={pressable} onClick={() => setDialog({ item: null })}><PlusIcon /> Add link</Button>}
       />
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -185,9 +243,17 @@ export default function NewsPage() {
             {items.map((item, index) => (
               <li key={item.id} className={cn("flex items-center gap-2 px-2 py-3 sm:gap-3 sm:px-4", !item.isActive && "bg-muted/30")}>
                 <ReorderButtons index={index} count={items.length} onMove={(d) => reorder(index, d)} label={item.title} />
+                <span className="hidden aspect-video w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:grid sm:place-items-center">
+                  {item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- uploaded image on the public bucket
+                    <img src={item.imageUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    <ImageIcon className="size-5 text-muted-foreground" />
+                  )}
+                </span>
                 <div className="min-w-0 flex-1">
                   <button type="button" onClick={() => setDialog({ item })} className="block w-full rounded-lg px-1 text-left hover:bg-muted/40">
-                    <span className="block text-xs font-bold uppercase tracking-wide text-brand-amber">{item.source}</span>
+                    <span className="block text-xs font-bold uppercase tracking-wide text-brand-amber-text">{item.source}</span>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold" lang="as">{item.title}</span>
                       {!item.isActive && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Hidden</Badge>}
@@ -217,7 +283,7 @@ export default function NewsPage() {
             ))}
             {items.length === 0 && (
               <li className="px-4 py-12 text-center text-sm text-muted-foreground">
-                No news links yet. Until you add one, the home page hides the news row.
+                No news links yet. Until you add one, the site shows a few example news sites.
               </li>
             )}
           </ol>

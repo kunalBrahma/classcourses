@@ -46,7 +46,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
 
 export function AuthLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="font-semibold text-brand-amber-text hover:underline">
+    <Link href={href} className="-my-3 inline-flex min-h-11 items-center font-semibold text-brand-amber-text hover:underline">
       {children}
     </Link>
   );

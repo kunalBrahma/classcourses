@@ -18,7 +18,7 @@ export const siteLinks = (published: PageLink[], hasFaq: boolean) => [
 
 // Shown in the "Latest news" row until the admin adds links (Admin → News
 // links). These are the sources from the client's home-page mock (#35).
-export const DEFAULT_NEWS = [
+export const DEFAULT_NEWS: { id: string; source: string; title: string; url: string; imageUrl?: string | null }[] = [
   { id: "default-1", source: "India Today", title: "Education & school updates", url: "https://www.indiatoday.in/education-today" },
   { id: "default-2", source: "Indian Express", title: "National education news", url: "https://indianexpress.com/section/education/" },
   { id: "default-3", source: "Just Rangaloo Things", title: "Assam & NE India local news", url: "https://justrangaloothings.in" },

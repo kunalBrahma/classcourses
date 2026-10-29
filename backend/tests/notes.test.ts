@@ -321,16 +321,41 @@ describe("buying a note", () => {
     expect((await verify(created.body.order.id, otherPaid)).status).toBe(400);
   });
 
-  it("authorized-but-not-captured is PENDING until the webhook confirms", async () => {
+  it("an authorized payment is captured by us (no need for the dashboard's auto-capture)", async () => {
     const note = await makeNote();
     const created = await order(note.id);
     const paid = rzp.pay(created.body.checkout.razorpayOrderId, { status: "authorized" });
-    expect((await verify(created.body.order.id, paid)).body.status).toBe("PENDING");
+    expect((await verify(created.body.order.id, paid)).body.status).toBe("PAID");
+    expect(rzp.payments.get(paid.payment.id)!.status).toBe("captured");
 
+    // The late webhooks (authorized, then captured) change nothing
+    const late = rzp.webhook("payment.authorized", { ...paid.payment, status: "authorized" });
+    expect((await sendWebhook(late.body, late.signature)).status).toBe(200);
     const hook = rzp.webhook("payment.captured", { ...paid.payment, status: "captured" });
-    const res = await sendWebhook(hook.body, hook.signature);
-    expect(res.body).toMatchObject({ ok: true, granted: true });
+    expect((await sendWebhook(hook.body, hook.signature)).body).toMatchObject({ ok: true, granted: true });
+    expect(await prisma.noteAccess.count({ where: { userId: studentId } })).toBe(1);
+  });
+
+  it("the webhook alone can capture and confirm an authorized payment", async () => {
+    const note = await makeNote();
+    const created = await order(note.id);
+    const paid = rzp.pay(created.body.checkout.razorpayOrderId, { status: "authorized" });
+    const hook = rzp.webhook("payment.authorized", paid.payment);
+    expect((await sendWebhook(hook.body, hook.signature)).body).toMatchObject({ ok: true, granted: true });
     expect((await as(student).get(`/api/payments/orders/${created.body.order.id}`)).body.order.status).toBe("PAID");
+  });
+
+  it("a payment in another currency, or an authorized wrong amount, is never accepted or captured", async () => {
+    const note = await makeNote();
+    const created = await order(note.id);
+    const usd = rzp.pay(created.body.checkout.razorpayOrderId, { currency: "USD" });
+    expect((await verify(created.body.order.id, usd)).status).toBe(400);
+    const short = rzp.pay(created.body.checkout.razorpayOrderId, { status: "authorized", amount: 100 });
+    expect((await verify(created.body.order.id, short)).status).toBe(400);
+    expect(rzp.payments.get(short.payment.id)!.status).toBe("authorized");
+    const stored = await prisma.order.findUniqueOrThrow({ where: { id: created.body.order.id } });
+    expect(stored.status).toBe("CREATED");
+    expect(stored.lastError).toMatch(/Amount mismatch/);
   });
 
   it("webhook: rejects bad signatures, ignores unknown orders, refuses wrong amounts", async () => {
@@ -395,17 +420,36 @@ describe("coins at checkout", () => {
     expect(await balance()).toBe(55);
   });
 
-  it("a new checkout for the same note cancels the old one and returns its coins", async () => {
+  it("opening checkout again gives back the same order; changing the coin choice replaces it", async () => {
     const note = await makeNote();
     await giveCoins(300);
     const first = await order(note.id, true);
-    const second = await order(note.id, true);
-    // 300 − 245 held by the first order, +245 refunded when it was replaced, −245 held by the second
-    expect(await balance()).toBe(55);
-    const firstStored = await prisma.order.findUniqueOrThrow({ where: { id: first.body.order.id } });
-    expect(firstStored.status).toBe("CANCELLED");
+    const again = await order(note.id, true);
+    expect(again.status).toBe(201);
+    expect(again.body.order.id).toBe(first.body.order.id);
+    expect(again.body.checkout.razorpayOrderId).toBe(first.body.checkout.razorpayOrderId);
+    expect(await balance()).toBe(55); // held once
+
+    const noCoins = await order(note.id, false);
+    expect(noCoins.body.order.id).not.toBe(first.body.order.id);
+    expect(noCoins.body.order.amountPaise).toBe(4900);
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: first.body.order.id } })).status).toBe("CANCELLED");
+    expect(await balance()).toBe(300);
     expect(await prisma.coinTransaction.count({ where: { reason: "NOTE_DISCOUNT_REFUND", refId: first.body.order.id } })).toBe(1);
-    expect(second.body.order.status).toBe("CREATED");
+  });
+
+  it("a double tap (two checkouts at the same moment) makes one order and holds coins once", async () => {
+    const note = await makeNote();
+    await giveCoins(300);
+    const before = rzp.orders.size;
+    const results = await Promise.all([order(note.id, true), order(note.id, true), order(note.id, true)]);
+    const ok = results.filter((r) => r.status === 201);
+    // The rest either got the same order back or "already opening"
+    for (const r of results) expect([201, 409]).toContain(r.status);
+    expect(new Set(ok.map((r) => r.body.order.id)).size).toBe(1);
+    expect(await prisma.order.count({ where: { noteId: note.id, status: "CREATED" } })).toBe(1);
+    expect(rzp.orders.size - before).toBe(1);
+    expect(await balance()).toBe(55);
   });
 
   it("an abandoned order gives its coins back after 30 minutes", async () => {
@@ -418,11 +462,43 @@ describe("coins at checkout", () => {
     expect(orders.body.orders[0].status).toBe("CANCELLED");
     expect(await balance()).toBe(300);
 
-    // If the student pays that old checkout anyway, they still get the note.
+    // If the student pays that old checkout anyway, they still get the note,
+    // and the discount coins are taken again (they used the discount).
     const paid = rzp.pay(created.body.checkout.razorpayOrderId);
     const hook = rzp.webhook("payment.captured", paid.payment);
     expect((await sendWebhook(hook.body, hook.signature)).body.granted).toBe(true);
     expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(200);
+    expect(await balance()).toBe(55);
+    expect(await prisma.coinTransaction.count({ where: { reason: "NOTE_DISCOUNT_REAPPLIED", refId: created.body.order.id } })).toBe(1);
+  });
+
+  it("paid after expiry with the coins already spent: still unlocked, flagged for the admin", async () => {
+    const note = await makeNote();
+    await giveCoins(300);
+    const created = await order(note.id, true);
+    await prisma.order.update({ where: { id: created.body.order.id }, data: { createdAt: new Date(Date.now() - 31 * 60_000) } });
+    await as(student).get("/api/users/me/orders"); // cancels it, coins back to 300
+    await prisma.$transaction((tx) => applyCoinChange(tx, { userId: studentId, delta: -300, reason: "ADMIN_ADJUST", note: "spent" }));
+
+    const paid = rzp.pay(created.body.checkout.razorpayOrderId);
+    const hook = rzp.webhook("payment.captured", paid.payment);
+    expect((await sendWebhook(hook.body, hook.signature)).body.granted).toBe(true);
+    const stored = await prisma.order.findUniqueOrThrow({ where: { id: created.body.order.id } });
+    expect(stored.status).toBe("PAID");
+    expect(stored.lastError).toMatch(/already been spent/);
+    expect(await balance()).toBe(0);
+  });
+
+  it("a stale order that was actually paid is confirmed, not cancelled", async () => {
+    const note = await makeNote();
+    await giveCoins(300);
+    const created = await order(note.id, true);
+    rzp.pay(created.body.checkout.razorpayOrderId); // paid, but the confirmation never arrived
+    await prisma.order.update({ where: { id: created.body.order.id }, data: { createdAt: new Date(Date.now() - 31 * 60_000) } });
+    const orders = await as(student).get("/api/users/me/orders");
+    expect(orders.body.orders[0].status).toBe("PAID");
+    expect(await balance()).toBe(55);
+    expect(await prisma.coinTransaction.count({ where: { reason: "NOTE_DISCOUNT_REFUND" } })).toBe(0);
   });
 
   it("if Razorpay is down, the order is cancelled and coins returned", async () => {
@@ -479,6 +555,101 @@ describe("admin: orders", () => {
     const otherId = (await prisma.user.findUniqueOrThrow({ where: { email: other.email } })).id;
     expect((await as(admin).post(`/api/admin/notes/${note.id}/grant`, { userId: otherId })).status).toBe(201);
     expect((await as(other).get(`/api/notes/${note.id}/download`)).status).toBe(200);
+  });
+
+  it("two different orders for one note paid at once: one unlocks, the other is refunded automatically", async () => {
+    const note = await makeNote();
+    await giveCoins(300);
+    const withCoins = await order(note.id, true);
+    // A second tab before the change of mind: we simulate the old checkout
+    // still being open by creating the replacement and paying both.
+    const full = await order(note.id, false);
+    const p1 = rzp.pay(withCoins.body.checkout.razorpayOrderId);
+    const p2 = rzp.pay(full.body.checkout.razorpayOrderId);
+    const h1 = rzp.webhook("payment.captured", p1.payment);
+    const h2 = rzp.webhook("payment.captured", p2.payment);
+    const [r1, r2] = await Promise.all([sendWebhook(h1.body, h1.signature), sendWebhook(h2.body, h2.signature)]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+
+    const orders = await prisma.order.findMany({ where: { noteId: note.id }, orderBy: { createdAt: "asc" } });
+    expect(orders.map((o) => o.status).sort()).toEqual(["PAID", "REFUNDED"]);
+    const refunded = orders.find((o) => o.status === "REFUNDED")!;
+    expect(refunded.refundId).toMatch(/^rfnd_/);
+    expect(rzp.payments.get(refunded.razorpayPaymentId!)!.status).toBe("refunded");
+    expect(await prisma.noteAccess.count({ where: { userId: studentId, noteId: note.id } })).toBe(1);
+    expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(200);
+    // Coins: the paid order keeps its discount; nothing is held by the refunded one
+    const paidOrder = orders.find((o) => o.status === "PAID")!;
+    expect(await balance()).toBe(300 - paidOrder.coinsUsed);
+
+    // Razorpay's own refund webhook for our refund changes nothing
+    const rf = [...rzp.refunds.values()].find((r) => r.payment_id === refunded.razorpayPaymentId)!;
+    const rh = rzp.webhook("refund.processed", rzp.payments.get(refunded.razorpayPaymentId!)!, undefined, rf);
+    expect((await sendWebhook(rh.body, rh.signature)).body).toMatchObject({ ok: true, refunded: false });
+    expect(await prisma.noteAccess.count({ where: { userId: studentId, noteId: note.id } })).toBe(1);
+  });
+
+  it("if the automatic refund fails, Reconcile retries it", async () => {
+    const note = await makeNote();
+    const first = await order(note.id);
+    await verify(first.body.order.id, rzp.pay(first.body.checkout.razorpayOrderId));
+    // A second order for a note the student already owns can only exist by a race; make one directly.
+    const dup = await prisma.order.create({ data: { userId: studentId, noteId: note.id, listPricePaise: 4900, amountPaise: 4900 } });
+    const rzpOrder = `order_dup_${Date.now()}`;
+    rzp.orders.set(rzpOrder, { id: rzpOrder, amount: 4900, currency: "INR", receipt: dup.id, status: "created" });
+    await prisma.order.update({ where: { id: dup.id }, data: { razorpayOrderId: rzpOrder } });
+    const paid = rzp.pay(rzpOrder);
+
+    rzp.failNextRefund = true;
+    const hook = rzp.webhook("payment.captured", paid.payment);
+    expect((await sendWebhook(hook.body, hook.signature)).status).toBe(200);
+    let stored = await prisma.order.findUniqueOrThrow({ where: { id: dup.id } });
+    expect(stored.status).toBe("PAID");
+    expect(stored.lastError).toMatch(/automatic refund failed/);
+
+    const res = await as(admin).post(`/api/admin/orders/${dup.id}/reconcile`);
+    expect(res.body).toMatchObject({ changed: true, status: "REFUNDED" });
+    stored = await prisma.order.findUniqueOrThrow({ where: { id: dup.id } });
+    expect(stored.refundId).toMatch(/^rfnd_/);
+    expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(200); // first purchase untouched
+  });
+
+  it("a full refund made in the Razorpay dashboard removes access and returns held coins", async () => {
+    const note = await makeNote();
+    await giveCoins(300);
+    const created = await order(note.id, true);
+    const paid = rzp.pay(created.body.checkout.razorpayOrderId);
+    await verify(created.body.order.id, paid);
+    expect(await balance()).toBe(55);
+
+    const refund = { id: "rfnd_dashboard1", payment_id: paid.payment.id, amount: paid.payment.amount, status: "processed" };
+    const hook = rzp.webhook("refund.processed", { ...paid.payment, status: "refunded", amount_refunded: paid.payment.amount }, undefined, refund);
+    expect((await sendWebhook(hook.body, hook.signature)).body).toMatchObject({ ok: true, refunded: true });
+    expect((await sendWebhook(hook.body, hook.signature)).body).toMatchObject({ ok: true, refunded: false }); // replay
+    const stored = await prisma.order.findUniqueOrThrow({ where: { id: created.body.order.id } });
+    expect(stored).toMatchObject({ status: "REFUNDED", refundId: "rfnd_dashboard1" });
+    expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(403);
+    expect(await balance()).toBe(300);
+
+    // A partial refund is only noted
+    const note2 = await makeNote({ title: "Second" });
+    const o2 = await order(note2.id);
+    const p2 = rzp.pay(o2.body.checkout.razorpayOrderId);
+    await verify(o2.body.order.id, p2);
+    const part = rzp.webhook("refund.processed", { ...p2.payment, amount_refunded: 1000 }, undefined, { id: "rfnd_part", payment_id: p2.payment.id, amount: 1000, status: "processed" });
+    expect((await sendWebhook(part.body, part.signature)).body).toMatchObject({ refunded: false });
+    expect((await as(student).get(`/api/notes/${note2.id}/download`)).status).toBe(200);
+  });
+
+  it("admin grant and a payment confirming at the same moment don't clash", async () => {
+    const note = await makeNote();
+    const created = await order(note.id);
+    const paid = rzp.pay(created.body.checkout.razorpayOrderId);
+    const [g, v] = await Promise.all([as(admin).post(`/api/admin/notes/${note.id}/grant`, { userId: studentId }), verify(created.body.order.id, paid)]);
+    expect(g.status).toBe(201);
+    expect(v.status).toBe(200);
+    expect(await prisma.noteAccess.count({ where: { userId: studentId, noteId: note.id } })).toBe(1);
   });
 
   it("is admin-only", async () => {

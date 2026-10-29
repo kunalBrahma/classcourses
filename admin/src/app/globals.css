@@ -41,8 +41,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-brand-navy: var(--brand-navy);
   --color-brand-amber: var(--brand-amber);
+  --color-brand-amber-light: var(--brand-amber-light);
+  --color-brand-amber-dark: var(--brand-amber-dark);
+  --color-brand-amber-text: var(--brand-amber-text);
+  --color-brand-cream: var(--brand-cream);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-brown: var(--brand-brown);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -55,82 +60,98 @@
 }
 
 /*
- * Class Course brand (from the client's requirements document):
- *   navy  #1f1d4a   indigo #4f46e5 / #6366f1   amber #f59e0b
- * Light: warm off-white canvas, white cards, navy sidebar with amber active state.
- * Dark:  deep navy canvas, slightly lifted navy cards, same sidebar language.
+ * Class Course brand: the same amber + cream palette as the student site
+ * (frontend/src/app/globals.css, from the client's home-page mock). Keep the
+ * two files' colour values in step. Text on amber is ink (never white), and
+ * amber text on white/cream uses --brand-amber-text (plain amber fails AA).
+ * Light: cream canvas, white cards, dark-brown sidebar with amber active state.
+ * Dark:  the site's warm dark mode.
  */
 :root {
-  --brand-navy: oklch(0.262 0.078 283);
-  --brand-amber: oklch(0.769 0.188 70.08);
+  --brand-amber: #f5a623;
+  --brand-amber-light: #ffbe4d;
+  --brand-amber-dark: #c9780c;
+  --brand-amber-text: #9a5208;
+  --brand-cream: #fff7e8;
+  --brand-ink: #3a2a00;
+  --brand-brown: #2e2000;
 
-  --background: oklch(0.975 0.005 90);
-  --foreground: oklch(0.262 0.06 283);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.262 0.06 283);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.262 0.06 283);
-  --primary: oklch(0.511 0.262 276.966);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.014 280);
-  --secondary-foreground: oklch(0.32 0.09 280);
-  --muted: oklch(0.955 0.008 280);
-  --muted-foreground: oklch(0.52 0.03 280);
-  --accent: oklch(0.955 0.025 280);
-  --accent-foreground: oklch(0.36 0.14 277);
-  --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.6 0.14 155);
-  --warning: oklch(0.7 0.16 65);
-  --border: oklch(0.915 0.01 280);
-  --input: oklch(0.89 0.012 280);
-  --ring: oklch(0.585 0.233 277.117);
-  --chart-1: oklch(0.585 0.233 277.117);
-  --chart-2: oklch(0.769 0.188 70.08);
-  --chart-3: oklch(0.6 0.14 155);
-  --chart-4: oklch(0.62 0.2 330);
-  --chart-5: oklch(0.45 0.12 280);
+  --background: #fff7e8;
+  --foreground: #3a2a00;
+  --card: #ffffff;
+  --card-foreground: #3a2a00;
+  --popover: #ffffff;
+  --popover-foreground: #3a2a00;
+  --primary: #f5a623;
+  --primary-foreground: #3a2a00;
+  --secondary: #fff1d6;
+  --secondary-foreground: #3a2a00;
+  --muted: #fdf0d8;
+  --muted-foreground: #75561a;
+  --accent: #ffe9bd;
+  --accent-foreground: #3a2a00;
+  --destructive: #c2261d;
+  /* A shade darker than the site's #2c7a3a: admin badges sit on a green tint. */
+  --success: #256b31;
+  --warning: #9a5208;
+  --border: #f3dfb6;
+  --input: #ead2a1;
+  --ring: #c9780c;
+  --chart-1: #f5a623;
+  --chart-2: #c9780c;
+  --chart-3: #2c7a3a;
+  --chart-4: #ff8a3d;
+  --chart-5: #8a5a00;
   --radius: 0.75rem;
 
-  --sidebar: oklch(0.262 0.078 283);
-  --sidebar-foreground: oklch(0.9 0.03 280);
-  --sidebar-primary: oklch(0.769 0.188 70.08);
-  --sidebar-primary-foreground: oklch(0.262 0.078 283);
-  --sidebar-accent: oklch(0.33 0.085 283);
-  --sidebar-accent-foreground: oklch(0.99 0 0);
-  --sidebar-border: oklch(0.34 0.07 283);
-  --sidebar-ring: oklch(0.769 0.188 70.08);
+  --sidebar: #2e2000;
+  --sidebar-foreground: #ffe9c2;
+  --sidebar-primary: #f5a623;
+  --sidebar-primary-foreground: #3a2a00;
+  --sidebar-accent: #3d2c06;
+  --sidebar-accent-foreground: #fff7e8;
+  --sidebar-border: #4a3610;
+  --sidebar-ring: #f5a623;
+
+  /* Dashboard bars: dark amber on white (3.2:1, plain amber is too faint). */
+  --chart-bar: #c9780c;
+  --chart-bar-active: #8a5a00;
 }
 
 .dark {
-  --background: oklch(0.17 0.04 283);
-  --foreground: oklch(0.95 0.01 280);
-  --card: oklch(0.215 0.055 283);
-  --card-foreground: oklch(0.95 0.01 280);
-  --popover: oklch(0.235 0.06 283);
-  --popover-foreground: oklch(0.95 0.01 280);
-  --primary: oklch(0.62 0.21 277);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.28 0.06 283);
-  --secondary-foreground: oklch(0.93 0.02 280);
-  --muted: oklch(0.26 0.05 283);
-  --muted-foreground: oklch(0.72 0.03 280);
-  --accent: oklch(0.29 0.07 283);
-  --accent-foreground: oklch(0.95 0.01 280);
-  --destructive: oklch(0.704 0.191 22.216);
-  --success: oklch(0.72 0.15 155);
-  --warning: oklch(0.8 0.15 70);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.62 0.21 277);
+  --brand-amber-text: #ffbe4d;
+  --background: #1a1206;
+  --foreground: #fff1d6;
+  --card: #261a0a;
+  --card-foreground: #fff1d6;
+  --popover: #2c1f0c;
+  --popover-foreground: #fff1d6;
+  --primary: #f5a623;
+  --primary-foreground: #2e2000;
+  --secondary: #33240c;
+  --secondary-foreground: #fff1d6;
+  --muted: #2c1f0c;
+  --muted-foreground: #cdb48a;
+  --accent: #3a2a0e;
+  --accent-foreground: #fff1d6;
+  --destructive: #f87171;
+  --success: #6fcf7a;
+  --warning: #ffbe4d;
+  --border: rgb(255 233 194 / 0.1);
+  --input: rgb(255 233 194 / 0.16);
+  --ring: #ffbe4d;
 
-  --sidebar: oklch(0.2 0.06 283);
-  --sidebar-foreground: oklch(0.88 0.03 280);
-  --sidebar-primary: oklch(0.769 0.188 70.08);
-  --sidebar-primary-foreground: oklch(0.2 0.06 283);
-  --sidebar-accent: oklch(0.28 0.07 283);
-  --sidebar-accent-foreground: oklch(0.99 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.769 0.188 70.08);
+  --sidebar: #120c03;
+  --sidebar-foreground: #ffe9c2;
+  --sidebar-primary: #f5a623;
+  --sidebar-primary-foreground: #2e2000;
+  --sidebar-accent: #2c1f0c;
+  --sidebar-accent-foreground: #fff7e8;
+  --sidebar-border: rgb(255 233 194 / 0.08);
+  --sidebar-ring: #f5a623;
+
+  --chart-bar: #f5a623;
+  --chart-bar-active: #ffbe4d;
 }
 
 @layer base {

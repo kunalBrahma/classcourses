@@ -15,8 +15,9 @@ export function CoinCard() {
 
   return (
     <section
+      id="rewards"
       aria-label="Your coins"
-      className="flex items-center gap-3 rounded-3xl bg-[image:var(--header-bg)] px-4 py-3.5 text-brand-ink shadow-[var(--header-shadow)] dark:text-brand-cream"
+      className="scroll-mt-24 flex items-center gap-3 rounded-3xl bg-[image:var(--header-bg)] px-4 py-3.5 text-brand-ink shadow-[var(--header-shadow)] dark:text-brand-cream"
     >
       <Coin3D />
       <div className="min-w-0">

@@ -10,12 +10,15 @@ export const FAKE_WEBHOOK_SECRET = "fake_webhook_secret_value";
 export const FAKE_PORT = 4599;
 
 interface FakeOrder { id: string; amount: number; currency: string; receipt: string; status: string }
-interface FakePayment { id: string; order_id: string; amount: number; currency: string; status: string; error_description?: string }
+interface FakePayment { id: string; order_id: string; amount: number; currency: string; status: string; amount_refunded?: number; error_description?: string }
+interface FakeRefund { id: string; payment_id: string; amount: number; status: string }
 
 export class FakeRazorpay {
   orders = new Map<string, FakeOrder>();
   payments = new Map<string, FakePayment>();
+  refunds = new Map<string, FakeRefund>();
   failNextOrderCreate = false;
+  failNextRefund = false;
   private server = http.createServer((req, res) => this.handle(req, res));
 
   start() {
@@ -26,13 +29,13 @@ export class FakeRazorpay {
   }
 
   // Simulates the student paying in Razorpay Checkout. Returns what the checkout success handler receives.
-  pay(orderId: string, opts: { status?: string; amount?: number } = {}) {
+  pay(orderId: string, opts: { status?: string; amount?: number; currency?: string } = {}) {
     const order = this.orders.get(orderId)!;
     const payment: FakePayment = {
       id: `pay_${crypto.randomBytes(7).toString("hex")}`,
       order_id: orderId,
       amount: opts.amount ?? order.amount,
-      currency: "INR",
+      currency: opts.currency ?? "INR",
       status: opts.status ?? "captured",
       ...(opts.status === "failed" ? { error_description: "Card declined by bank" } : {}),
     };
@@ -41,8 +44,8 @@ export class FakeRazorpay {
     return { payment, razorpay_order_id: orderId, razorpay_payment_id: payment.id, razorpay_signature: signature };
   }
 
-  webhook(event: string, payment: FakePayment, secret = FAKE_WEBHOOK_SECRET) {
-    const body = JSON.stringify({ event, payload: { payment: { entity: payment } } });
+  webhook(event: string, payment: FakePayment, secret = FAKE_WEBHOOK_SECRET, refund?: FakeRefund) {
+    const body = JSON.stringify({ event, payload: { payment: { entity: payment }, ...(refund ? { refund: { entity: refund } } : {}) } });
     return { body, signature: crypto.createHmac("sha256", secret).update(body).digest("hex") };
   }
 
@@ -77,6 +80,33 @@ export class FakeRazorpay {
       const orderPayments = /^\/orders\/([^/]+)\/payments$/.exec(path);
       if (req.method === "GET" && orderPayments) {
         return send(200, { items: [...this.payments.values()].filter((p) => p.order_id === orderPayments[1]) });
+      }
+      const capture = /^\/payments\/([^/]+)\/capture$/.exec(path);
+      if (req.method === "POST" && capture) {
+        const p = this.payments.get(capture[1]);
+        if (!p) return send(400, { error: { description: "The id provided does not exist" } });
+        if (p.status === "captured") return send(400, { error: { description: "This payment has already been captured" } });
+        if (p.status !== "authorized") return send(400, { error: { description: "Only authorized payments can be captured" } });
+        const body = JSON.parse(raw);
+        if (body.amount !== p.amount || body.currency !== p.currency) return send(400, { error: { description: "Capture amount must be equal to the amount authorized" } });
+        p.status = "captured";
+        return send(200, p);
+      }
+      const refund = /^\/payments\/([^/]+)\/refund$/.exec(path);
+      if (req.method === "POST" && refund) {
+        const p = this.payments.get(refund[1]);
+        if (!p || p.status !== "captured") return send(400, { error: { description: "Payment can't be refunded" } });
+        if (this.failNextRefund) {
+          this.failNextRefund = false;
+          return send(500, { error: { description: "Internal error" } });
+        }
+        const body = JSON.parse(raw);
+        if ((p.amount_refunded ?? 0) + body.amount > p.amount) return send(400, { error: { description: "The total refund amount is greater than the refund payment amount" } });
+        const r = { id: `rfnd_${crypto.randomBytes(7).toString("hex")}`, payment_id: p.id, amount: body.amount, status: "processed" };
+        p.amount_refunded = (p.amount_refunded ?? 0) + body.amount;
+        if (p.amount_refunded === p.amount) p.status = "refunded";
+        this.refunds.set(r.id, r);
+        return send(200, r);
       }
       const payment = /^\/payments\/([^/]+)$/.exec(path);
       if (req.method === "GET" && payment) {

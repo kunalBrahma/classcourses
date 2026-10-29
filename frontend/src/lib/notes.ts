@@ -37,7 +37,7 @@ export interface PriceQuote {
 export interface OrderView {
   id: string;
   noteId: string;
-  status: "CREATED" | "PAID" | "CANCELLED";
+  status: "CREATED" | "PAID" | "CANCELLED" | "REFUNDED";
   amountPaise: number;
   coinsUsed: number;
 }

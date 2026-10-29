@@ -75,6 +75,8 @@ export interface NewsLink {
   source: string;
   title: string;
   url: string;
+  // Card picture (public bucket URL), or null
+  imageUrl: string | null;
   order: number;
   isActive: boolean;
 }

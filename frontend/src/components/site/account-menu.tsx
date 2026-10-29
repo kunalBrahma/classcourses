@@ -14,6 +14,7 @@ interface Me {
   id: string;
   email: string;
   name: string | null;
+  phone?: string | null;
   coins: number;
   role: "STUDENT" | "ADMIN";
 }

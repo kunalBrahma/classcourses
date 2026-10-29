@@ -45,7 +45,7 @@ export const getPublicNews = asyncHandler(async (_req: Request, res: Response) =
   const items = await prisma.newsLink.findMany({
     where: { isActive: true },
     orderBy: { order: "asc" },
-    select: { id: true, source: true, title: true, url: true },
+    select: { id: true, source: true, title: true, url: true, imageUrl: true },
   });
   res.json({ items });
 });
@@ -163,7 +163,7 @@ export const reorderFaq = asyncHandler(async (req: Request, res: Response) => {
 // News links (home page "Latest news")
 // ===========================================================================
 
-type NewsBody = { source: string; title: string; url: string; isActive?: boolean };
+type NewsBody = { source: string; title: string; url: string; imageUrl?: string | null; isActive?: boolean };
 
 export const listNewsAdmin = asyncHandler(async (_req: Request, res: Response) => {
   const items = await prisma.newsLink.findMany({ orderBy: { order: "asc" } });
@@ -171,17 +171,17 @@ export const listNewsAdmin = asyncHandler(async (_req: Request, res: Response) =
 });
 
 export const createNews = asyncHandler(async (req: Request, res: Response) => {
-  const { source, title, url, isActive } = req.body as NewsBody;
+  const { source, title, url, imageUrl, isActive } = req.body as NewsBody;
   const last = await prisma.newsLink.findFirst({ orderBy: { order: "desc" }, select: { order: true } });
   const item = await prisma.newsLink.create({
-    data: { source, title, url, isActive: isActive ?? true, order: (last?.order ?? -1) + 1 },
+    data: { source, title, url, imageUrl: imageUrl ?? null, isActive: isActive ?? true, order: (last?.order ?? -1) + 1 },
   });
   res.status(201).json({ item });
 });
 
 export const updateNews = asyncHandler(async (req: Request, res: Response) => {
-  const { source, title, url, isActive } = req.body as Partial<NewsBody>;
-  const item = await prisma.newsLink.update({ where: { id: req.params.id }, data: { source, title, url, isActive } });
+  const { source, title, url, imageUrl, isActive } = req.body as Partial<NewsBody>;
+  const item = await prisma.newsLink.update({ where: { id: req.params.id }, data: { source, title, url, imageUrl, isActive } });
   res.json({ item });
 });
 

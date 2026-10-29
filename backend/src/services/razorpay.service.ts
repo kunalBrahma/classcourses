@@ -23,7 +23,15 @@ export interface RazorpayPayment {
   currency: string;
   // created | authorized | captured | refunded | failed
   status: string;
+  amount_refunded?: number;
   error_description?: string | null;
+}
+
+export interface RazorpayRefund {
+  id: string;
+  payment_id: string;
+  amount: number;
+  status: string;
 }
 
 export const requireRazorpay = async (): Promise<RazorpaySettings> => {
@@ -80,6 +88,27 @@ export const fetchRazorpayPayment = async (paymentId: string) =>
 
 export const fetchRazorpayOrderPayments = async (razorpayOrderId: string) =>
   call<{ items: RazorpayPayment[] }>(await requireRazorpay(), "GET", `/orders/${encodeURIComponent(razorpayOrderId)}/payments`);
+
+// Captures an authorized payment, so confirming a payment doesn't depend on
+// the dashboard's auto-capture setting. A payment that is already captured
+// (auto-capture, or a parallel call) counts as success.
+export const captureRazorpayPayment = async (payment: RazorpayPayment): Promise<RazorpayPayment> => {
+  const config = await requireRazorpay();
+  try {
+    return await call<RazorpayPayment>(config, "POST", `/payments/${encodeURIComponent(payment.id)}/capture`, {
+      amount: payment.amount,
+      currency: payment.currency,
+    });
+  } catch (err) {
+    const latest = await fetchRazorpayPayment(payment.id);
+    if (latest.status === "captured") return latest;
+    throw err;
+  }
+};
+
+// Full refund of a payment (e.g. a student who paid twice for the same note).
+export const refundRazorpayPayment = async (paymentId: string, amountPaise: number, notes: Record<string, string>) =>
+  call<RazorpayRefund>(await requireRazorpay(), "POST", `/payments/${encodeURIComponent(paymentId)}/refund`, { amount: amountPaise, notes });
 
 // Checks keys with a harmless read. Used by the admin "Test" button before saving.
 export const testRazorpayKeys = async (config: RazorpaySettings) => {

@@ -126,7 +126,7 @@ export default function StorageSettingsPage() {
           <Card className={formCard}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <HardDriveIcon className="size-5 text-primary" /> Connection
+                <HardDriveIcon className="size-5 text-brand-amber-text" /> Connection
               </CardTitle>
               <CardDescription>Cloudflare dashboard → R2 → your bucket → Settings → S3 API.</CardDescription>
             </CardHeader>

@@ -21,7 +21,7 @@ describe("news links", () => {
     expect(b.body.item.order).toBe(1);
     expect((await publicNews()).map((n) => n.title)).toEqual(["Education updates", "National education news"]);
     // Public items carry only what the card needs.
-    expect(Object.keys((await publicNews())[0]).sort()).toEqual(["id", "source", "title", "url"]);
+    expect(Object.keys((await publicNews())[0]).sort()).toEqual(["id", "imageUrl", "source", "title", "url"]);
 
     const patch = (id: string, body: object) => api().patch(`/api/admin/news/${id}`).set("Authorization", admin).send(body);
     expect((await patch(a.body.item.id, { title: "School updates" })).body.item.title).toBe("School updates");
@@ -54,5 +54,15 @@ describe("news links", () => {
     const student = await createUserAndLogin("STUDENT");
     expect((await api().get("/api/admin/news").set("Authorization", student.auth)).status).toBe(403);
     expect((await api().post("/api/admin/news").set("Authorization", student.auth).send({})).status).toBe(403);
+  });
+
+  it("a link can have a picture (https only), which can be removed", async () => {
+    const res = await post({ source: "Sentinel", title: "Board exam dates", url: "https://www.sentinelassam.com/", imageUrl: "https://pub-x.r2.dev/images/a.jpg" });
+    expect(res.status).toBe(201);
+    expect(res.body.item.imageUrl).toBe("https://pub-x.r2.dev/images/a.jpg");
+    expect((await post({ source: "X", title: "Y", url: "https://x.com", imageUrl: "javascript:alert(1)" })).status).toBe(400);
+    const removed = await api().patch(`/api/admin/news/${res.body.item.id}`).set("Authorization", admin).send({ imageUrl: null });
+    expect(removed.body.item.imageUrl).toBeNull();
+    await api().delete(`/api/admin/news/${res.body.item.id}`).set("Authorization", admin);
   });
 });

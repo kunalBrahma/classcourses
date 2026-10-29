@@ -41,7 +41,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function IdValue({ value }: { value: string | null }) {
   if (!value) return <span className="text-muted-foreground">—</span>;
   return (
-    <button type="button" onClick={() => copy(value)} className="inline-flex max-w-full items-center gap-1.5 font-mono text-xs hover:text-primary" title="Copy">
+    <button type="button" onClick={() => copy(value)} className="inline-flex max-w-full items-center gap-1.5 font-mono text-xs hover:text-brand-amber-text" title="Copy">
       <span className="truncate">{value}</span>
       <CopyIcon className="size-3 shrink-0" />
     </button>
@@ -56,7 +56,8 @@ function OrderSheet({ order, onClose, onChanged }: { order: OrderRow | null; onC
     setBusy(true);
     try {
       const res = await apiJson<{ changed: boolean; status: string; payments?: string[] }>(`/api/admin/orders/${order.id}/reconcile`, { method: "POST" });
-      if (res.changed) toast.success("Payment found — note unlocked for the student");
+      if (res.changed && res.status === "REFUNDED") toast.success("Duplicate payment refunded to the student");
+      else if (res.changed) toast.success("Payment found — note unlocked for the student");
       else if (res.status === "PAID") toast.info("Already paid");
       else toast.info("No completed payment at Razorpay", { description: res.payments?.length ? `Payment attempts: ${res.payments.join(", ")}` : "The student hasn't paid this order." });
       onChanged();
@@ -84,12 +85,15 @@ function OrderSheet({ order, onClose, onChanged }: { order: OrderRow | null; onC
                 <span className="font-heading text-2xl font-bold tabular-nums">{rupees(order.amountPaise)}</span>
               </div>
 
-              {order.lastError && (
+              {order.lastError && order.status !== "REFUNDED" && order.status !== "CANCELLED" && (
                 <Alert className="border-warning/40 bg-warning/10">
                   <AlertTriangleIcon className="text-warning" />
                   <AlertTitle>Needs attention</AlertTitle>
                   <AlertDescription>{order.lastError}</AlertDescription>
                 </Alert>
+              )}
+              {order.lastError && (order.status === "REFUNDED" || order.status === "CANCELLED") && (
+                <p className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">{order.lastError}</p>
               )}
 
               <div className="divide-y rounded-xl border px-4">
@@ -101,6 +105,7 @@ function OrderSheet({ order, onClose, onChanged }: { order: OrderRow | null; onC
                 <Row label="Created">{formatDate(order.createdAt, true)}</Row>
                 {order.paidAt && <Row label="Paid">{formatDate(order.paidAt, true)}</Row>}
                 {order.confirmedVia && <Row label="Confirmed by">{CONFIRMED_VIA[order.confirmedVia] ?? order.confirmedVia}</Row>}
+                {order.refundedAt && <Row label="Refunded">{formatDate(order.refundedAt, true)}</Row>}
               </div>
 
               <div className="divide-y rounded-xl border px-4">
@@ -114,15 +119,19 @@ function OrderSheet({ order, onClose, onChanged }: { order: OrderRow | null; onC
               <div className="divide-y rounded-xl border px-4">
                 <Row label="Razorpay order"><IdValue value={order.razorpayOrderId} /></Row>
                 <Row label="Razorpay payment"><IdValue value={order.razorpayPaymentId} /></Row>
+                {order.status === "REFUNDED" && <Row label="Razorpay refund"><IdValue value={order.refundId} /></Row>}
               </div>
 
-              {order.status !== "PAID" && order.razorpayOrderId && (
+              {/* Unpaid: look for a payment. Paid without unlocking (duplicate) and not refunded yet: retry the refund. */}
+              {((order.status !== "PAID" && order.status !== "REFUNDED") || (order.status === "PAID" && /refund failed/i.test(order.lastError ?? ""))) && order.razorpayOrderId && (
                 <div className="grid gap-2">
                   <Button className={pressable} disabled={busy} onClick={reconcile}>
                     {busy ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} Check with Razorpay
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    If the student paid but the note didn&apos;t unlock (e.g. they closed the tab and the webhook didn&apos;t arrive), this asks Razorpay and unlocks it.
+                    {order.status === "PAID"
+                      ? "The student paid twice for this note. This tries the automatic refund again."
+                      : "If the student paid but the note didn't unlock (e.g. they closed the tab and the webhook didn't arrive), this asks Razorpay and unlocks it."}
                   </p>
                 </div>
               )}
@@ -192,6 +201,7 @@ function OrdersList() {
           <TabsTrigger value="PAID" className="h-9 px-3">Paid</TabsTrigger>
           <TabsTrigger value="CREATED" className="h-9 px-3">Awaiting payment</TabsTrigger>
           <TabsTrigger value="CANCELLED" className="h-9 px-3">Cancelled</TabsTrigger>
+          <TabsTrigger value="REFUNDED" className="h-9 px-3">Refunded</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -210,7 +220,7 @@ function OrdersList() {
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="truncate font-medium">{o.user.name || o.user.email}</span>
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", s.className)}>{s.label}</Badge>
-                        {o.lastError && <AlertTriangleIcon className="size-4 text-warning" aria-label="Needs attention" />}
+                        {o.lastError && (o.status === "PAID" || o.status === "CREATED") && <AlertTriangleIcon className="size-4 text-warning" aria-label="Needs attention" />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground" lang="as">{o.note.title}</span>
                       <span className="block text-xs text-muted-foreground">{formatDate(o.createdAt, true)}</span>

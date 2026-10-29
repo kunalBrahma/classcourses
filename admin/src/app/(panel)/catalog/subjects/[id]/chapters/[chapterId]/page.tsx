@@ -136,7 +136,7 @@ function ChapterEditor() {
       </div>
 
       <div className="flex items-start gap-4">
-        <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-navy font-heading text-xl font-bold text-white shadow-[0_4px_0_color-mix(in_oklch,var(--brand-navy),black_40%)]">
+        <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-brown font-heading text-xl font-bold text-white shadow-[0_4px_0_var(--brand-amber-dark)]">
           {content.number}
         </span>
         <div className="min-w-0">

@@ -65,8 +65,8 @@ export default function KitPage() {
       <section>
         <SectionTitle icon={VideoIcon}>Videos</SectionTitle>
         <ScrollRow label="Videos">
-          <VideoCard youtubeId="dQw4w9WgXcQ" format="LANDSCAPE" title="Class 10 Maths — Chapter 1 explained" subtitle="Class 10 · Maths · Chapter 1" href="#" />
-          <VideoCard youtubeId="jNQXAC9IVRw" format="SHORT" title="A quick science trick" subtitle="Class 8 · Science" />
+          <VideoCard youtubeId="dQw4w9WgXcQ" format="LANDSCAPE" title="Class 10 Maths — Chapter 1 explained" tag="Class 10 · Maths" chapterLabel="Chapter 1" href="#" />
+          <VideoCard youtubeId="jNQXAC9IVRw" format="SHORT" title="A quick science trick" tag="Class 8 · Science" />
           <VideoCard youtubeId="M7lc1UVf-VE" format="LANDSCAPE" title="Class 12 History — full revision" />
           <VideoCard youtubeId="ysz5S6PUM-U" format="LANDSCAPE" title="অসমীয়া ব্যাকৰণ" />
         </ScrollRow>

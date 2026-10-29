@@ -31,7 +31,7 @@ interface TestResult {
   latencyMs: number;
 }
 
-const EVENTS = ["payment.captured", "payment.failed", "order.paid"];
+const EVENTS = ["payment.captured", "payment.authorized", "payment.failed", "order.paid", "refund.processed"];
 
 const copy = (text: string, what: string) => navigator.clipboard.writeText(text).then(() => toast.success(`${what} copied`));
 
@@ -141,7 +141,7 @@ export default function PaymentsSettingsPage() {
             <Card className={formCard}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                  <CreditCardIcon className="size-5 text-primary" /> API keys
+                  <CreditCardIcon className="size-5 text-brand-amber-text" /> API keys
                 </CardTitle>
                 <CardDescription>Razorpay Dashboard → Account &amp; Settings → API Keys. Start with Test keys; switch to Live after KYC.</CardDescription>
               </CardHeader>
@@ -244,7 +244,7 @@ export default function PaymentsSettingsPage() {
           <Card className={formCard}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <WebhookIcon className="size-5 text-primary" /> Webhook
+                <WebhookIcon className="size-5 text-brand-amber-text" /> Webhook
               </CardTitle>
               <CardDescription>
                 Razorpay calls this address when a payment completes — it unlocks notes even if the student closes the tab before returning.

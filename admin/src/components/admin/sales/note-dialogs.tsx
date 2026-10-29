@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FileUpIcon, Loader2Icon, SearchIcon, UploadCloudIcon } from "lucide-react";
+import { FileCheck2Icon, FileUpIcon, Loader2Icon, SearchIcon, UploadCloudIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -109,14 +109,126 @@ function AttachPicker({ value, onChange }: { value: Attachment; onChange: (a: At
 }
 
 // ---------------------------------------------------------------------------
-// Create / edit a note
+// PDF upload (presigned PUT to the PRIVATE bucket, with progress)
 // ---------------------------------------------------------------------------
 
-export function NoteDialog({ target, onClose, onSaved }: { target: { note: NoteRow | null } | null; onClose: () => void; onSaved: () => void }) {
+// fetch() can't report upload progress — XMLHttpRequest can.
+const putWithProgress = (url: string, file: File, headers: Record<string, string>, onProgress: (pct: number) => void) =>
+  new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ApiError(xhr.status, `Upload failed (${xhr.status}).`)));
+    // Network errors include a bucket CORS policy that doesn't allow this site.
+    xhr.onerror = () => reject(new ApiError(0, "Upload blocked by the storage bucket. Add the CORS policy shown in Settings → Storage to the private bucket, then try again."));
+    xhr.send(file);
+  });
+
+// Ask for an upload link, send the file, then let the server check it landed.
+const uploadNotePdf = async (noteId: string, file: File, onProgress: (pct: number) => void) => {
+  const { key, uploadUrl, headers } = await apiJson<{ key: string; uploadUrl: string; headers: Record<string, string> }>(`/api/admin/notes/${noteId}/upload-url`, {
+    method: "POST",
+    json: { contentType: "application/pdf", size: file.size },
+  });
+  await putWithProgress(uploadUrl, file, headers, onProgress);
+  await apiJson(`/api/admin/notes/${noteId}/file`, { method: "POST", json: { key } });
+};
+
+// Returns an error message, or null when the file can be uploaded.
+export const checkPdf = (f: File) =>
+  f.type !== "application/pdf" && !/\.pdf$/i.test(f.name)
+    ? "Only PDF files can be uploaded."
+    : f.size > MAX_PDF
+      ? `That PDF is ${formatBytes(f.size)} — the limit is 50 MB.`
+      : null;
+
+function PdfDrop({ file, onPick, progress, current }: { file: File | null; onPick: (f: File | undefined) => void; progress: number | null; current?: string }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const uploading = progress !== null;
+  return (
+    <div className="grid gap-2">
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => fileInput.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          onPick(e.dataTransfer.files[0]);
+        }}
+        className={cn(
+          "flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed px-6 py-6 text-center transition hover:border-primary/50 hover:bg-primary/5 disabled:opacity-60",
+          over && "border-primary bg-primary/5",
+          file && "border-solid border-primary/40 bg-primary/5"
+        )}
+      >
+        {file ? <FileCheck2Icon className="size-7 text-brand-amber-text" /> : <UploadCloudIcon className="size-7 text-brand-amber-text" />}
+        <span className="max-w-full truncate text-sm font-semibold">{file ? file.name : current ? "Choose or drop a new PDF to replace it" : "Choose or drop a PDF"}</span>
+        <span className="text-xs text-muted-foreground">{file ? `${formatBytes(file.size)} · tap to change` : current ? `Current: ${current}` : "Up to 50 MB"}</span>
+      </button>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => {
+          onPick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      {uploading && (
+        <div className="grid gap-1.5" role="status" aria-live="polite">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="text-xs text-muted-foreground tabular-nums">{progress < 100 ? `Uploading… ${progress}%` : "Checking the upload…"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NoBucketAlert() {
+  return (
+    <Alert className="border-warning/40 bg-warning/10">
+      <AlertTitle>No private bucket yet</AlertTitle>
+      <AlertDescription>
+        Note PDFs are kept in a separate <strong>private</strong> R2 bucket so they can&apos;t be downloaded without buying. Create it and add it in{" "}
+        <Link href="/settings/storage" className="font-medium underline">Settings → Storage</Link> (with the CORS policy shown there), then come back.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Create / edit a note — details, PDF and publishing in one form
+// ---------------------------------------------------------------------------
+
+export function NoteDialog({
+  target,
+  privateBucketReady,
+  onClose,
+  onSaved,
+}: {
+  target: { note: NoteRow | null } | null;
+  privateBucketReady: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const id = useId();
   const [form, setForm] = useState({ title: "", description: "", isFree: false, price: "49" });
   const [attach, setAttach] = useState<Attachment>({ subjectId: null, chapterId: null });
   const [changeAttach, setChangeAttach] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [publish, setPublish] = useState(true);
+  const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,11 +241,24 @@ export function NoteDialog({ target, onClose, onSaved }: { target: { note: NoteR
     });
     setAttach({ subjectId: null, chapterId: null });
     setChangeAttach(!note);
+    setFile(null);
+    setPublish(note?.isPublished ?? true);
+    setProgress(null);
     setError(null);
   });
 
   const note = target?.note ?? null;
   const currentAttach = note?.chapter ? `${note.chapter.subject.name} › ${note.chapter.title}` : note?.subject ? `${note.subject.name} (whole subject)` : "Not attached";
+  // A note can be shown to students only once it has a PDF.
+  const willHaveFile = Boolean(file || note?.hasFile);
+
+  const pick = (f: File | undefined) => {
+    setError(null);
+    if (!f) return;
+    const problem = checkPdf(f);
+    if (problem) return setError(problem);
+    setFile(f);
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -150,21 +275,42 @@ export function NoteDialog({ target, onClose, onSaved }: { target: { note: NoteR
     setError(null);
     const where = changeAttach ? (attach.chapterId ? { chapterId: attach.chapterId } : { subjectId: attach.subjectId }) : {};
     const body = { title: form.title.trim(), description: form.description.trim() || null, isFree: form.isFree, ...(form.isFree ? {} : { pricePaise }), ...where };
+
+    let saved: { id: string } | null = note;
     try {
       if (note) await apiJson(`/api/admin/notes/${note.id}`, { method: "PATCH", json: body });
-      else await apiJson("/api/admin/notes", { method: "POST", json: body });
-      toast.success(note ? "Note saved" : "Note created", { description: note ? undefined : "Next: upload the PDF, then publish it." });
+      else saved = (await apiJson<{ note: { id: string } }>("/api/admin/notes", { method: "POST", json: body })).note;
+      const noteId = saved!.id;
+      if (file) {
+        setProgress(0);
+        await uploadNotePdf(noteId, file, setProgress);
+      }
+      const shouldPublish = publish && willHaveFile;
+      if (shouldPublish !== (note?.isPublished ?? false)) {
+        await apiJson(`/api/admin/notes/${noteId}`, { method: "PATCH", json: { isPublished: shouldPublish } });
+      }
+      toast.success(note ? "Note saved" : "Note created", {
+        description: shouldPublish ? "Students can see it now." : willHaveFile ? "It stays hidden until you publish it." : "Upload the PDF to publish it.",
+      });
       onSaved();
       onClose();
     } catch (err) {
-      setError((err as ApiError).message);
+      setProgress(null);
+      if (!note && saved) {
+        // The note exists now; closing avoids creating it twice on a retry.
+        toast.error("Note created, but the PDF didn't upload", { description: `${(err as ApiError).message} Use “Upload PDF” on the note to try again.` });
+        onSaved();
+        onClose();
+      } else {
+        setError((err as ApiError).message);
+      }
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={target !== null} onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <form onSubmit={submit} className="grid gap-5">
           <DialogHeader>
@@ -218,11 +364,28 @@ export function NoteDialog({ target, onClose, onSaved }: { target: { note: NoteR
             {form.isFree ? "Free notes still need a student login to download." : "Students can pay part of it with coins (Settings → Quiz & coins)."}
           </p>
 
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">PDF file</Label>
+            {privateBucketReady ? (
+              <PdfDrop file={file} onPick={pick} progress={progress} current={note?.hasFile ? formatBytes(note.fileSize) : undefined} />
+            ) : (
+              <NoBucketAlert />
+            )}
+          </div>
+
+          <label htmlFor={`${id}-pub`} className={cn("flex items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3", willHaveFile ? "cursor-pointer" : "opacity-60")}>
+            <span className="grid gap-0.5">
+              <span className="text-sm font-semibold">Show to students</span>
+              <span className="text-xs text-muted-foreground">{willHaveFile ? "Switch off to keep it hidden for now." : "Add the PDF first."}</span>
+            </span>
+            <Switch id={`${id}-pub`} checked={publish && willHaveFile} disabled={!willHaveFile} onCheckedChange={setPublish} />
+          </label>
+
           {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
           <DialogFooter>
-            <Button type="button" variant="outline" className="h-10" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-10" disabled={busy} onClick={onClose}>Cancel</Button>
             <Button type="submit" className={pressable} disabled={busy}>
-              {busy && <Loader2Icon className="animate-spin" />} {note ? "Save" : "Create note"}
+              {busy && <Loader2Icon className="animate-spin" />} {progress !== null ? "Uploading…" : note ? "Save" : file ? "Create & upload" : "Create note"}
             </Button>
           </DialogFooter>
         </form>
@@ -232,39 +395,40 @@ export function NoteDialog({ target, onClose, onSaved }: { target: { note: NoteR
 }
 
 // ---------------------------------------------------------------------------
-// Upload the PDF (presigned PUT to the PRIVATE bucket, with progress)
+// Upload / replace only the PDF (row button, or a PDF dropped on a row)
 // ---------------------------------------------------------------------------
 
-// fetch() can't report upload progress — XMLHttpRequest can.
-const putWithProgress = (url: string, file: File, headers: Record<string, string>, onProgress: (pct: number) => void) =>
-  new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ApiError(xhr.status, `Upload failed (${xhr.status}).`)));
-    // Network errors include a bucket CORS policy that doesn't allow this site.
-    xhr.onerror = () => reject(new ApiError(0, "Upload blocked by the storage bucket. Add the CORS policy shown in Settings → Storage to the private bucket, then try again."));
-    xhr.send(file);
-  });
-
-export function UploadDialog({ note, privateBucketReady, onClose, onDone }: { note: NoteRow | null; privateBucketReady: boolean; onClose: () => void; onDone: () => void }) {
-  const fileInput = useRef<HTMLInputElement>(null);
+export function UploadDialog({
+  target,
+  privateBucketReady,
+  onClose,
+  onDone,
+}: {
+  target: { note: NoteRow; file: File | null } | null;
+  privateBucketReady: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
+  const [publish, setPublish] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useResetOnOpen(note, () => {
-    setFile(null);
+  useResetOnOpen(target, (t) => {
+    const problem = t.file ? checkPdf(t.file) : null;
+    setFile(problem ? null : t.file);
+    setPublish(true);
     setProgress(null);
-    setError(null);
+    setError(problem);
   });
+
+  const note = target?.note ?? null;
 
   const pick = (f: File | undefined) => {
     setError(null);
     if (!f) return;
-    if (f.type !== "application/pdf" && !/\.pdf$/i.test(f.name)) return setError("Only PDF files can be uploaded.");
-    if (f.size > MAX_PDF) return setError(`That PDF is ${formatBytes(f.size)} — the limit is 50 MB.`);
+    const problem = checkPdf(f);
+    if (problem) return setError(problem);
     setFile(f);
   };
 
@@ -273,13 +437,10 @@ export function UploadDialog({ note, privateBucketReady, onClose, onDone }: { no
     setError(null);
     setProgress(0);
     try {
-      const { key, uploadUrl, headers } = await apiJson<{ key: string; uploadUrl: string; headers: Record<string, string> }>(`/api/admin/notes/${note.id}/upload-url`, {
-        method: "POST",
-        json: { contentType: "application/pdf", size: file.size },
-      });
-      await putWithProgress(uploadUrl, file, headers, setProgress);
-      await apiJson(`/api/admin/notes/${note.id}/file`, { method: "POST", json: { key } });
-      toast.success("PDF uploaded", { description: note.isPublished ? "Students now get the new file." : "Publish the note when you're ready." });
+      await uploadNotePdf(note.id, file, setProgress);
+      const publishNow = !note.isPublished && publish;
+      if (publishNow) await apiJson(`/api/admin/notes/${note.id}`, { method: "PATCH", json: { isPublished: true } });
+      toast.success("PDF uploaded", { description: note.isPublished ? "Students now get the new file." : publishNow ? "The note is now shown to students." : "Publish the note when you're ready." });
       onDone();
       onClose();
     } catch (err) {
@@ -291,7 +452,7 @@ export function UploadDialog({ note, privateBucketReady, onClose, onDone }: { no
   const uploading = progress !== null;
 
   return (
-    <Dialog open={note !== null} onOpenChange={(open) => !open && !uploading && onClose()}>
+    <Dialog open={target !== null} onOpenChange={(open) => !open && !uploading && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading">{note?.hasFile ? "Replace PDF" : "Upload PDF"}</DialogTitle>
@@ -299,38 +460,15 @@ export function UploadDialog({ note, privateBucketReady, onClose, onDone }: { no
         </DialogHeader>
 
         {!privateBucketReady ? (
-          <Alert className="border-warning/40 bg-warning/10">
-            <AlertTitle>No private bucket yet</AlertTitle>
-            <AlertDescription>
-              Note PDFs are kept in a separate <strong>private</strong> R2 bucket so they can&apos;t be downloaded without buying. Create it and add it in{" "}
-              <Link href="/settings/storage" className="font-medium underline">Settings → Storage</Link> (with the CORS policy shown there), then come back.
-            </AlertDescription>
-          </Alert>
+          <NoBucketAlert />
         ) : (
           <>
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => fileInput.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                pick(e.dataTransfer.files[0]);
-              }}
-              className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition hover:border-primary/50 hover:bg-primary/5 disabled:opacity-60"
-            >
-              <UploadCloudIcon className="size-8 text-primary" />
-              <span className="text-sm font-semibold">{file ? file.name : "Choose or drop a PDF"}</span>
-              <span className="text-xs text-muted-foreground">{file ? formatBytes(file.size) : "Up to 50 MB"}</span>
-            </button>
-            <input ref={fileInput} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
-            {uploading && (
-              <div className="grid gap-1.5" role="status" aria-live="polite">
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
-                </div>
-                <span className="text-xs text-muted-foreground tabular-nums">{progress < 100 ? `Uploading… ${progress}%` : "Checking the upload…"}</span>
-              </div>
+            <PdfDrop file={file} onPick={pick} progress={progress} current={note?.hasFile ? formatBytes(note.fileSize) : undefined} />
+            {note && !note.isPublished && (
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">
+                <span className="text-sm font-semibold">Show to students after upload</span>
+                <Switch checked={publish} onCheckedChange={setPublish} />
+              </label>
             )}
           </>
         )}

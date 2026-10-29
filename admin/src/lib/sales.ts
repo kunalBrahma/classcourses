@@ -1,6 +1,6 @@
 // Shapes from /api/admin/notes, /api/admin/orders and the razorpay setting.
 
-export type OrderStatus = "CREATED" | "PAID" | "CANCELLED";
+export type OrderStatus = "CREATED" | "PAID" | "CANCELLED" | "REFUNDED";
 
 export interface NoteRow {
   id: string;
@@ -31,6 +31,8 @@ export interface OrderRow {
   currency: string;
   razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
+  refundId: string | null;
+  refundedAt: string | null;
   paidAt: string | null;
   confirmedVia: string | null;
   lastError: string | null;
@@ -43,6 +45,7 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; className: strin
   PAID: { label: "Paid", className: "border-success/30 bg-success/10 text-success" },
   CREATED: { label: "Awaiting payment", className: "border-warning/40 bg-warning/10 text-warning" },
   CANCELLED: { label: "Cancelled", className: "text-muted-foreground" },
+  REFUNDED: { label: "Refunded", className: "border-primary/30 bg-primary/10 text-brand-amber-text" },
 };
 
 export const CONFIRMED_VIA: Record<string, string> = {

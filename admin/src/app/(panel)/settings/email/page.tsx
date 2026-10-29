@@ -318,7 +318,7 @@ export default function EmailSettingsPage() {
           <Card className={formCard}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <SendIcon className="size-5 text-primary" /> Send a test email
+                <SendIcon className="size-5 text-brand-amber-text" /> Send a test email
               </CardTitle>
               <CardDescription>Uses the details above (saved or not), so you can try before saving.</CardDescription>
             </CardHeader>

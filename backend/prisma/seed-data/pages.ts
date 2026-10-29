@@ -46,10 +46,11 @@ export const PAGES: PageSeed[] = [
 <p>This policy explains what information {{site.name}} collects, why, and how it is protected. By using {{site.name}} you agree to this policy.</p>
 <h3>Information we collect</h3>
 <ul>
-<li><strong>Account details:</strong> your name, email address and password. Passwords are stored only in encrypted (hashed) form — nobody at {{site.name}} can read them.</li>
+<li><strong>Account details:</strong> your name, email address, mobile number and password. We email you a one-time code to confirm the email address is yours. Your mobile number is seen only by our team, to help you with your account or a purchase; we don't share it or send marketing messages to it. Passwords are stored only in encrypted (hashed) form — nobody at {{site.name}} can read them.</li>
 <li><strong>Study preferences:</strong> the medium and class you choose, so the site opens where you left off.</li>
 <li><strong>Learning activity:</strong> quiz attempts, scores and the coins you earn or use.</li>
 <li><strong>Purchases:</strong> which notes you bought, the amount paid and the order ID.</li>
+<li><strong>Messages you send us:</strong> when you use the contact form, your name, email, the topic, your message and (only if you add it) your mobile number, so we can answer you.</li>
 </ul>
 <h3>Payments</h3>
 <p>Payments are processed by <strong>Razorpay</strong>. Your card, UPI or bank details are entered on Razorpay's secure page and are <strong>never stored by {{site.name}}</strong>. We only receive confirmation that a payment succeeded, the amount and a payment reference.</p>
@@ -128,7 +129,7 @@ export const PAGES: PageSeed[] = [
 <p>Because notes are delivered instantly as downloads, we do not offer refunds for a change of mind. We <strong>will</strong> refund you in full if:</p>
 <ul>
 <li>you were charged but the note was not unlocked in your account, and we cannot fix it;</li>
-<li>you were charged twice for the same note; or</li>
+<li>you were charged twice for the same note (this is refunded <strong>automatically</strong>, you don't need to ask; any coins used on that second payment are returned too); or</li>
 <li>the file is damaged or is not the note described, and we cannot replace it.</li>
 </ul>
 <p>To ask for a refund, email <a href="mailto:{{contact.email}}">{{contact.email}}</a> within <strong>7 days</strong> of payment with your registered email and order ID.</p>

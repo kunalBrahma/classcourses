@@ -16,7 +16,8 @@ type Step =
   | { kind: "paying" } // Razorpay window open
   | { kind: "verifying" }
   | { kind: "pending"; orderId: string } // paid, waiting for Razorpay to confirm
-  | { kind: "paid" }
+  // refunded: they already owned the note, so the server refunded this payment
+  | { kind: "paid"; refunded?: boolean }
   | { kind: "closed" } // student closed the payment window
   | { kind: "error"; message: string };
 
@@ -37,6 +38,10 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   const [useCoins, setUseCoins] = useState(initialUseCoins);
   const [step, setStep] = useState<Step>({ kind: "quote" });
   const [downloading, setDownloading] = useState(false);
+  // While Razorpay's own window is open, ours is hidden: a modal dialog makes
+  // the rest of the page unclickable and traps focus, which would block
+  // Razorpay's window (it's added outside our dialog). State is kept.
+  const [razorpayOpen, setRazorpayOpen] = useState(false);
 
   // Fresh quote each time the window opens ("previous target" reset, no effect setState).
   const [wasOpen, setWasOpen] = useState(false);
@@ -44,6 +49,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     setWasOpen(open);
     if (open) {
       setQuote(null);
+      setRazorpayOpen(false);
       setStep({ kind: "quote" });
     }
   }
@@ -58,8 +64,8 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     };
   }, [open, note.id]);
 
-  const finishPaid = useCallback(() => {
-    setStep({ kind: "paid" });
+  const finishPaid = useCallback((refunded = false) => {
+    setStep({ kind: "paid", refunded });
     announceNotesChanged();
     announceCoinsChanged();
   }, []);
@@ -72,9 +78,9 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
       tries += 1;
       try {
         const { order } = await apiJson<{ order: OrderView }>(`/api/payments/orders/${step.orderId}`);
-        if (order.status === "PAID") {
+        if (order.status === "PAID" || order.status === "REFUNDED") {
           clearInterval(timer);
-          finishPaid();
+          finishPaid(order.status === "REFUNDED");
         } else if (order.status === "CANCELLED" || tries >= POLL_LIMIT) {
           clearInterval(timer);
           setStep({
@@ -120,24 +126,32 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
         prefill: checkout.prefill,
         theme: { color: "#f5a623" },
         handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          setRazorpayOpen(false);
           setStep({ kind: "verifying" });
           try {
-            const result = await apiJson<{ status: "PAID" | "PENDING"; order: OrderView }>("/api/payments/verify", {
+            const result = await apiJson<{ status: "PAID" | "PENDING" | "REFUNDED"; order: OrderView }>("/api/payments/verify", {
               method: "POST",
               json: { orderId: order.id, ...resp },
             });
-            if (result.status === "PAID") finishPaid();
+            if (result.status === "PAID" || result.status === "REFUNDED") finishPaid(result.status === "REFUNDED");
             else setStep({ kind: "pending", orderId: order.id });
           } catch (err) {
             // The webhook may still confirm it: keep checking.
             setStep(err instanceof ApiError && err.status === 400 ? { kind: "error", message: err.message } : { kind: "pending", orderId: order.id });
           }
         },
-        modal: { ondismiss: () => setStep((s) => (s.kind === "paying" ? { kind: "closed" } : s)) },
+        modal: {
+          ondismiss: () => {
+            setRazorpayOpen(false);
+            setStep((s) => (s.kind === "paying" ? { kind: "closed" } : s));
+          },
+        },
       });
       rzp.on("payment.failed", (r) => setStep({ kind: "error", message: r.error?.description || "The payment didn't go through. No money was taken." }));
+      setRazorpayOpen(true);
       rzp.open();
     } catch (err) {
+      setRazorpayOpen(false);
       setStep({ kind: "error", message: (err as Error).message });
     }
   };
@@ -156,7 +170,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   const busy = step.kind === "paying" || step.kind === "verifying" || step.kind === "pending";
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+    <Dialog open={open && !razorpayOpen} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="pr-8 font-heading text-xl leading-snug" lang="as">
@@ -168,6 +182,11 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
         {step.kind === "paid" ? (
           <div className="grid gap-4 text-center">
             <CheckCircle2Icon className="mx-auto size-14 text-success" aria-hidden="true" />
+            {step.refunded && (
+              <p role="status" className="rounded-xl bg-accent px-4 py-3 text-left text-[15px]">
+                You already had this note, so this payment has been <strong>refunded</strong>. The money reaches your account in 5–7 working days.
+              </p>
+            )}
             <button type="button" onClick={download} disabled={downloading} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-success font-bold text-white">
               {downloading && <Loader2Icon className="size-5 animate-spin" />} Download PDF
             </button>

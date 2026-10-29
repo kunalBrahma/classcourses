@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/auth/password-input";
 import { FormError, SubmitButton } from "@/components/auth/form-bits";
+import { VerifyCodeStep } from "@/components/auth/verify-code";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
 
@@ -22,6 +23,9 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // The account exists but its email was never verified: the backend has
+  // sent a code, so show the code step.
+  const [needsCode, setNeedsCode] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -37,17 +41,21 @@ export function LoginForm() {
       router.refresh();
     } catch (err) {
       const e = err as ApiError;
+      if (e.code === "EMAIL_NOT_VERIFIED") {
+        setNeedsCode(email.trim());
+        return;
+      }
       setError(
         e.status === 401
           ? "That email and password don't match. Check them and try again."
-          : e.status === 429
-            ? "Too many tries. Please wait 15 minutes and try again."
-            : e.message
+          : e.message // 429s carry the server's own wording (this account / this network)
       );
     } finally {
       setLoading(false);
     }
   };
+
+  if (needsCode) return <VerifyCodeStep email={needsCode} next={next} onBack={() => setNeedsCode(null)} />;
 
   return (
     <form onSubmit={submit} className="grid gap-5" aria-describedby={error ? `${id}-err` : undefined}>
@@ -74,7 +82,7 @@ export function LoginForm() {
       <div className="grid gap-2">
         <div className="flex items-center justify-between">
           <Label htmlFor={`${id}-pw`} className="text-sm font-semibold">Password</Label>
-          <Link href="/forgot-password" className="text-sm font-medium text-brand-amber-text hover:underline">Forgot password?</Link>
+          <Link href="/forgot-password" className="-my-3 inline-flex min-h-11 items-center text-sm font-medium text-brand-amber-text hover:underline">Forgot password?</Link>
         </div>
         <PasswordInput id={`${id}-pw`} value={password} onChange={setPassword} autoComplete="current-password" placeholder="Your password" />
       </div>

@@ -3,11 +3,12 @@
 import { FormEvent, KeyboardEvent, Suspense, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearTokens, setTokens } from "@/lib/auth";
+import { LogoFull } from "@/components/admin/logo-mark";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-// Brand colours from the client's requirements document (navy / indigo / amber).
-const NAVY = "#1f1d4a";
+// Brand panel colour: the student site's dark-brown footer, with amber glows.
+const BROWN = "#2e2000";
 
 // ---------------------------------------------------------------------------
 // Icons (inline, decorative — the controls that use them carry their own labels)
@@ -65,25 +66,25 @@ function CardStack({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`relative ${size}`} aria-hidden="true">
       <div
-        className={`${card} bg-[#312e81] shadow-[0_18px_40px_-12px_rgba(0,0,0,.6)]`}
+        className={`${card} bg-[#8a5a00] shadow-[0_18px_40px_-12px_rgba(0,0,0,.6)]`}
         style={{ transform: "translate(22px, 22px) rotate(6deg)", ["--cc-rot" as string]: "6deg", ["--cc-rot-from" as string]: "16deg", animationDelay: "60ms" }}
       />
       <div
-        className={`${card} bg-[#4338ca] shadow-[0_18px_40px_-12px_rgba(0,0,0,.55)]`}
+        className={`${card} bg-[#c9780c] shadow-[0_18px_40px_-12px_rgba(0,0,0,.55)]`}
         style={{ transform: "translate(11px, 11px) rotate(3deg)", ["--cc-rot" as string]: "3deg", ["--cc-rot-from" as string]: "11deg", animationDelay: "140ms" }}
       />
       <div
-        className={`${card} flex flex-col justify-between bg-gradient-to-br from-[#6366f1] to-[#4f46e5] p-4 text-white shadow-[0_24px_50px_-14px_rgba(0,0,0,.6),inset_0_1px_0_rgba(255,255,255,.25)] ${compact ? "" : "xl:p-6"}`}
+        className={`${card} flex flex-col justify-between bg-gradient-to-br from-[#ffbe4d] to-[#f5a623] p-4 text-brand-ink shadow-[0_24px_50px_-14px_rgba(0,0,0,.6),inset_0_1px_0_rgba(255,255,255,.35)] ${compact ? "" : "xl:p-6"}`}
         style={{ ["--cc-rot-from" as string]: "-6deg", animationDelay: "220ms" }}
       >
         <span className={`font-[family-name:var(--font-display)] font-bold leading-none ${compact ? "text-lg" : "text-2xl xl:text-3xl"}`}>
           Class 1 – 12
         </span>
-        <span className={`flex items-center gap-x-2 whitespace-nowrap font-medium text-indigo-100 ${compact ? "text-[11px]" : "text-sm"}`}>
-          Q&amp;A <span className="text-indigo-300">·</span> MCQ <span className="text-indigo-300">·</span> Notes
+        <span className={`flex items-center gap-x-2 whitespace-nowrap font-medium text-brand-ink/80 ${compact ? "text-[11px]" : "text-sm"}`}>
+          Q&amp;A <span className="text-brand-ink/50">·</span> MCQ <span className="text-brand-ink/50">·</span> Notes
           {!compact && (
             <>
-              <span className="text-indigo-300">·</span> Quiz
+              <span className="text-brand-ink/50">·</span> Quiz
             </>
           )}
         </span>
@@ -92,29 +93,20 @@ function CardStack({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function BrandMark({ light = true }: { light?: boolean }) {
+function BrandMark() {
   return (
-    <div className="flex items-center gap-3">
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-400 font-[family-name:var(--font-display)] text-sm font-extrabold text-[#1f1d4a] shadow-[0_4px_0_#b45309]">
-        CC
-      </span>
-      <span className="leading-tight">
-        <span className={`block font-[family-name:var(--font-display)] text-lg font-bold ${light ? "text-white" : "text-[#1f1d4a]"}`}>
-          Class Course
-        </span>
-        <span className={`block text-xs font-medium uppercase tracking-[0.18em] ${light ? "text-indigo-200" : "text-indigo-600"}`}>
-          Admin panel
-        </span>
-      </span>
+    <div className="grid gap-1.5">
+      <LogoFull className="h-10" />
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#ffd889]">Admin panel</span>
     </div>
   );
 }
 
-// Subtle dot grid + glow so the navy panel has depth instead of a flat fill.
+// Subtle dot grid + amber glows so the brown panel has depth instead of a flat fill.
 const panelBackground = {
-  backgroundColor: NAVY,
+  backgroundColor: BROWN,
   backgroundImage: [
-    "radial-gradient(circle at 85% 15%, rgba(99,102,241,.45), transparent 45%)",
+    "radial-gradient(circle at 85% 15%, rgba(245,166,35,.35), transparent 45%)",
     "radial-gradient(circle at 10% 90%, rgba(245,158,11,.18), transparent 40%)",
     "radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)",
   ].join(","),
@@ -127,7 +119,7 @@ const panelBackground = {
 
 const friendlyError = (status: number, message?: string) => {
   if (status === 401) return "That email and password don't match. Check them and try again.";
-  if (status === 429) return "Too many sign-in attempts. Please wait 15 minutes and try again.";
+  if (status === 429) return message || "Too many sign-in attempts. Please wait 15 minutes and try again.";
   if (status === 400) return "Enter a valid email address and your password.";
   return message || "Sign-in failed. Please try again.";
 };
@@ -188,13 +180,12 @@ function LoginForm() {
   const trackCapsLock = (e: KeyboardEvent<HTMLInputElement>) => setCapsLock(e.getModifierState("CapsLock"));
 
   const inputBase =
-    "peer h-12 w-full rounded-xl border bg-white pl-11 text-base text-slate-900 placeholder:text-slate-400 outline-none transition " +
-    "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 " +
-    "dark:bg-white/[0.04] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/20 " +
+    "peer h-12 w-full rounded-xl border bg-card pl-11 text-base text-foreground placeholder:text-muted-foreground/70 outline-none transition " +
+    "focus:border-ring focus:ring-4 focus:ring-ring/20 " +
     "aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-500/15";
-  const inputBorder = "border-slate-200 dark:border-white/10";
+  const inputBorder = "border-input";
   const iconBox =
-    "pointer-events-none absolute inset-y-0 left-0 grid w-11 place-items-center text-slate-400 transition peer-focus:text-indigo-500 dark:text-slate-500";
+    "pointer-events-none absolute inset-y-0 left-0 grid w-11 place-items-center text-muted-foreground transition peer-focus:text-brand-amber-text";
 
   return (
     <form
@@ -203,10 +194,10 @@ function LoginForm() {
       className="motion-safe:animate-[cc-rise_600ms_cubic-bezier(.2,.8,.2,1)_both] [animation-delay:120ms]"
       aria-describedby={message ? ids.error : undefined}
     >
-      <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight text-[#1f1d4a] sm:text-4xl dark:text-white">
+      <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
         Welcome back
       </h1>
-      <p className="mt-2 text-[15px] text-slate-500 dark:text-slate-400">Sign in to manage classes, content, quizzes and notes.</p>
+      <p className="mt-2 text-[15px] text-muted-foreground">Sign in to manage classes, content, quizzes and notes.</p>
 
       {message && (
         <div
@@ -222,7 +213,7 @@ function LoginForm() {
 
       <div className="mt-7 space-y-5">
         <div>
-          <label htmlFor={ids.email} className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <label htmlFor={ids.email} className="mb-1.5 block text-sm font-semibold text-foreground">
             Email
           </label>
           <div className="relative">
@@ -249,7 +240,7 @@ function LoginForm() {
         </div>
 
         <div>
-          <label htmlFor={ids.password} className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <label htmlFor={ids.password} className="mb-1.5 block text-sm font-semibold text-foreground">
             Password
           </label>
           <div className="relative">
@@ -282,25 +273,25 @@ function LoginForm() {
               aria-pressed={showPassword}
               aria-controls={ids.password}
               title={showPassword ? "Hide password" : "Show password"}
-              className="absolute inset-y-1 right-1 grid w-11 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-white/10 dark:hover:text-white"
+              className="absolute inset-y-1 right-1 grid w-11 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <EyeIcon open={!showPassword} />
             </button>
           </div>
           {capsLock && (
-            <p id={ids.caps} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] dark:bg-amber-400/15">⇪</span>
+            <p id={ids.caps} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-brand-amber-text">
+              <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">⇪</span>
               Caps Lock is on
             </p>
           )}
         </div>
       </div>
 
-      {/* Pressable "3D" button, matching the site's depth style */}
+      {/* Pressable "3D" button, the student site's amber style */}
       <button
         type="submit"
         disabled={loading}
-        className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-base font-semibold text-white shadow-[0_5px_0_#312e81,0_12px_24px_-8px_rgba(67,56,202,.6)] transition-[transform,box-shadow,background-color] hover:bg-indigo-500 active:translate-y-[3px] active:shadow-[0_2px_0_#312e81,0_6px_14px_-8px_rgba(67,56,202,.6)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 disabled:cursor-wait disabled:opacity-80 disabled:active:translate-y-0"
+        className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#ffbe4d] to-[#f5a623] text-base font-bold text-brand-ink shadow-[0_5px_0_#c9780c,0_12px_24px_-8px_rgba(201,120,12,.6)] transition-[transform,box-shadow,filter] hover:brightness-105 active:translate-y-[3px] active:shadow-[0_2px_0_#c9780c,0_6px_14px_-8px_rgba(201,120,12,.6)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30 disabled:cursor-wait disabled:opacity-80 disabled:active:translate-y-0"
       >
         {loading ? (
           <>
@@ -312,7 +303,7 @@ function LoginForm() {
         )}
       </button>
 
-      <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
+      <p className="mt-6 text-center text-xs text-muted-foreground">
         Admin access only · Students sign in on the main Class Course site
       </p>
     </form>
@@ -321,7 +312,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-dvh bg-[#f7f6f2] lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] dark:bg-[#0d0c22]">
+    <main className="min-h-dvh bg-background lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       {/* Brand panel: full-height column on large screens, header band on phones/tablets */}
       <section
         style={panelBackground}
@@ -336,14 +327,14 @@ export default function LoginPage() {
             Every class. Every chapter.{" "}
             <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">One place.</span>
           </h2>
-          <p className="mt-4 max-w-md text-base leading-relaxed text-indigo-100/80">
+          <p className="mt-4 max-w-md text-base leading-relaxed text-[#ffe9c2]/80">
             Manage Assamese and English medium content, quizzes, coins and premium notes for students across Assam.
           </p>
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
           <span className="h-1 w-10 rounded-full bg-amber-400" />
-          <span className="text-sm text-indigo-200/80">Classes 1–12 · Q&amp;A · MCQ · Notes</span>
+          <span className="text-sm text-[#ffd889]/80">Classes 1–12 · Q&amp;A · MCQ · Notes</span>
         </div>
 
         {/* Phones / tablets: compact stack in the header band */}
@@ -354,7 +345,7 @@ export default function LoginPage() {
 
       {/* Form: overlaps the header band on small screens, centred column on large ones */}
       <section className="relative -mt-16 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-6 lg:mt-0 lg:flex lg:items-center lg:justify-center lg:px-12 lg:py-12">
-        <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-200/70 bg-white p-6 shadow-[0_24px_60px_-20px_rgba(31,29,74,.35)] sm:p-9 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none dark:border-white/10 dark:bg-[#15143a] lg:dark:bg-transparent">
+        <div className="mx-auto w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-[0_24px_60px_-20px_rgba(201,120,12,.35)] sm:p-9 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <Suspense>
             <LoginForm />
           </Suspense>

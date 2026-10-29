@@ -139,7 +139,7 @@ async function ChapterPageContent({ params }: { params: Props["params"] }) {
               <ul className="flex flex-wrap items-start gap-4">
                 {data.videos.map((v) => (
                   <li key={v.id} className={v.format === "SHORT" ? undefined : "w-full sm:w-auto"}>
-                    <VideoCard youtubeId={v.youtubeId} format={v.format} title={v.title} className={v.format === "SHORT" ? "w-44" : "w-full sm:w-96"} />
+                    <VideoCard youtubeId={v.youtubeId} format={v.format} title={v.title} fluid className="w-full sm:w-96" />
                   </li>
                 ))}
               </ul>

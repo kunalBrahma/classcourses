@@ -15,7 +15,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { formCard } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { formatDate, initials, UserRow } from "@/lib/people";
+import { formatDate, formatPhone, initials, UserRow } from "@/lib/people";
+import { UnverifiedBadge } from "@/components/admin/unverified-badge";
 
 interface Page {
   users: UserRow[];
@@ -86,7 +87,7 @@ function UsersList() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or email"
+            placeholder="Search name, email or phone"
             aria-label="Search users"
             className="h-10 pl-9"
           />
@@ -120,19 +121,21 @@ function UsersList() {
                   <td className="px-4 py-3">
                     <Link href={`/users/${u.id}`} className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                       <Avatar className="size-9 rounded-lg">
-                        <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">{initials(u.name, u.email)}</AvatarFallback>
+                        <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
                       </Avatar>
                       <span className="min-w-0">
                         <span className="flex items-center gap-2 font-medium group-hover:underline">
                           {u.name || "—"}
                           {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
+                          {!u.emailVerified && <UnverifiedBadge />}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+                        {u.phone && <span className="block text-xs text-muted-foreground tabular-nums">{formatPhone(u.phone)}</span>}
                       </span>
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-muted-foreground">
-                    {u.classLevel ? `Class ${u.classLevel}` : "—"}
+                    {u.classLevel ? u.classLevel.name : "—"}
                     {u.medium && <span className="block text-xs">{u.medium.name}</span>}
                   </td>
                   <td className="px-3 py-3 text-right font-medium tabular-nums">{u.coins.toLocaleString("en-IN")}</td>
@@ -149,14 +152,18 @@ function UsersList() {
               <li key={u.id}>
                 <Link href={`/users/${u.id}`} className="flex items-center gap-3 px-4 py-3 active:bg-muted/50">
                   <Avatar className="size-10 rounded-lg">
-                    <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">{initials(u.name, u.email)}</AvatarFallback>
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 font-medium">
                       <span className="truncate">{u.name || u.email}</span>
                       {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
+                      {!u.emailVerified && <UnverifiedBadge />}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {u.email}
+                      {u.phone && ` · ${formatPhone(u.phone)}`}
+                    </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums">
                     <CoinsIcon className="size-4 text-warning" /> {u.coins}

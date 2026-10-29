@@ -11,6 +11,7 @@ import quizRoutes from "./routes/quiz.routes";
 import pagesRoutes from "./routes/pages.routes";
 import notesRoutes from "./routes/notes.routes";
 import paymentsRoutes from "./routes/payments.routes";
+import { apiLimiter } from "./middleware/rateLimiter";
 import { razorpayWebhook } from "./controllers/payments.controller";
 import { globalErrorHandler, notFoundHandler } from "./middleware/error.middleware";
 import prisma from "./config/prisma";
@@ -38,6 +39,9 @@ app.post("/api/payments/webhook/razorpay", express.raw({ type: "*/*", limit: "1m
 
 // 3 MB: bulk question imports (Assamese text is ~3 bytes/char in UTF-8) exceed the 100 kB default.
 app.use(express.json({ limit: "3mb" }));
+
+// Whole-API backstop (per IP); each sensitive route adds its own tighter limit.
+app.use("/api", apiLimiter);
 
 // Liveness: the process is up.
 app.get("/health", (_req, res) => {

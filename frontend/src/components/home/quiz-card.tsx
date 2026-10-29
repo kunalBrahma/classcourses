@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { TimerIcon } from "lucide-react";
 import { SectionTitle } from "@/components/kit/section-title";
 import { QuizUsage } from "@/components/home/quiz-usage";
+import { StartQuizButton } from "@/components/home/start-quiz";
 import type { PublicSettings } from "@/lib/server-api";
 
 const COIN_RULE = {
@@ -32,20 +32,18 @@ export function QuizCard({ quiz, coins }: Pick<PublicSettings, "quiz" | "coins">
             </span>
           </div>
           <div className="min-w-0">
-            <h3 className="font-heading font-extrabold">Chapter Quiz</h3>
+            <h3 className="font-heading font-extrabold">Daily Chapter Quiz</h3>
             <p className="text-sm text-muted-foreground">
               {quiz.secondsPerQuestion} sec/question • Pass: {quiz.passMark}/{quiz.questionsPerQuiz}
             </p>
           </div>
-          <Link href="#classes" className="press-3d ml-auto inline-flex h-11 items-center rounded-4xl px-5 font-extrabold">
-            Start Quiz
-          </Link>
+          <StartQuizButton />
         </div>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-          Every quiz has {quiz.questionsPerQuiz} questions, {quiz.secondsPerQuestion} seconds each, so you answer from your own knowledge, not
-          by searching Google. Score {quiz.passMark} or more correct to earn {coins.perPass} coins. {COIN_RULE[coins.awardRule ?? "firstPassPerChapter"]}{" "}
-          If you leave a quiz midway, it stays paused only for that day; once the day ends, it can&apos;t be resumed. Leaving while a question
-          is on screen counts that question as wrong. Open a chapter below to start its quiz.
+        {/* Short on purpose (Class 1 readers); every rule here is what the server enforces. */}
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          {quiz.questionsPerQuiz} questions, {quiz.secondsPerQuestion} seconds each: answer from what you know, not Google. Score{" "}
+          {quiz.passMark} or more to earn {coins.perPass} coins. {COIN_RULE[coins.awardRule ?? "firstPassPerChapter"]} A quiz you leave stays paused
+          until the day ends, and a question left on screen counts as wrong.
         </p>
         <QuizUsage />
       </div>

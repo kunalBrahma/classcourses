@@ -6,6 +6,7 @@ import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { sendPasswordResetEmail } from "../utils/mailer";
+import { RESEND_COOLDOWN_SECONDS, sendVerificationCode, verifyCode } from "../services/emailVerification.service";
 import crypto from "crypto";
 
 const issueTokenPair = async (userId: string, email: string) => {
@@ -19,29 +20,55 @@ const issueTokenPair = async (userId: string, email: string) => {
   return { accessToken, refreshToken };
 };
 
+const userView = (u: { id: string; email: string; name: string | null; role: string; createdAt: Date }) => ({
+  id: u.id,
+  email: u.email,
+  name: u.name,
+  role: u.role,
+  createdAt: u.createdAt,
+});
+
+// Creates the account unverified and emails a 6-digit code. No tokens yet:
+// the student is logged in by POST /verify-email once they enter the code.
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, phone } = req.body;
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    throw new AppError(400, "User already exists");
+  if (existingUser?.emailVerified) {
+    throw new AppError(400, "This email is already registered. Please log in.");
   }
 
   const hashedPassword = await hashPassword(password);
 
-  const user = await prisma.user.create({
-    data: { email, password: hashedPassword, name: name || null },
-    select: { id: true, email: true, name: true, createdAt: true },
-  });
+  // Signing up again before verifying (e.g. a typo in the password) just
+  // replaces the unverified details: until the code is entered, nobody has
+  // proven they own this email.
+  const user = existingUser
+    ? await prisma.user.update({ where: { id: existingUser.id }, data: { password: hashedPassword, name, phone } })
+    : await prisma.user.create({ data: { email, password: hashedPassword, name, phone, emailVerified: false } });
 
-  const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email);
+  const { retryAfter } = await sendVerificationCode(user);
 
   res.status(201).json({
-    message: "User registered successfully",
-    user,
-    accessToken,
-    refreshToken,
+    message: "We've sent a 6-digit code to your email",
+    needsVerification: true,
+    email: user.email,
+    retryAfter,
   });
+});
+
+export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
+  const user = await verifyCode(req.body.email, req.body.code);
+  const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email);
+  res.json({ message: "Email verified", user: userView(user), accessToken, refreshToken });
+});
+
+// Always answers the same way, whether or not the email is registered.
+export const resendVerificationCode = asyncHandler(async (req: Request, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { email: req.body.email } });
+  let retryAfter = RESEND_COOLDOWN_SECONDS;
+  if (user && !user.emailVerified) retryAfter = (await sendVerificationCode(user)).retryAfter;
+  res.json({ message: "If that account is waiting for a code, a new one has been sent", retryAfter });
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
@@ -57,11 +84,18 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(401, "Invalid credentials");
   }
 
+  // Right password, email not verified yet: send a code (unless one just
+  // went out) and let the client show the code screen.
+  if (!user.emailVerified) {
+    await sendVerificationCode(user);
+    throw new AppError(403, "Please verify your email first. We've sent a 6-digit code to it.", "EMAIL_NOT_VERIFIED");
+  }
+
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email);
 
   res.json({
     message: "Login successful",
-    user: { id: user.id, email: user.email, name: user.name, role: user.role, createdAt: user.createdAt },
+    user: userView(user),
     accessToken,
     refreshToken,
   });
@@ -138,7 +172,8 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   await prisma.$transaction([
     prisma.user.update({
       where: { id: resetToken.userId },
-      data: { password: hashedPassword },
+      // Opening the emailed link proves they own the email.
+      data: { password: hashedPassword, emailVerified: true },
     }),
     prisma.passwordResetToken.delete({ where: { id: resetToken.id } }),
     // Invalidate every existing session on password change.
@@ -160,6 +195,7 @@ export const getMe = asyncHandler(async (req: AuthRequest, res: Response) => {
       id: true,
       email: true,
       name: true,
+      phone: true,
       role: true,
       mediumId: true,
       classLevel: { select: { id: true, name: true, slug: true } },

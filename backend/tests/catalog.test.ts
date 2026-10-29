@@ -424,3 +424,18 @@ describe("student preferences & users list", () => {
     expect((await api().get("/api/users").set("Authorization", admin)).status).toBe(200);
   });
 });
+
+describe("catalog totals (About page)", () => {
+  it("counts only what students can see", async () => {
+    const res = await api().get("/api/catalog/stats");
+    expect(res.status).toBe(200);
+    const { stats } = res.body;
+    expect(stats.classes).toBeGreaterThan(0);
+    expect(stats.subjects).toBeGreaterThan(0);
+    expect(stats.chapters).toBeGreaterThan(0);
+    const chapter = await prisma.chapter.findFirstOrThrow({ where: { isPublished: true } });
+    await prisma.chapter.update({ where: { id: chapter.id }, data: { isPublished: false } });
+    expect((await api().get("/api/catalog/stats")).body.stats.chapters).toBe(stats.chapters - 1);
+    await prisma.chapter.update({ where: { id: chapter.id }, data: { isPublished: true } });
+  });
+});

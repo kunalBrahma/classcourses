@@ -97,3 +97,50 @@ export const availableQuizzes = async (userId: string | null, place: Place) => {
   }
   return out;
 };
+
+// Every quiz a student can start in one medium + class, for the home page
+// "Start Quiz" picker: class tests, subject quizzes and chapter quizzes,
+// grouped by subject. Readiness and visibility come from availableQuizzes()
+// above; the chapter query only narrows down which chapters to ask about.
+export const classQuizCatalog = async (mediumSlug: string, classSlug: string) => {
+  const [medium, classLevel] = await Promise.all([
+    prisma.medium.findFirst({ where: { slug: mediumSlug, isActive: true }, select: { id: true, slug: true, name: true } }),
+    prisma.classLevel.findFirst({ where: { slug: classSlug, isActive: true }, select: { id: true, slug: true, name: true } }),
+  ]);
+  if (!medium || !classLevel) return null;
+
+  const subjects = await prisma.subject.findMany({
+    where: { mediumId: medium.id, classLevelId: classLevel.id, isActive: true },
+    orderBy: { order: "asc" },
+    select: {
+      id: true,
+      name: true,
+      nativeName: true,
+      slug: true,
+      chapters: {
+        // Chapters with at least one quiz MCQ, or a custom quiz of their own.
+        where: {
+          isPublished: true,
+          OR: [{ questions: { some: { kind: "MCQ", isPublished: true, useInQuiz: true } } }, { homeQuizzes: { some: { isPublished: true } } }],
+        },
+        orderBy: [{ number: "asc" }, { order: "asc" }],
+        select: { id: true, number: true, title: true, slug: true },
+      },
+    },
+  });
+
+  const classQuizzes = await availableQuizzes(null, { mediumId: medium.id, classId: classLevel.id });
+  const groups = [];
+  for (const subject of subjects) {
+    const subjectQuizzes = await availableQuizzes(null, { subjectId: subject.id });
+    const chapters = [];
+    for (const chapter of subject.chapters) {
+      const quizzes = await availableQuizzes(null, { chapterId: chapter.id });
+      if (quizzes.length) chapters.push({ id: chapter.id, number: chapter.number, title: chapter.title, slug: chapter.slug, quizzes });
+    }
+    if (subjectQuizzes.length || chapters.length) {
+      groups.push({ id: subject.id, name: subject.name, nativeName: subject.nativeName, slug: subject.slug, quizzes: subjectQuizzes, chapters });
+    }
+  }
+  return { medium, classLevel, quizzes: classQuizzes, subjects: groups };
+};

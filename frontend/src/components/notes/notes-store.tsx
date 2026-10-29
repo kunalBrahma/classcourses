@@ -45,7 +45,7 @@ export function NotesStore({ notes }: { notes: NoteItem[] }) {
         </div>
       )}
       <div className="grid gap-2">
-        <div role="radiogroup" aria-label="Class" className="scroll-row gap-2 pb-1">
+        <div role="radiogroup" aria-label="Class" className="scroll-row gap-2 pb-1 sm:flex-wrap">
           <button type="button" role="radio" aria-checked={!classSlug} onClick={() => setClassSlug(null)} className={chip(!classSlug)}>
             All classes
           </button>

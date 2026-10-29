@@ -261,7 +261,7 @@ export interface PickableQuestion {
 export const SCHEDULE_STATUS: Record<ScheduleStatus, { label: string; className: string }> = {
   LIVE: { label: "Live", className: "border-success/30 bg-success/10 text-success" },
   DRAFT: { label: "Draft", className: "text-muted-foreground" },
-  SCHEDULED: { label: "Scheduled", className: "border-primary/30 bg-primary/10 text-primary" },
+  SCHEDULED: { label: "Scheduled", className: "border-primary/30 bg-primary/10 text-brand-amber-text" },
   CLOSED: { label: "Closed", className: "border-warning/40 bg-warning/10 text-warning" },
 };
 

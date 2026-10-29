@@ -150,7 +150,7 @@ function QuizCard() {
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 font-heading text-lg">
-              <TimerIcon className="size-5 text-primary" /> Quiz rules
+              <TimerIcon className="size-5 text-brand-amber-text" /> Quiz rules
             </CardTitle>
             <CardDescription className="mt-1.5">
               The defaults for every quiz, shown on the guidelines screen. Custom quizzes in the{" "}

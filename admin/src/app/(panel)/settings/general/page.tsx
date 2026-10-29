@@ -125,7 +125,7 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 font-heading text-lg">
-              <Icon className="size-5 text-primary" /> {group.title}
+              <Icon className="size-5 text-brand-amber-text" /> {group.title}
             </CardTitle>
             <CardDescription className="mt-1.5">{group.description}</CardDescription>
           </div>

@@ -24,7 +24,7 @@ export function ForgotForm() {
       setSent(true);
     } catch (err) {
       const e = err as ApiError;
-      setError(e.status === 429 ? "Too many tries. Please wait 15 minutes and try again." : e.message);
+      setError(e.message); // a 429 says whether it's this address or this network
     } finally {
       setLoading(false);
     }

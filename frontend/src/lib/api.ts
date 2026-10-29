@@ -50,7 +50,9 @@ export async function api(path: string, options: RequestInit = {}) {
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    // The backend's machine-readable reason, when it sends one (e.g. "EMAIL_NOT_VERIFIED").
+    public readonly code?: string
   ) {
     super(message);
   }
@@ -66,7 +68,7 @@ export async function apiJson<T>(path: string, options: RequestInit & { json?: u
     throw new ApiError(0, "Can't reach Class Course right now. Check your internet connection and try again.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `Something went wrong (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, data.error ?? `Something went wrong (${res.status})`, data.code);
   return data as T;
 }
 
@@ -84,7 +86,7 @@ export async function publicJson<T>(path: string, init: RequestInit & { json?: u
     throw new ApiError(0, "Can't reach Class Course right now. Check your internet connection and try again.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `Something went wrong (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, data.error ?? `Something went wrong (${res.status})`, data.code);
   return data as T;
 }
 

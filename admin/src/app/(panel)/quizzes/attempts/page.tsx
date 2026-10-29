@@ -124,7 +124,7 @@ function AttemptsList() {
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", st.className)}>{st.label}</Badge>
                       </span>
                       <span className="block truncate text-xs text-muted-foreground" lang="as">
-                        <span className={cn("font-medium", a.quizId || a.quizTitle ? "text-primary" : "text-foreground/80")}>{attemptTitle(a)}</span> · {attemptScope(a)}
+                        <span className={cn("font-medium", a.quizId || a.quizTitle ? "text-brand-amber-text" : "text-foreground/80")}>{attemptTitle(a)}</span> · {attemptScope(a)}
                       </span>
                       <span className="block text-xs text-muted-foreground">{formatDate(a.startedAt, true)}</span>
                     </span>

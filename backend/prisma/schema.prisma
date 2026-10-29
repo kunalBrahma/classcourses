@@ -12,26 +12,33 @@ enum Role {
 }
 
 model User {
-  id            String               @id @default(uuid())
-  email         String               @unique
-  name          String?
-  password      String
-  role          Role                 @default(STUDENT)
+  id              String                  @id @default(uuid())
+  email           String                  @unique
+  name            String?
+  // 10-digit Indian mobile number, asked for at sign-up (null for older accounts)
+  phone           String?
+  password        String
+  // /register creates students with false until they enter the emailed code.
+  // Defaults to true so older accounts, admins and seeded users count as verified.
+  emailVerified   Boolean                 @default(true)
+  role            Role                    @default(STUDENT)
   // Student's preferred medium/class, used to open the site where they left off
-  mediumId      String?
-  medium        Medium?              @relation(fields: [mediumId], references: [id], onDelete: SetNull)
-  classLevelId  String?
-  classLevel    ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
+  mediumId        String?
+  medium          Medium?                 @relation(fields: [mediumId], references: [id], onDelete: SetNull)
+  classLevelId    String?
+  classLevel      ClassLevel?             @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   // Cached balance; the source of truth is the CoinTransaction ledger
-  coins         Int                  @default(0)
-  quizAttempts  QuizAttempt[]
-  coinTxns      CoinTransaction[]
-  orders        Order[]
-  noteAccess    NoteAccess[]
-  refreshTokens RefreshToken[]
-  resetTokens   PasswordResetToken[]
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  coins           Int                     @default(0)
+  quizAttempts    QuizAttempt[]
+  coinTxns        CoinTransaction[]
+  orders          Order[]
+  noteAccess      NoteAccess[]
+  refreshTokens   RefreshToken[]
+  resetTokens     PasswordResetToken[]
+  emailCodes      EmailVerificationCode[]
+  contactMessages ContactMessage[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 }
 
 model RefreshToken {
@@ -394,6 +401,9 @@ enum CoinReason {
   NOTE_DISCOUNT
   // Held coins returned when that order is cancelled/abandoned (refId = Order id)
   NOTE_DISCOUNT_REFUND
+  // Paid after the order had been cancelled (and its held coins refunded): the
+  // discount was used after all, so the coins are taken again (refId = Order id)
+  NOTE_DISCOUNT_REAPPLIED
   ADMIN_ADJUST
 }
 
@@ -452,6 +462,9 @@ enum OrderStatus {
   PAID
   // Abandoned or replaced before payment; held coins were refunded
   CANCELLED
+  // Paid, then the money went back (duplicate payment, or a refund from the
+  // Razorpay dashboard); access from this order is removed
+  REFUNDED
 }
 
 model Order {
@@ -470,6 +483,9 @@ model Order {
   razorpayOrderId   String?     @unique
   razorpayPaymentId String?     @unique
   paidAt            DateTime?
+  // Razorpay refund id once the payment was refunded
+  refundId          String?     @unique
+  refundedAt        DateTime?
   // How the payment was confirmed: "verify" | "webhook" | "reconcile" | "coins"
   confirmedVia      String?
   lastError         String?
@@ -517,6 +533,8 @@ model NewsLink {
   source    String
   title     String
   url       String
+  // Picture for the card (public bucket upload or any https image); optional
+  imageUrl  String?
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -535,4 +553,47 @@ model FaqItem {
   updatedAt   DateTime @updatedAt
 
   @@index([order])
+}
+
+// One-time 6-digit code that proves a new student owns their email.
+// Only a hash is stored; a new code replaces the old one.
+model EmailVerificationCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum ContactStatus {
+  NEW
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+// A message from the website's contact form. Saved first (the admin always
+// sees it in Admin → Messages); the notification email goes out afterwards.
+model ContactMessage {
+  id        String        @id @default(uuid())
+  name      String
+  email     String
+  // Optional 10-digit mobile number, if the student gave one
+  phone     String?
+  topic     String
+  message   String
+  status    ContactStatus @default(NEW)
+  // Set when sent while signed in
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Notification email result, for the admin ("sent" / the error)
+  emailNote String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }

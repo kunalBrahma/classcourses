@@ -12,6 +12,8 @@ export interface MailMessage {
   subject: string;
   html: string;
   text: string;
+  // Overrides the configured reply-to (e.g. the student who wrote in).
+  replyTo?: string;
 }
 
 let cachedTransport: { fingerprint: string; transport: Transporter } | undefined;
@@ -49,7 +51,7 @@ export const sendMail = async (message: MailMessage) => {
 
   await cachedTransport.transport.sendMail({
     from: fromHeader(config),
-    replyTo: config.replyTo ?? undefined,
+    replyTo: message.replyTo ?? config.replyTo ?? undefined,
     to: message.to,
     subject: message.subject,
     html: message.html,

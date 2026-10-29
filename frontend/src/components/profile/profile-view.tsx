@@ -20,14 +20,14 @@ interface CoinTx {
   id: string;
   delta: number;
   balanceAfter: number;
-  reason: "QUIZ_PASS" | "NOTE_DISCOUNT" | "NOTE_DISCOUNT_REFUND" | "ADMIN_ADJUST";
+  reason: "QUIZ_PASS" | "NOTE_DISCOUNT" | "NOTE_DISCOUNT_REFUND" | "NOTE_DISCOUNT_REAPPLIED" | "ADMIN_ADJUST";
   note: string | null;
   createdAt: string;
 }
 
 interface MyOrder {
   id: string;
-  status: "CREATED" | "PAID" | "CANCELLED";
+  status: "CREATED" | "PAID" | "CANCELLED" | "REFUNDED";
   amountPaise: number;
   coinsUsed: number;
   createdAt: string;
@@ -38,12 +38,14 @@ const ORDER_STATUS: Record<MyOrder["status"], { label: string; className: string
   PAID: { label: "Paid", className: "bg-success/12 text-success" },
   CREATED: { label: "Waiting for payment", className: "bg-accent text-brand-amber-text" },
   CANCELLED: { label: "Not completed", className: "bg-muted text-muted-foreground" },
+  REFUNDED: { label: "Refunded", className: "bg-secondary text-secondary-foreground" },
 };
 
 const REASON: Record<CoinTx["reason"], string> = {
   QUIZ_PASS: "Passed a quiz",
   NOTE_DISCOUNT: "Used on a note",
-  NOTE_DISCOUNT_REFUND: "Returned (order not completed)",
+  NOTE_DISCOUNT_REFUND: "Returned (order not completed or refunded)",
+  NOTE_DISCOUNT_REAPPLIED: "Used on a note (paid after the order expired)",
   ADMIN_ADJUST: "From Class Course",
 };
 

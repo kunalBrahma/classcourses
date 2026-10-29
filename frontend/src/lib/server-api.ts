@@ -325,9 +325,34 @@ export interface FeaturedVideo {
   youtubeId: string;
   format: "LANDSCAPE" | "SHORT";
   title: string;
+  createdAt: string;
   chapter: { title: string; number: number; href: string };
   subject: { name: string; nativeName: string | null };
-  classLevel: { name: string };
+  classLevel: { name: string; slug: string };
+}
+
+export interface VideoPage {
+  videos: FeaturedVideo[];
+  total: number;
+  page: number;
+  totalPages: number;
+  classes: { name: string; slug: string }[];
+}
+
+export const EMPTY_VIDEO_PAGE: VideoPage = { videos: [], total: 0, page: 1, totalPages: 1, classes: [] };
+
+// First page of /videos (all mediums and classes); the page filters further in the browser.
+export async function getVideoPage(format: "LANDSCAPE" | "SHORT"): Promise<VideoPage> {
+  "use cache";
+  cacheTag("catalog");
+  try {
+    const page = await getJson<VideoPage>(`/api/catalog/videos?format=${format}`);
+    cacheLife("minutes");
+    return page;
+  } catch {
+    cacheLife("seconds");
+    return EMPTY_VIDEO_PAGE;
+  }
 }
 
 export async function getFeaturedVideos(): Promise<FeaturedVideo[]> {
@@ -343,11 +368,35 @@ export async function getFeaturedVideos(): Promise<FeaturedVideo[]> {
   }
 }
 
+export interface CatalogStats {
+  classes: number;
+  subjects: number;
+  chapters: number;
+  qa: number;
+  mcq: number;
+  videos: number;
+}
+
+// Totals for the About page (visible content only).
+export async function getCatalogStats(): Promise<CatalogStats | null> {
+  "use cache";
+  cacheTag("catalog");
+  try {
+    const { stats } = await getJson<{ stats: CatalogStats }>("/api/catalog/stats");
+    cacheLife("minutes");
+    return stats;
+  } catch {
+    cacheLife("seconds");
+    return null;
+  }
+}
+
 export interface NewsLink {
   id: string;
   source: string;
   title: string;
   url: string;
+  imageUrl?: string | null;
 }
 
 export async function getNews(): Promise<NewsLink[]> {

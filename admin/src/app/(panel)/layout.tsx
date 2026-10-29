@@ -19,6 +19,7 @@ import { ConfirmProvider } from "@/components/admin/confirm";
 import { breadcrumbFor } from "@/components/admin/nav";
 import { api } from "@/lib/api";
 import { clearTokens, getAccessToken } from "@/lib/auth";
+import { LogoMark } from "@/components/admin/logo-mark";
 
 // Guards every page in the (panel) group (must be logged in AND an ADMIN) and
 // renders the shadcn sidebar-07 shell around it.
@@ -49,9 +50,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     return (
       <div className="grid min-h-dvh place-items-center bg-background" role="status" aria-live="polite">
         <div className="flex flex-col items-center gap-4">
-          <span className="grid size-12 animate-pulse place-items-center rounded-xl bg-brand-amber font-heading text-sm font-extrabold text-brand-navy shadow-[0_4px_0_#b45309]">
-            CC
-          </span>
+          <LogoMark className="size-12 animate-pulse rounded-xl" />
           <span className="text-sm text-muted-foreground">Loading admin panel…</span>
         </div>
       </div>

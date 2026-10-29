@@ -28,8 +28,32 @@ export const createNewsSchema = z.object({
   source: z.string().trim().min(1).max(60),
   title: z.string().trim().min(1).max(160),
   url: httpUrl,
+  // Card picture: uploaded to the public bucket (absolute URL) or null to remove.
+  imageUrl: httpUrl.nullable().optional(),
   isActive: z.boolean().optional(),
 });
 export const updateNewsSchema = createNewsSchema.partial();
 
 export const reorderNewsSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
+
+// Contact form. Topics are fixed so the admin can sort messages; the
+// frontend shows the same list (frontend/src/lib/contact.ts).
+export const CONTACT_TOPICS = ["General question", "Account or sign-in", "Quizzes and coins", "Notes and payments", "Report a mistake", "Other"] as const;
+
+export const contactMessageSchema = z.object({
+  name: z.string().trim().min(1, "Please enter your name").max(80),
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address").max(160),
+  phone: z
+    .string()
+    .trim()
+    .max(20)
+    .optional()
+    .transform((v) => (v ? v.replace(/[\s()-]/g, "").replace(/^(\+?91|0)(?=\d{10}$)/, "") : null))
+    .refine((v) => v === null || /^[6-9]\d{9}$/.test(v), "Enter a 10-digit mobile number, or leave it empty"),
+  topic: z.enum(CONTACT_TOPICS),
+  message: z.string().trim().min(10, "Please write a little more (at least 10 characters)").max(2000),
+  // Spam trap: a hidden field people never fill in.
+  website: z.string().max(200).optional(),
+});
+
+export const contactStatusSchema = z.object({ status: z.enum(["NEW", "READ", "REPLIED", "ARCHIVED"]) });

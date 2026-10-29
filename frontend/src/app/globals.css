@@ -225,8 +225,8 @@
   }
 }
 
-/* Sideways-scrolling rows (videos, news): snap to cards, no visible scrollbar
-   on touch, keep the native one for mouse users. */
+/* Sideways-scrolling rows (videos, news, chips): snap to cards, never a
+   visible scrollbar. Touch users swipe; mouse users get ScrollRow's arrows. */
 @utility scroll-row {
   /* relative: screen-reader-only text inside the cards (position: absolute)
      must be clipped by this row, or it widens the whole page on phones. */
@@ -243,8 +243,9 @@
     scroll-snap-align: start;
     flex-shrink: 0;
   }
-  @media (pointer: coarse) {
-    scrollbar-width: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 

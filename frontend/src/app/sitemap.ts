@@ -29,6 +29,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: url("/"), changeFrequency: "daily", priority: 1 },
     { url: url("/notes"), changeFrequency: "daily", priority: 0.8 },
+    { url: url("/videos"), changeFrequency: "daily", priority: 0.7 },
+    { url: url("/news"), changeFrequency: "daily", priority: 0.5 },
     ...(faq.length ? [{ url: url("/faq"), changeFrequency: "monthly" as const, priority: 0.4 }] : []),
     ...mediums.map((m) => ({ url: url(catalogHref(m.slug)), changeFrequency: "weekly" as const, priority: 0.8 })),
     ...classes.map((c) => ({ url: url(catalogHref(c.medium, c.classSlug)), changeFrequency: "weekly" as const, priority: 0.8 })),

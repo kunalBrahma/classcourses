@@ -79,7 +79,7 @@ function QuizCard({ quiz, onChanged }: { quiz: QuizRow; onChanged: () => void })
         <span
           className={cn(
             "grid size-10 shrink-0 place-items-center rounded-xl",
-            quiz.pickMode === "FIXED" ? "bg-brand-amber/15 text-amber-700 dark:text-amber-300" : "bg-primary/10 text-primary"
+            quiz.pickMode === "FIXED" ? "bg-brand-amber/15 text-amber-700 dark:text-amber-300" : "bg-primary/10 text-brand-amber-text"
           )}
           aria-hidden="true"
         >

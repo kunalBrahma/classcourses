@@ -76,6 +76,9 @@ import adminCatalogRoutes from "./adminCatalog.routes";
 import adminContentRoutes from "./adminContent.routes";
 import { getQuizAttempt, getQuizStatsHandler, listQuizAttempts } from "../controllers/adminQuiz.controller";
 import { adjustUserCoins, getUserAdmin, listUsersAdmin, updateUserAdmin } from "../controllers/adminUsers.controller";
+import { getDashboardStats } from "../controllers/adminStats.controller";
+import { deleteContactMessage, listContactMessages, updateContactMessage } from "../controllers/contact.controller";
+import { contactStatusSchema } from "../validations/pages.validation";
 import { adjustCoinsSchema, quizFlagSchema, quizInputSchema, reorderQuizzesSchema, updateUserAdminSchema } from "../validations/quiz.validation";
 import {
   chapterQuizOverview,
@@ -155,6 +158,8 @@ router.post("/chapters/:chapterId/questions/quiz-flag", validateBody(quizFlagSch
 router.get("/chapters/:chapterId/quiz-overview", chapterQuizOverview);
 
 // Users, coins and quiz activity
+// Dashboard figures (read-only)
+router.get("/stats", getDashboardStats);
 router.get("/users", listUsersAdmin);
 router.get("/users/:id", getUserAdmin);
 router.patch("/users/:id", validateBody(updateUserAdminSchema), updateUserAdmin);
@@ -178,6 +183,11 @@ router.post("/orders/:id/reconcile", reconcileOrderAdmin);
 router.get("/pages", listPagesAdmin);
 router.get("/pages/:slug", getPageAdmin);
 router.put("/pages/:slug", validateBody(updatePageSchema), updatePage);
+// Contact-form messages
+router.get("/messages", listContactMessages);
+router.patch("/messages/:id", validateBody(contactStatusSchema), updateContactMessage);
+router.delete("/messages/:id", deleteContactMessage);
+
 router.get("/faq", listFaqAdmin);
 router.post("/faq", validateBody(createFaqSchema), createFaq);
 router.put("/faq/reorder", validateBody(reorderFaqSchema), reorderFaq);

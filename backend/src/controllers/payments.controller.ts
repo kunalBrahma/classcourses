@@ -4,12 +4,13 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { getSetting } from "../services/settings.service";
-import { verifyWebhookSignature } from "../services/razorpay.service";
+import { RazorpayPayment, RazorpayRefund, verifyWebhookSignature } from "../services/razorpay.service";
 import {
   cancelStaleOrders,
   createOrder,
+  confirmPayment,
   getOrderView,
-  grantOrder,
+  markRefunded,
   orderSelect,
   verifyCheckout,
 } from "../services/order.service";
@@ -49,13 +50,15 @@ export const myOrders = asyncHandler(async (req: AuthRequest, res: Response) => 
 interface RazorpayWebhookEvent {
   event: string;
   payload?: {
-    payment?: { entity?: { id: string; order_id: string; amount: number; status: string; error_description?: string } };
+    payment?: { entity?: RazorpayPayment };
+    refund?: { entity?: RazorpayRefund };
   };
 }
 
 // POST /api/payments/webhook/razorpay — mounted with express.raw() so the
 // signature is checked against the exact bytes Razorpay sent.
 // 2xx = handled (or deliberately ignored); 5xx makes Razorpay retry later.
+// Every branch is idempotent: Razorpay may send an event more than once.
 export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) => {
   const config = await getSetting("razorpay");
   if (!config?.webhookSecret) {
@@ -75,20 +78,42 @@ export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) 
   }
 
   const payment = event.payload?.payment?.entity;
-  if (!payment?.order_id) {
-    res.json({ ok: true, ignored: event.event });
-    return;
-  }
-  const order = await prisma.order.findUnique({ where: { razorpayOrderId: payment.order_id }, select: { id: true, status: true } });
+  const refund = event.payload?.refund?.entity;
+  const order = payment?.order_id
+    ? await prisma.order.findUnique({ where: { razorpayOrderId: payment.order_id } })
+    : refund?.payment_id
+      ? await prisma.order.findUnique({ where: { razorpayPaymentId: refund.payment_id } })
+      : null;
   if (!order) {
     // Not one of ours (e.g. another integration on the same Razorpay account).
-    res.json({ ok: true, ignored: "unknown order" });
+    res.json({ ok: true, ignored: payment || refund ? "unknown order" : event.event });
     return;
   }
 
-  if ((event.event === "payment.captured" || event.event === "order.paid") && payment.status === "captured") {
+  // A refund (ours for a duplicate, or one made in the Razorpay dashboard).
+  // Only a full refund removes access; a partial one is noted for the admin.
+  if (event.event === "refund.processed" || event.event === "payment.refunded") {
+    const refundedPaise = payment?.amount_refunded ?? refund?.amount ?? 0;
+    if (refundedPaise >= order.amountPaise) {
+      const changed = await markRefunded(order.id, refund?.id ?? null, "Refunded in Razorpay");
+      res.json({ ok: true, refunded: changed });
+    } else {
+      await prisma.order.update({ where: { id: order.id }, data: { lastError: `Partly refunded in Razorpay (${refundedPaise} paise)` } });
+      res.json({ ok: true, refunded: false });
+    }
+    return;
+  }
+
+  const confirmable =
+    (event.event === "payment.captured" || event.event === "order.paid") && payment?.status === "captured"
+      ? payment
+      : event.event === "payment.authorized" && payment?.status === "authorized"
+        ? payment
+        : null;
+  if (confirmable) {
+    let granted: boolean;
     try {
-      await grantOrder(order.id, { via: "webhook", paymentId: payment.id, paidAmountPaise: payment.amount });
+      granted = await confirmPayment(order, confirmable, "webhook");
     } catch (err) {
       // An amount mismatch will never succeed on retry — record it and acknowledge.
       if (err instanceof AppError && err.statusCode === 400) {
@@ -98,12 +123,12 @@ export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) 
       }
       throw err;
     }
-    res.json({ ok: true, granted: true });
+    res.json({ ok: true, granted });
     return;
   }
 
   if (event.event === "payment.failed" && order.status === "CREATED") {
-    await prisma.order.update({ where: { id: order.id }, data: { lastError: payment.error_description ?? "Payment failed" } });
+    await prisma.order.update({ where: { id: order.id }, data: { lastError: payment?.error_description ?? "Payment failed" } });
   }
   res.json({ ok: true, ignored: event.event });
 });

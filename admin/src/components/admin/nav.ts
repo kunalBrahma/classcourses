@@ -1,4 +1,4 @@
-import { FileTextIcon, LayoutDashboardIcon, NewspaperIcon, TimerIcon, LibraryBigIcon, ReceiptIndianRupeeIcon, Settings2Icon, UsersIcon, type LucideIcon } from "lucide-react";
+import { FileTextIcon, InboxIcon, LayoutDashboardIcon, NewspaperIcon, TimerIcon, LibraryBigIcon, ReceiptIndianRupeeIcon, Settings2Icon, UsersIcon, type LucideIcon } from "lucide-react";
 
 // Single source for the sidebar and the header breadcrumbs.
 // Each development phase adds its section here (task.md) — only link pages that exist.
@@ -68,6 +68,7 @@ export const NAV: NavGroup[] = [
     label: "People",
     sections: [
       { title: "Users", icon: UsersIcon, url: "/users" },
+      { title: "Messages", icon: InboxIcon, url: "/messages" },
     ],
   },
   {

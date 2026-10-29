@@ -159,6 +159,24 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - **Coins are held at order creation** (`NOTE_DISCOUNT`, refId = order id)
   and refunded by `cancelOrder` (`NOTE_DISCOUNT_REFUND`). Stale orders
   (30 min) are cancelled lazily.
+- **One open order per student and note.** `createOrder` runs in one transaction
+  that first locks the student's row (`tx.user.update`, a no-op increment). An open
+  order with the same price and coins is **reused** (same Razorpay order, so Razorpay
+  takes one payment); only a different price or coin choice cancels and replaces it.
+  Never call Razorpay inside that transaction.
+- **Access rows are created with `createMany({ skipDuplicates: true })`**, never a
+  plain create or upsert, so two confirmations at once can't roll back a paid order.
+  A PAID order that unlocked nothing is a duplicate: `refundDuplicate()` refunds it
+  through Razorpay (REFUNDED, coins back); if that fails, admin Reconcile retries it.
+- **Refunds:** `markRefunded()` (PAID → REFUNDED, removes that order's access,
+  returns held coins from the ledger) is used by duplicate refunds and by the
+  `refund.processed` / `payment.refunded` webhook (full refunds only).
+- **Capture:** authorized payments are captured by us (`captureRazorpayPayment`),
+  only when amount AND currency match. The dashboard's auto-capture setting
+  doesn't matter.
+- **Stale orders ask Razorpay first** (`settleFromRazorpay`): paid → confirmed,
+  not cancelled. Paid after a cancel → coins taken again
+  (`NOTE_DISCOUNT_REAPPLIED`), or flagged if already spent.
 - **The webhook route is registered in `app.ts` BEFORE `express.json()`**,
   with `express.raw()`, because the HMAC needs the exact bytes. Keep it there.
 - **Note PDFs:** only in the **private** bucket (`visibility: "private"`),
@@ -365,7 +383,20 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - `tests/helpers.ts` has `createUserAndLogin(role)`.
   - SMTP tests run a local `smtp-server`. Live R2 tests run only when `R2_*`
     env vars exist.
-  - The auth rate limiter is skipped when `NODE_ENV=test`.
+  - Rate limiters are off when `NODE_ENV=test` (`rateLimitSwitch`);
+    `tests/rateLimit.test.ts` switches them on and calls `resetRateLimits()`.
+- **Rate limits** (`src/middleware/rateLimiter.ts`, all built with `limiter()`;
+  in memory, one API instance assumed; IP keys need `TRUST_PROXY` right):
+  - login: 20 **failed** per 15 min per IP + 5 failed per email per 15 min
+    (successful sign-ins never count: a class shares one IP on school Wi-Fi /
+    mobile NAT, so tight limits follow the account, not the IP)
+  - sign-up 15/hour per IP; forgot password 10/15 min per IP + 3/hour per
+    email; reset 10/15 min; email code 20/15 min; contact 5/hour
+  - quiz 90/min and payments 30/min per user; search 60/min; check answer 40/min
+  - whole `/api` backstop 600/min per IP (`/health` is outside it; the
+    Razorpay webhook is registered before it)
+  - A new public endpoint that sends email or does heavy work gets its own
+    limiter here.
   - `tests/setup.ts` turns HTTP keep-alive off: with Node 19+ and supertest's
     per-request servers it caused random "socket hang up" failures.
 
@@ -374,7 +405,9 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   preset, Lucide icons). Add components with
   `cd admin && npx shadcn@latest add <name>`.
 - **Shell:** the user's chosen block, **`sidebar-07`**, restyled with the
-  brand (navy sidebar, amber active marker, "CC" mark).
+  brand (dark-brown sidebar, amber active marker, the client's logo:
+  `LogoFull` when open, `LogoMark` on the collapsed rail, both in
+  `components/admin/logo-mark.tsx`).
   - `src/app/(panel)/layout.tsx`: ADMIN guard, `SidebarProvider`, header
     with trigger and breadcrumb
   - `src/components/app-sidebar.tsx`, `nav-main.tsx`, `nav-user.tsx` (real
@@ -385,8 +418,11 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   the sidebar and the breadcrumbs. **Each phase adds its sections there**, so
   never link to pages that don't exist yet.
 - **Theme:** `next-themes` (System/Light/Dark; dark = `.dark` class). The
-  brand tokens live in `src/app/globals.css` (`--brand-navy`,
-  `--brand-amber`, `--success`, `--warning`, and the sidebar tokens).
+  brand tokens live in `src/app/globals.css` and use **the same colour values as
+  the student site** (`frontend/src/app/globals.css`); keep the two in step.
+  Amber buttons have ink text; amber *text* uses `text-brand-amber-text`
+  (never `text-primary`: plain amber on white fails contrast). Admin
+  `--success` is one shade darker (badges sit on a green tint).
   Fonts: `font-heading` (Bricolage Grotesque) and `font-sans` (Geist).
 - **Reuse rather than re-invent:**
   - `apiJson()` / `ApiError` / `logout()` in `src/lib/api.ts`
@@ -426,6 +462,15 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - Dialogs reset their form when opened via the "previous target" render
     pattern (see `subject-dialog.tsx`), not `useEffect`, because of the
     set-state-in-effect lint rule.
+- **Dashboard** (`(panel)/dashboard/page.tsx`) reads one endpoint,
+  `GET /api/admin/stats?days=7|30|90` (`controllers/adminStats.controller.ts`):
+  figures vs the previous period, daily series by IST day, top chapters/notes,
+  latest orders/students, content totals and an `attention` list (only real
+  problems: failed refunds, payments/email/storage not set up, legal pages).
+  Revenue counts PAID orders only. Charts are the dependency-free
+  `components/admin/dashboard/bar-chart.tsx` (one series, `--chart-bar` colour,
+  hover readout, hidden data table). Add new figures to the endpoint, not as
+  extra calls from the page.
 - **Page width (one standard):** `(panel)/layout.tsx` wraps every page in
   the same container: full width, capped at 1600 px, with gutters of
   16/24/32 px. Page roots are just `<div className="space-y-6">`. Never add
@@ -444,11 +489,18 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   shadcn's version broke the `react-hooks/set-state-in-effect` lint rule.
 - **Verify UI** with device-emulated screenshots (puppeteer-core plus the
   installed Chrome, in the scratchpad) at 390 and 1440 px, light and dark.
-  Repeated test logins trip the backend's login limiter (10 per 15 minutes,
-  in memory); touching `backend/src/server.ts` restarts the dev server and
-  resets it.
-- **Brand:** navy `#1f1d4a`, indigo `#4338ca`/`#6366f1`, amber `#f59e0b` (from
-  the client's document). Display font Bricolage Grotesque (currently loaded
+  Successful test logins don't count toward the login limit; repeated failed
+  ones do (20 per IP / 5 per email per 15 min, in memory). Touching
+  `backend/src/server.ts` restarts the dev server and resets the counters.
+- **Brand:** the client mock's amber `#f5a623` / cream `#fff7e8` / ink
+  `#3a2a00` / brown `#2e2000`, shared with the student site (the old navy +
+  indigo look was replaced on 29 Oct 2026).
+- **Logo files (client's, both apps):** `public/brand/` — `class-course-logo-original.svg`
+  (as supplied, 164 KB, embedded images), `logo.svg` (same, frame trimmed to the
+  artwork), `logo.webp` (18 KB render used on pages), `logo-mark.webp`/`.png`
+  (square mark). The landscape logo is **white**: use it only on amber/brown
+  (site header and footer, admin sidebar and login panel); on light surfaces use
+  `LogoMark` (the square mark). Favicon = `src/app/icon.png` + `apple-icon.png`. Display font Bricolage Grotesque (currently loaded
   in `admin/src/app/login/layout.tsx`); body font Geist.
 - The login page (`admin/src/app/login/page.tsx`) is the reference for the
   look: layered "3D" cards, a pressable button, 16 px inputs (no iOS zoom),
@@ -479,6 +531,12 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
     news/video cards `rounded-[15px]`, small buttons `rounded-[12px]`
   - use `card-3d` (+ `lift` for links) for cards, `press-3d` for primary buttons
     (it sets its own gradient + ink text), `scroll-row` / `ScrollRow` for sideways rows
+  - **no visible scrollbars**: `scroll-row` hides them; card rows use `ScrollRow`
+    (arrow buttons for mouse users, hidden at the ends); rows of chips/buttons
+    add `sm:flex-wrap` so they wrap on wider screens instead of scrolling
+  - video cards are all the same size (16:9 frame; a Short sits upright on a
+    blurred copy of its picture; titles reserve two lines). `upright` is only
+    for rows where every video is a Short
   - reuse the kit in `src/components/kit/` (SectionTitle, ClassTile, RowCard,
     NoteCard, VideoCard, NewsCard, Coin3D, LogoMark); preview it at `/kit` (dev only)
   - icons are Lucide/SVG, never emoji; headings `font-heading`; mark Assamese
@@ -517,17 +575,32 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   `components/notes/` (`NoteList`, `NoteActions`, `BuyDialog`, `NotesStore`;
   `placeLine` is a plain module so server components can call it). The
   browser never unlocks a note: it waits for the server's PAID (verify, or
-  polling while PENDING). Without Razorpay keys, browser tests stub
+  polling while PENDING). `BuyDialog` hides itself while Razorpay's window is open
+  (`razorpayOpen`): a modal Radix dialog sets `pointer-events: none` and traps
+  focus, which made Razorpay's window unclickable. Do the same for any other
+  third-party popup opened from a dialog. Without Razorpay keys, browser tests stub
   `checkout.razorpay.com` and the payment endpoints with request interception.
 - **Page weight:** the header's search, medium switcher and menu (Radix) and
   the buy window load on first tap (`components/site/lazy-header.tsx`,
   `next/dynamic`). Keep new heavy UI out of the first load the same way.
   Lighthouse mobile medians are 90–92; re-check after big changes.
 - **Static pages:** `components/pages/static-page.tsx` + one tiny page file per
-  slug; `/faq` has its own page. A new top-level route also needs its word in
+  slug; `/faq` has its own page. About = hero + feature cards + the owner's text
+  + call to action; legal pages = hero ("Last updated") + article with an
+  automatic "On this page" list (h2/h3 get ids) + other policies; Contact = the
+  form (`components/pages/contact-form.tsx`, React Hook Form + Zod, rules in
+  `src/lib/contact.ts` mirroring the backend) beside the email card. The form
+  works even when the contact page text isn't published.
+- **Contact messages:** `POST /api/content/contact` (`contactLimiter` 5/hour,
+  hidden `website` spam trap, optional sign-in links the message to the
+  student). The message is saved and answered first; the email to the
+  `contact` setting's address goes out afterwards (`setImmediate`, reply-to =
+  the student) and its result is stored in `emailNote`. Admin → Messages
+  (`/api/admin/messages`) reads them; new ones show on the dashboard. A new top-level route also needs its word in
   the backend's `RESERVED_TOP_LEVEL`.
 - **Home = the client's mock** (`docs/design/home-page-mock.html`): keep its
-  order, wording and card styles. Sections never disappear: no admin content
+  order, wording and card styles. The quiz box title is "Daily Chapter Quiz"; the about
+  text's "from Class X to Class Y" is worked out from the mediums' class lists. Sections never disappear: no admin content
   → a "coming soon" placeholder (`components/home/placeholders.tsx`) or the
   mock's news sources (`DEFAULT_NEWS`). Footer/menu links come from
   `siteLinks()` (`src/lib/site-links.ts`); unpublished pages say "Coming soon".
@@ -536,7 +609,29 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   `.scroll-row` must stay `position: relative` (it clips sr-only text in cards).
 - Browser tests: Next keeps hidden copies of earlier screens in the DOM, so
   match **visible** elements only (`offsetParent !== null`), not page text.
+- **Videos & news pages:** `/videos` (`components/media/video-browser.tsx`: medium +
+  class chips, a Shorts row and a lessons grid with "Load more", from public
+  `GET /api/catalog/videos?medium&classSlug&format&page`) and `/news` (grid; falls
+  back to `DEFAULT_NEWS`). `VideoCard` / `NewsCard` take `fluid` to fill a grid cell;
+  news cards show `NewsLink.imageUrl` (admin upload) or an amber panel.
+- **Start Quiz** (home) opens `components/quiz/quiz-picker.tsx` (lazy, like the
+  header panels): medium → class → every ready quiz from public
+  `GET /api/catalog/quiz-picker?medium&classSlug` (`classQuizCatalog()` in
+  `quizAvailability.service.ts`, which reuses `availableQuizzes()` so readiness
+  rules stay in one place). Guests get a sign-in link back to `/#start-quiz`.
+- **Demo quizzes (dev only):** `npm run seed:demo` (backend) fills 50 chapters with
+  12 marked MCQs each + 2 class tests; `npm run seed:demo -- --remove` deletes only
+  those. It refuses to run in production.
 - **Auth pages** take `?next=`. Only same-site paths are allowed (`safeNext`).
+- **Sign-up needs an email code.** `/register` (name, email, phone, password) creates the
+  student with `emailVerified: false` and emails a 6-digit code; no tokens until
+  `POST /api/auth/verify-email`. Login of an unverified account answers 403 with
+  `code: "EMAIL_NOT_VERIFIED"` (AppError's optional third argument; the frontend's
+  `ApiError.code`). Code rules live only in `backend/src/services/emailVerification.service.ts`;
+  the UI step is `components/auth/verify-code.tsx`. Accounts made any other way
+  (seed, create-admin, tests) default to verified. Phone is a 10-digit Indian mobile
+  (`phoneSchema` in `auth.validation.ts`), shown to admins only; the "no phone number"
+  rule is about the site's own contact details.
 
 ### Roles
 - `User.role` is `STUDENT | ADMIN` (default STUDENT).

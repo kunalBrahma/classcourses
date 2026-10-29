@@ -77,7 +77,7 @@ Settings → each page tests the connection before saving; secrets are encrypted
 2. **Email (SMTP)** — business mailbox; use "Send test email".
 3. **Payments (Razorpay)** — start with `rzp_test_` keys; switch to live after
    KYC. Copy the **webhook URL** shown there into Razorpay Dashboard → Webhooks
-   with events `payment.captured`, `payment.failed`, `order.paid`, and the same
+   with events `payment.captured`, `payment.authorized`, `payment.failed`, `order.paid`, `refund.processed`, and the same
    webhook secret. Keep **auto-capture ON**.
 4. **Pages** — publish About, Contact, Privacy, Terms, Refund policy (Razorpay
    KYC checks them), and the FAQ, after the owner approves the drafts.

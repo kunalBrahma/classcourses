@@ -348,3 +348,24 @@ describe("admin: users & coins", () => {
     expect((await as(student).get("/api/admin/users")).status).toBe(403);
   });
 });
+
+describe("home page quiz picker", () => {
+  it("lists the ready chapter quizzes of a class by subject, and never leaks answers", async () => {
+    const res = await api().get("/api/catalog/quiz-picker?medium=english-medium&classSlug=8");
+    expect(res.status).toBe(200);
+    expect(res.body.classLevel.slug).toBe("class-8");
+    const math = res.body.subjects.find((s: { name: string }) => s.name === "Math");
+    // Chapters 1–8 have 12 quiz MCQs; chapter 9 has only 5, so it isn't ready.
+    expect(math.chapters).toHaveLength(8);
+    expect(math.chapters[0]).toMatchObject({ number: 1, href: expect.stringMatching(/^\/english-medium\/class-8\/math\//) });
+    expect(math.chapters[0].quizzes[0]).toMatchObject({ id: "auto", kind: "CHAPTER", questions: 10 });
+    expect(JSON.stringify(res.body)).not.toMatch(/correctIndex|Because \d/);
+
+    // Switching automatic chapter quizzes off empties the list
+    await api().put("/api/admin/settings/quiz").set("Authorization", admin.auth).send({ autoChapterQuizzes: false });
+    expect((await api().get("/api/catalog/quiz-picker?medium=english-medium&classSlug=class-8")).body.subjects).toEqual([]);
+
+    expect((await api().get("/api/catalog/quiz-picker?medium=nope&classSlug=class-8")).status).toBe(404);
+    expect((await api().get("/api/catalog/quiz-picker?medium=english-medium")).status).toBe(400);
+  });
+});

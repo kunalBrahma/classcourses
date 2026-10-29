@@ -55,7 +55,7 @@ export function ChapterQuizPanel({ chapterId, refreshKey }: { chapterId: string;
   return (
     <Card className={cn(formCard, "gap-0 py-0")}>
       <div className="flex flex-wrap items-start gap-4 border-b px-4 py-4 sm:px-5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-brand-amber-text">
           <ShuffleIcon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">

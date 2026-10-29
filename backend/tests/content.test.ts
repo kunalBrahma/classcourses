@@ -356,6 +356,32 @@ describe("videos", () => {
     expect(await featured()).toEqual([]);
   });
 
+  it("the videos page lists every video on a visible chapter, newest first, filterable by medium and class", async () => {
+    const list = async (q = "") => (await api().get(`/api/catalog/videos${q}`)).body;
+    const a = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "iiiiiiiiiii", title: "Older" });
+    const b = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "https://youtube.com/shorts/jjjjjjjjjjj", title: "Newer" });
+    await prisma.video.update({ where: { id: a.body.video.id }, data: { createdAt: new Date(Date.now() - 60_000) } });
+
+    const all = await list();
+    expect(all.videos.map((v: { title: string }) => v.title)).toEqual(["Newer", "Older"]);
+    expect(all).toMatchObject({ total: 2, page: 1, totalPages: 1 });
+    expect(all.videos[0]).toMatchObject({ format: "SHORT", chapter: { href: "/english-medium/class-9/english/chapter-1" }, classLevel: { slug: "class-9" } });
+    expect(all.classes).toEqual([{ name: "Class 9", slug: "class-9" }]);
+
+    expect((await list("?medium=english-medium&classSlug=9")).total).toBe(2);
+    expect((await list("?medium=assamese-medium")).total).toBe(0);
+    expect((await list("?classSlug=class-10")).total).toBe(0);
+    expect((await list("?format=SHORT")).videos.map((v: { title: string }) => v.title)).toEqual(["Newer"]);
+    expect((await list("?format=LANDSCAPE")).videos.map((v: { title: string }) => v.title)).toEqual(["Older"]);
+    expect((await api().get("/api/catalog/videos?format=SQUARE")).status).toBe(400);
+
+    await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: false } });
+    expect((await list()).total).toBe(0);
+    await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: true } });
+
+    for (const v of [a, b]) await api().delete(`/api/admin/videos/${v.body.video.id}`).set("Authorization", admin);
+  });
+
   it("adds, reorders and shows videos on the chapter page", async () => {
     const a = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "https://youtu.be/aaaaaaaaaaa", title: "Part A" });
     const b = await post(`/api/admin/chapters/${chapterId}/videos`, { url: "bbbbbbbbbbb", title: "Part B" });

@@ -156,7 +156,7 @@ export function QuestionSection({
                   title={q.useInQuiz ? "Can appear in quizzes — click for practice only" : "Practice only — click to use in quizzes"}
                   className={cn(
                     "mt-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors",
-                    q.useInQuiz ? "border-primary/30 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+                    q.useInQuiz ? "border-primary/30 bg-primary/10 text-brand-amber-text" : "text-muted-foreground hover:bg-muted"
                   )}
                 >
                   <TargetIcon className="size-3.5" />
@@ -187,7 +187,7 @@ export function QuestionSection({
         {questions.length === 0 && (
           <li className="px-4 py-8 text-center text-sm text-muted-foreground">
             None yet —{" "}
-            <button type="button" className="font-medium text-primary hover:underline" onClick={onAdd}>
+            <button type="button" className="font-medium text-brand-amber-text hover:underline" onClick={onAdd}>
               add one
             </button>{" "}
             or use <strong>Import</strong>.

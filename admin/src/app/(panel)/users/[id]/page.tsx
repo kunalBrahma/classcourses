@@ -18,7 +18,8 @@ import { useAdmin } from "@/components/admin/session";
 import { useConfirm } from "@/components/admin/confirm";
 import { formCard, inputClass, pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { COIN_REASON, formatDate, initials, QUIZ_STATUS, Role, UserDetail } from "@/lib/people";
+import { COIN_REASON, formatDate, formatPhone, initials, QUIZ_STATUS, Role, UserDetail } from "@/lib/people";
+import { UnverifiedBadge } from "@/components/admin/unverified-badge";
 import { cn } from "@/lib/utils";
 
 function CoinAdjust({ user, onDone }: { user: UserDetail; onDone: () => void }) {
@@ -267,7 +268,7 @@ export default function UserDetailPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Avatar className="size-16 rounded-2xl">
-          <AvatarFallback className="rounded-2xl bg-brand-navy font-heading text-xl font-bold text-white">{initials(user.name, user.email)}</AvatarFallback>
+          <AvatarFallback className="rounded-2xl bg-brand-brown font-heading text-xl font-bold text-white">{initials(user.name, user.email)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-2 font-heading text-2xl font-bold tracking-tight md:text-3xl">
@@ -278,10 +279,18 @@ export default function UserDetailPage() {
               </Badge>
             )}
           </h1>
-          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span className="truncate">{user.email}</span>
+            {!user.emailVerified && <UnverifiedBadge />}
+          </p>
+          {user.phone && (
+            <a href={`tel:+91${user.phone}`} className="text-sm text-muted-foreground tabular-nums hover:text-foreground hover:underline">
+              {formatPhone(user.phone)}
+            </a>
+          )}
           <p className="mt-1 text-xs text-muted-foreground">
             Joined {formatDate(user.createdAt)}
-            {(user.medium || user.classLevel) && ` · studies ${[user.medium?.name, user.classLevel && `Class ${user.classLevel}`].filter(Boolean).join(", ")}`}
+            {(user.medium || user.classLevel) && ` · studies ${[user.medium?.name, user.classLevel?.name].filter(Boolean).join(", ")}`}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:w-72">

@@ -25,6 +25,8 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
           OR: [
             { email: { contains: search, mode: "insensitive" } },
             { name: { contains: search, mode: "insensitive" } },
+            // Phone: match on digits only, once there are enough to mean something.
+            ...(/^[\d\s+-]{3,}$/.test(search) ? [{ phone: { contains: search.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "") } }] : []),
           ],
         }
       : {}),
@@ -39,6 +41,8 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
         id: true,
         email: true,
         name: true,
+        phone: true,
+        emailVerified: true,
         role: true,
         coins: true,
         classLevel: { select: { id: true, name: true, slug: true } },
@@ -65,6 +69,8 @@ export const getUserAdmin = asyncHandler(async (req: Request, res: Response) => 
       id: true,
       email: true,
       name: true,
+      phone: true,
+      emailVerified: true,
       role: true,
       coins: true,
       classLevel: { select: { id: true, name: true, slug: true } },

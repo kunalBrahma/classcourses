@@ -55,7 +55,7 @@ function Section({ step, title, hint, children }: { step: number; title: string;
   return (
     <Card className={cn(formCard, "gap-5 p-5 sm:p-6")}>
       <div className="flex items-start gap-3">
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-navy font-heading text-xs font-bold text-white">{step}</span>
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-brown font-heading text-xs font-bold text-white">{step}</span>
         <div>
           <h2 className="font-heading text-lg font-bold leading-tight">{title}</h2>
           {hint && <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>}

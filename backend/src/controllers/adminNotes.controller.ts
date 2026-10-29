@@ -162,11 +162,9 @@ export const grantNoteAccess = asyncHandler(async (req: AuthRequest, res: Respon
   const note = await requireNote(req.params.id);
   const user = await prisma.user.findUnique({ where: { id: req.body.userId }, select: { id: true } });
   if (!user) throw new AppError(404, "User not found");
-  const access = await prisma.noteAccess.upsert({
-    where: { userId_noteId: { userId: user.id, noteId: note.id } },
-    create: { userId: user.id, noteId: note.id },
-    update: {},
-  });
+  // ON CONFLICT DO NOTHING: safe even if a payment confirms at the same moment.
+  await prisma.noteAccess.createMany({ data: [{ userId: user.id, noteId: note.id }], skipDuplicates: true });
+  const access = await prisma.noteAccess.findUniqueOrThrow({ where: { userId_noteId: { userId: user.id, noteId: note.id } } });
   res.status(201).json({ access });
 });
 

@@ -68,7 +68,7 @@ function ToolButton({
       type="button"
       variant="ghost"
       size="icon-sm"
-      className={cn("size-8 shrink-0", active && "bg-primary/10 text-primary hover:bg-primary/15")}
+      className={cn("size-8 shrink-0", active && "bg-primary/10 text-brand-amber-text hover:bg-primary/15")}
       aria-label={label}
       title={label}
       aria-pressed={active}
@@ -107,7 +107,7 @@ function LinkButton({ editor, active }: { editor: Editor; active: boolean }) {
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={cn("size-8 shrink-0", active && "bg-primary/10 text-primary")}
+          className={cn("size-8 shrink-0", active && "bg-primary/10 text-brand-amber-text")}
           aria-label="Link"
           title="Link"
           onMouseDown={(e) => e.preventDefault()}

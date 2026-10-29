@@ -7,6 +7,9 @@ import {
   listMediums,
   checkAnswer,
   featuredVideos,
+  listVideos,
+  quizPicker,
+  catalogStats,
   search,
 } from "../controllers/catalog.controller";
 import { checkAnswerLimiter, searchLimiter } from "../middleware/rateLimiter";
@@ -20,6 +23,9 @@ const router = Router();
 router.get("/mediums", listMediums);
 router.get("/search", searchLimiter, search);
 router.get("/videos/featured", featuredVideos);
+router.get("/videos", listVideos);
+router.get("/quiz-picker", quizPicker);
+router.get("/stats", catalogStats);
 router.get("/mediums/:medium", getMediumClasses);
 router.get("/mediums/:medium/classes/:classSlug", getClassSubjects);
 router.get("/mediums/:medium/classes/:classSlug/subjects/:subject", getSubject);

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { QuestionKind, QuestionSource } from "@prisma/client";
+import { Prisma, QuestionKind, QuestionSource } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
@@ -15,6 +15,7 @@ import {
   sortChaptersInReadingOrder,
 } from "../services/catalog.service";
 import { publicNoteWhere } from "../services/order.service";
+import { classQuizCatalog } from "../services/quizAvailability.service";
 
 // Public, read-only catalog for the student site. Anything inactive or
 // unpublished is invisible here (404), never partially shown.
@@ -294,47 +295,128 @@ const groupByPart = (parts: PartLite[], chapters: ChapterLite[]) => {
 // ===========================================================================
 
 // Videos the admin put on the home page, newest first, from visible chapters only.
+const videoSelect = {
+  id: true,
+  youtubeId: true,
+  format: true,
+  title: true,
+  createdAt: true,
+  chapter: {
+    select: {
+      title: true,
+      number: true,
+      slug: true,
+      subject: {
+        select: {
+          name: true,
+          nativeName: true,
+          slug: true,
+          medium: { select: { slug: true } },
+          classLevel: { select: { name: true, slug: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.VideoSelect;
+
+const videoView = ({ chapter: { subject, ...chapter }, ...v }: Prisma.VideoGetPayload<{ select: typeof videoSelect }>) => ({
+  ...v,
+  chapter: {
+    title: chapter.title,
+    number: chapter.number,
+    href: catalogHref(subject.medium.slug, subject.classLevel.slug, subject.slug, chapter.slug),
+  },
+  subject: { name: subject.name, nativeName: subject.nativeName },
+  classLevel: { name: subject.classLevel.name, slug: subject.classLevel.slug },
+});
+
 export const featuredVideos = asyncHandler(async (_req: Request, res: Response) => {
   const videos = await prisma.video.findMany({
     where: { featuredAt: { not: null }, chapter: publicChapterWhere },
     orderBy: { featuredAt: "desc" },
     take: 12,
-    select: {
-      id: true,
-      youtubeId: true,
-      format: true,
-      title: true,
-      chapter: {
-        select: {
-          title: true,
-          number: true,
-          slug: true,
-          subject: {
-            select: {
-              name: true,
-              nativeName: true,
-              slug: true,
-              medium: { select: { slug: true } },
-              classLevel: { select: { name: true, slug: true } },
-            },
-          },
-        },
-      },
-    },
+    select: videoSelect,
   });
+  res.json({ videos: videos.map(videoView) });
+});
 
+// The /videos page: every video on a public chapter, newest first, optionally
+// for one medium, class and shape (Shorts / long videos). Also returns the
+// classes that have videos, for the class filter.
+const videoListQuery = z.object({
+  medium: z.string().trim().max(80).optional(),
+  classSlug: z.string().trim().max(80).optional(),
+  format: z.enum(["LANDSCAPE", "SHORT"]).optional(),
+  page: z.coerce.number().int().min(1).max(500).default(1),
+});
+const VIDEOS_PER_PAGE = 24;
+
+export const listVideos = asyncHandler(async (req: Request, res: Response) => {
+  const q = videoListQuery.parse(req.query);
+  const mediumWhere: Prisma.ChapterWhereInput = q.medium ? { subject: { medium: { slug: q.medium } } } : {};
+  const where: Prisma.VideoWhereInput = {
+    format: q.format,
+    chapter: {
+      AND: [
+        publicChapterWhere,
+        mediumWhere,
+        q.classSlug ? { subject: { classLevel: { slug: classSlugFrom(q.classSlug) } } } : {},
+      ],
+    },
+  };
+  const [videos, total, classRows] = await Promise.all([
+    prisma.video.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      skip: (q.page - 1) * VIDEOS_PER_PAGE,
+      take: VIDEOS_PER_PAGE,
+      select: videoSelect,
+    }),
+    prisma.video.count({ where }),
+    prisma.classLevel.findMany({
+      where: { subjects: { some: { chapters: { some: { AND: [publicChapterWhere, mediumWhere, { videos: { some: {} } }] } } } } },
+      orderBy: { order: "asc" },
+      select: { name: true, slug: true },
+    }),
+  ]);
   res.json({
-    videos: videos.map(({ chapter: { subject, ...chapter }, ...v }) => ({
-      ...v,
-      chapter: {
-        title: chapter.title,
-        number: chapter.number,
-        href: catalogHref(subject.medium.slug, subject.classLevel.slug, subject.slug, chapter.slug),
-      },
-      subject: { name: subject.name, nativeName: subject.nativeName },
-      classLevel: { name: subject.classLevel.name },
+    videos: videos.map(videoView),
+    total,
+    page: q.page,
+    totalPages: Math.max(1, Math.ceil(total / VIDEOS_PER_PAGE)),
+    classes: classRows,
+  });
+});
+
+// Home page "Start Quiz" picker: every quiz in one medium + class.
+const quizPickerQuery = z.object({ medium: z.string().trim().min(1).max(80), classSlug: z.string().trim().min(1).max(80) });
+
+export const quizPicker = asyncHandler(async (req: Request, res: Response) => {
+  const q = quizPickerQuery.parse(req.query);
+  const catalog = await classQuizCatalog(q.medium, classSlugFrom(q.classSlug));
+  if (!catalog) throw new AppError(404, "Class not found");
+  res.json({
+    ...catalog,
+    subjects: catalog.subjects.map((s) => ({
+      ...s,
+      chapters: s.chapters.map(({ slug, ...c }) => ({ ...c, href: catalogHref(catalog.medium.slug, catalog.classLevel.slug, s.slug, slug) })),
     })),
   });
+});
+
+// Site-wide totals for the About page ("920 chapters · 600 MCQs …"): only
+// what students can actually see.
+export const catalogStats = asyncHandler(async (_req: Request, res: Response) => {
+  const visibleQuestion = { isPublished: true, chapter: publicChapterWhere };
+  const [classes, subjects, chapters, qa, mcq, videos] = await Promise.all([
+    prisma.classLevel.count({ where: { isActive: true, subjects: { some: publicSubjectWhere } } }),
+    prisma.subject.count({ where: publicSubjectWhere }),
+    prisma.chapter.count({ where: publicChapterWhere }),
+    prisma.question.count({ where: { ...visibleQuestion, kind: "QA" } }),
+    prisma.question.count({ where: { ...visibleQuestion, kind: "MCQ" } }),
+    prisma.video.count({ where: { chapter: publicChapterWhere } }),
+  ]);
+  res.json({ stats: { classes, subjects, chapters, qa, mcq, videos } });
 });
 
 // ===========================================================================

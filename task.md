@@ -573,6 +573,72 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [x] Verified: tsc, lint, build; 360/390/1440, light + dark, guest + signed in: page exactly device-wide on all routes, axe (WCAG 2.1 AA) zero violations on the home page, no console errors from the site
 - [x] Corner radii set to the mock's exact values (radius scale in `globals.css` + per element); all 15 measured home elements match
 
+### Admin notes: PDF in the note form (29 Oct 2026)
+- [x] New/Edit note has a PDF box (choose or drop) and "Show to students"; one "Create & upload" creates, uploads and publishes. Rows show an Upload PDF / Replace PDF button, and a PDF dropped on a row opens the upload window with it. Shared `uploadNotePdf()` + `PdfDrop` in `components/admin/sales/note-dialogs.tsx`
+- [x] Verified against the real `classcoursenotes` bucket (create + upload + publish, then deleted); 390 px no overflow
+
+### Sign-up: phone, confirm password, email code (29 Oct 2026)
+- [x] **Backend:** `User.phone` (10-digit Indian mobile, `+91`/`0`/spaces accepted, stored as 10 digits), `User.emailVerified` (default true so older accounts and admins count as verified; `/register` sets false), `EmailVerificationCode` (hash only). `/register` emails a 6-digit code and returns no tokens; `POST /api/auth/verify-email` logs in; `POST /api/auth/resend-code` (60 s wait, same answer for unknown emails); login of an unverified account sends a code and answers 403 `EMAIL_NOT_VERIFIED`. 10-minute codes, 5 wrong tries per code, `otpLimiter`. Password reset also marks the email verified. Rules in `src/services/emailVerification.service.ts`. Migration `email_verification_phone`; 7 new tests (197 green)
+- [x] **Admin:** users list and detail show the phone and an "Email not verified" badge; search finds phone numbers. Fixed "Class [object Object]" in the users list and detail
+- [x] **Frontend:** register has Mobile number (+91) and Confirm password (live match hint), then the code step (`components/auth/verify-code.tsx`: auto-checks on the 6th digit, resend countdown, change email). Login shows the same step for unverified accounts
+- [x] Verified with the real SMTP (Hostinger): code email delivered in ~3 s, code accepted, signed in; test account deleted
+- [ ] **Owner:** the privacy draft now mentions the mobile number and the email code (`seed-data/pages.ts`), but the copy already in the database isn't overwritten. Update Admin → Pages → Privacy the same way before publishing
+
+### Payment safety review (29 Oct 2026)
+- [x] Reviewed: prices from the DB only; unlock only after server checks (signature + payment fetched from Razorpay, or signed webhook); every multi-step change in one Prisma transaction; guarded status updates; DB unique keys on access, Razorpay ids and coin ledger
+- [x] **Double payment:** one open order per student and note (row lock + reuse of the same Razorpay order); a double tap or second tab gets the same checkout or 409 "already opening"
+- [x] **Confirmations at the same moment:** access via `createMany skipDuplicates`, so a second payment no longer rolls back or makes the webhook fail forever; it is refunded automatically (REFUNDED, coins back); Reconcile retries a failed refund. Admin "Give to a student" made race-safe the same way
+- [x] **Late payments:** stale orders are checked with Razorpay before cancelling; paid after a cancel → discount coins taken again (or flagged if spent)
+- [x] Currency checked with the amount; authorized payments captured by the server (only if they match); full refunds from the Razorpay dashboard remove access and return held coins
+- [x] Admin Orders: Refunded tab, refund id and date, "try refund again"; student: "Refunded" in My orders and a "you already had this note, refunded" message in the buy window
+- [x] Migration `payment_safety` (`OrderStatus.REFUNDED`, `Order.refundId/refundedAt`, `CoinReason.NOTE_DISCOUNT_REAPPLIED`); 9 new/updated tests incl. concurrent checkouts and concurrent webhooks (206 green, payment file 4 runs in a row)
+- [ ] **Owner:** refund-policy draft now says duplicates are refunded automatically; update Admin → Pages → Refund policy the same way (the database copy isn't overwritten)
+- [ ] **With real test keys (#21/#24):** in the Razorpay dashboard subscribe the webhook to `payment.captured`, `payment.authorized`, `payment.failed`, `order.paid`, `refund.processed`; then try a double tap, a payment in two tabs, and a dashboard refund
+
+### Videos & news pages, Start Quiz picker, demo quizzes (29 Oct 2026)
+- [x] **Backend:** `NewsLink.imageUrl` (migration `news_image`, https only, removable); public `GET /api/catalog/videos` (all visible videos, newest first, medium/class/format filters, 24 per page, classes with videos); public `GET /api/catalog/quiz-picker`; `videos` and `news` added to `RESERVED_TOP_LEVEL`; tests for all three (209 green)
+- [x] **Admin:** news form has a picture (upload, preview, remove); list shows thumbnails
+- [x] **Frontend:** `/videos` (filters, Shorts row, lessons grid, load more, inline play) and `/news` (picture cards); redesigned `VideoCard` (class/subject tag, amber play button, "Chapter N →") and `NewsCard` (picture on top, source chip, "Read more"); home "See all" links, menu links and sitemap entries. Checked at 390 and 1440, light and dark, no overflow
+- [x] **Start Quiz fixed:** it only scrolled to the class list (and no quiz was ready anywhere: 0 MCQs in the DB). Now it opens a picker (class → quizzes by subject → Start); verified start → quiz screen as a student, sign-in prompt as a guest
+- [x] **Demo content:** `npm run seed:demo` added 50 ready chapter quizzes (English Medium, Classes 2–12, 600 MCQs) + Class 11/12 practice tests; remove with `npm run seed:demo -- --remove` **before launch**. Assamese Medium has subjects but no chapters yet, so it has no chapter quizzes
+- [x] Video cards all the same height (16:9 frame for every video; Shorts upright on a blurred backdrop); scrollbars removed from every sideways row (arrows for mouse users, hidden at the ends; chip rows wrap on wider screens). Measured: equal heights at 390 and 1280, no page overflow at 1024–1920
+- [ ] **Owner:** remove the demo quizzes before going live
+
+### Final check against the client mock (29 Oct 2026)
+- [x] All 7 home sections present in the mock's order; header, menu, footer, class/subject/chapter screens and Previous/Next all exist
+- [x] Corner radii identical to the mock (logo/socials 10, coins strip 18, Redeem 18, quiz box 18, Start Quiz 20, class tile 16, note card 14, video/news 15, about 16); content 358 px with 16 px gutters at 390; class grid 4 across
+- [x] Mock wording "Daily Chapter Quiz"; quiz rules shortened (box 398 → 291 px tall on phones); about text's class range now comes from the database (no hardcoded classes); menu has "Rewards & coins" (→ coins strip, as in the mock)
+- [x] Phones: no overflow on 8 routes at 320/360/390; tap targets ≥ 44 px (video "Chapter N", Forgot password, Sign in/Join free links fixed); no text under 12 px (card chips raised from 11 px); images `decoding="async"`
+- [x] Production build: Lighthouse mobile medians (3 runs) — home 95, /videos 90, /news 96, chapter 94; Accessibility, Best Practices and SEO 100 on all; CLS 0. axe WCAG 2.1 AA: no violations on /, /videos, /news (390 light/dark, 1440)
+
+### Admin matches the site's colours and logo (29 Oct 2026)
+- [x] Admin colour tokens = the student site's amber/cream palette (light) and warm dark mode; dark-brown sidebar with amber active state; `text-primary` → `text-brand-amber-text` (25 places) for readable amber text
+- [x] "CC" box replaced by the site's "C" `LogoMark` (sidebar, loading screen, login); login page and dashboard banner recoloured (brown panel, amber card stack, amber sign-in button)
+- [x] Favicon: both apps used the default Next.js icon; now `src/app/icon.svg` with the "C" mark
+- [x] axe WCAG 2 AA: no violations on login, dashboard, notes, quizzes, orders, users, subjects, storage/payments settings, FAQ, pages, news (light + dark). Fixed on the way: inactive tab text (3.8:1 → muted colour) and success badges (admin `--success` one shade darker)
+
+### Production dashboard (29 Oct 2026)
+- [x] Launch checklist removed. New `GET /api/admin/stats?days=7|30|90` (Prisma groupBy/aggregate, IST days): revenue, paid orders, new/total/active students, quizzes, pass rate, coins given — each vs the previous period; daily series; most played chapters; best-selling notes; latest orders and students; content totals; "Needs attention" only for real problems. 2 new tests (211 green)
+- [x] Admin page: 7/30/90-day switch (remembered), refresh, 4 headline cards with ↗/↘ change, revenue/sign-ups/quizzes bar charts (hover readout, screen-reader table), leaderboards, activity lists, content counters linking to their pages. Checked with temporary activity at 1440 light/dark and 390: axe clean, no overflow
+
+### Contact form, messages inbox, redesigned About / Contact / legal pages (29 Oct 2026)
+- [x] **Backend:** `ContactMessage` (migration `contact_messages`; NEW/READ/REPLIED/ARCHIVED), public `POST /api/content/contact` (Zod, 5/hour per IP, spam trap, links a signed-in student), notification email to the contact address in the background with reply-to = the student (result in `emailNote`), admin list/status/delete, "N new contact messages" on the dashboard. 4 new tests (215 green)
+- [x] **Admin:** Messages page (Inbox/New/Replied/Archived, search, detail panel, opening marks read, "Reply by email" opens the mail app pre-filled and marks replied, archive, delete; warns if the notification email failed)
+- [x] **Frontend:** About (hero, 6 feature cards, owner's text, call to action), Contact (form + email card + quick help + socials + owner's text), Privacy/Terms/Refund (hero with last updated, readable article, "On this page" list — sidebar on desktop, fold-out on phones — other policies, contact link). Form: React Hook Form + Zod (`react-hook-form` 7.90.0, `@hookform/resolvers` 5.9.1, `zod` 3.25.76), prefilled when signed in, inline errors, counter, success screen. axe clean on all 5 pages (390 light/dark, 1440); no overflow
+- [x] About redesigned with visuals: hero with the site's card art (class range, +coins, quiz pass), live numbers from new public `GET /api/catalog/stats` (classes, subjects, chapters, questions, videos; only visible content, test added — 216 green), "How it works" 3 steps, amber icon tiles, "Made in Assam" panel beside the owner's text, amber call to action. Every section the same container width (1216 px desktop, 358 px phone); amber tiles readable in dark mode
+- [x] Contact form: standard placeholders (name, email, mobile); details are filled in only for a signed-in student, from their own account, with a "filled in from your account" note
+- [ ] **Owner:** the privacy draft now mentions contact-form details; update Admin → Pages → Privacy the same way (the database copy isn't overwritten). Send one real test message from /contact to confirm the email reaches the contact inbox
+
+### Client logo and favicon (29 Oct 2026)
+- [x] Client's landscape logo copied to `public/brand/` in both apps (original SVG, trimmed SVG, an 18 KB WebP used on pages); square mark as WebP/PNG; favicon + Apple touch icon = the client's PNG (`src/app/icon.png`, `apple-icon.png`), replacing the CSS "C"
+- [x] Site: header shows the full logo (switches to the square mark below 360 px, or below 400 px when the coin chip shows), footer shows the logo; `LogoMark` is now the client's mark image. Admin: sidebar shows the full logo (mark when collapsed), login panel shows the logo, loading screen the mark. Checked at 340/390/1440, light and dark; no overflow
+
+### Rate limits reviewed and fixed (29 Oct 2026)
+- [x] Problem: one shared login/sign-up/forgot/reset limit of 10 per 15 min per IP, counting successful sign-ins — a school lab or mobile-NAT network would lock everyone out; no per-account limit (password guessing from many IPs); forgot-password could flood an inbox; no whole-API backstop
+- [x] Now: login 20 failed/15 min per IP + 5 failed/15 min per email (successes never count); sign-up 15/hour per IP; forgot 10/15 min per IP + 3/hour per email; reset 10/15 min; whole `/api` 600/min per IP (standard RateLimit headers); existing quiz/payment/search/check/contact/email-code limits kept. Forms show the server's specific message (this account vs this network)
+- [x] `tests/rateLimit.test.ts` (6 cases with limits switched on: 30 successful logins pass, per-account lock incl. other casing, per-network lock, sign-up cap, forgot-password per address, API backstop + /health outside) — 222 green
+- [ ] **Deploy:** set `TRUST_PROXY` to the number of proxies in front of the API, or every visitor shares the proxy's IP and its limits. A second API instance would need a shared (Redis) store
+
 ## Waiting on client
 | # | Item | Who |
 |---|---|---|

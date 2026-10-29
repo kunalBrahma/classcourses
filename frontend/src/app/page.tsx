@@ -13,6 +13,7 @@ import { NoteList } from "@/components/notes/note-list";
 import { placeLine } from "@/components/notes/place-line";
 import { Container } from "@/components/site/container";
 import { getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
+import { classRange } from "@/lib/class-range";
 import { DEFAULT_NEWS } from "@/lib/site-links";
 
 // The client's home-page mock (docs/design/home-page-mock.html), in its order:
@@ -20,12 +21,13 @@ import { DEFAULT_NEWS } from "@/lib/site-links";
 // always there: until the admin adds notes, videos or news links, a
 // "coming soon" placeholder (or the mock's news sources) fills the spot.
 export default async function HomePage() {
-  const [{ site, quiz, coins }, videos, news, pages, notes] = await Promise.all([
+  const [{ site, quiz, coins }, videos, news, pages, notes, range] = await Promise.all([
     getSiteSettings(),
     getFeaturedVideos(),
     getNews(),
     getPublishedPages(),
     getStoreNotes(),
+    classRange(),
   ]);
   const newsLinks = news.length ? news : DEFAULT_NEWS;
   const aboutPublished = pages.some((p) => p.slug === "about");
@@ -58,7 +60,7 @@ export default async function HomePage() {
       </section>
 
       <section id="videos" className="scroll-mt-24" aria-labelledby="videos-title">
-        <SectionTitle icon={VideoIcon}>
+        <SectionTitle icon={VideoIcon} action={{ href: "/videos", label: "See all" }}>
           <span id="videos-title">Videos</span>
         </SectionTitle>
         {videos.length ? (
@@ -69,7 +71,8 @@ export default async function HomePage() {
                 youtubeId={v.youtubeId}
                 format={v.format}
                 title={v.title}
-                subtitle={`${v.classLevel.name} · ${v.subject.name} · Chapter ${v.chapter.number}`}
+                tag={`${v.classLevel.name} · ${v.subject.name}`}
+                chapterLabel={`Chapter ${v.chapter.number}`}
                 href={v.chapter.href}
               />
             ))}
@@ -80,12 +83,12 @@ export default async function HomePage() {
       </section>
 
       <section id="news" className="scroll-mt-24" aria-labelledby="news-title">
-        <SectionTitle icon={NewspaperIcon}>
+        <SectionTitle icon={NewspaperIcon} action={{ href: "/news", label: "See all" }}>
           <span id="news-title">Latest News</span>
         </SectionTitle>
         <ScrollRow label="Latest news">
           {newsLinks.map((n) => (
-            <NewsCard key={n.id} source={n.source} title={n.title} url={n.url} />
+            <NewsCard key={n.id} source={n.source} title={n.title} url={n.url} imageUrl={n.imageUrl} />
           ))}
         </ScrollRow>
       </section>
@@ -96,7 +99,7 @@ export default async function HomePage() {
             <span id="about-title">What is {site.name}?</span>
           </SectionTitle>
           <p className="max-w-4xl text-[15px] leading-relaxed text-muted-foreground">
-            {site.name} is an online learning platform for students from Class 1 to Class 12 in Assam. Every subject has chapter-wise
+            {site.name} is an online learning platform for students {range ? `${range} ` : ""}in Assam. Every subject has chapter-wise
             textbook Q&amp;A, extra advanced Q&amp;A, and practice MCQs. Students can test their knowledge through quizzes, earn coins, and
             use those coins to get a discount on premium notes. Education videos and the latest education-related news are also available
             in one place, so students don&apos;t need to go anywhere else to study.

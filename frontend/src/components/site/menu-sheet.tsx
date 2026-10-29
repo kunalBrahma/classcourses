@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpenIcon, FileTextIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ScaleIcon, TimerIcon, VideoIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ScaleIcon, TimerIcon, TrophyIcon, VideoIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AccountPanel } from "@/components/site/account-menu";
 import { ThemeRow } from "@/components/site/theme-toggle";
@@ -12,11 +12,12 @@ import type { PageLink } from "@/lib/server-api";
 // the admin has added some).
 const mainLinks = (show: { videos: boolean; news: boolean }) => [
   { href: "/", label: "Home", icon: HomeIcon },
+  { href: "/#rewards", label: "Rewards & coins", icon: TrophyIcon },
   { href: "/#classes", label: "Choose your class", icon: BookOpenIcon },
   { href: "/#quiz", label: "Quizzes", icon: TimerIcon },
   { href: "/notes", label: "Notes", icon: FileTextIcon },
-  ...(show.videos ? [{ href: "/#videos", label: "Videos", icon: VideoIcon }] : []),
-  ...(show.news ? [{ href: "/#news", label: "Latest news", icon: NewspaperIcon }] : []),
+  ...(show.videos ? [{ href: "/videos", label: "Videos", icon: VideoIcon }] : []),
+  ...(show.news ? [{ href: "/news", label: "Latest news", icon: NewspaperIcon }] : []),
 ];
 
 const PAGE_ICONS: Record<string, typeof HomeIcon> = {

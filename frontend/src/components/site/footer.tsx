@@ -3,6 +3,7 @@ import { MailIcon } from "lucide-react";
 import { getCurrentYear, getFaq, getPublishedPages, getSiteSettings } from "@/lib/server-api";
 import { siteLinks } from "@/lib/site-links";
 import { SocialIcons } from "@/components/site/social-icons";
+import { Logo } from "@/components/site/logo";
 
 // The mock's dark-brown footer: social buttons, one row of page links, the
 // contact email. Email only: never a phone number or address.
@@ -13,6 +14,7 @@ export async function SiteFooter() {
   return (
     <footer className="mt-12 bg-footer text-footer-fg">
       <div className="mx-auto max-w-7xl px-4 pb-8 pt-7 sm:px-6 lg:px-8">
+        <Logo name={site.name} className="mb-5 w-fit" nameClassName="h-10" />
         <SocialIcons links={social} className="flex flex-wrap gap-2.5" />
         <nav aria-label="Footer" className="mt-5">
           <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[15px]">

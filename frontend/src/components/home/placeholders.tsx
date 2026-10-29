@@ -41,7 +41,7 @@ export function VideoPlaceholders() {
   return (
     <ScrollRow label="Videos coming soon">
       {["Chapter explained", "Easy tricks", "Quick revision"].map((title) => (
-        <div key={title} className="card-3d w-52 overflow-hidden rounded-[15px] p-0">
+        <div key={title} className="card-3d w-64 overflow-hidden rounded-[15px] p-0 sm:w-72">
           <div className="grid aspect-video place-items-center bg-[image:var(--header-bg)]" aria-hidden="true">
             <span className="grid size-11 place-items-center rounded-full bg-black/45 text-white">
               <PlayIcon className="ml-0.5 size-5 fill-current" />

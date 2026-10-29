@@ -9,6 +9,10 @@ export interface UserRow {
   id: string;
   email: string;
   name: string | null;
+  // 10-digit mobile number from sign-up; null for older accounts
+  phone: string | null;
+  // false until the student enters the code emailed at sign-up
+  emailVerified: boolean;
   role: Role;
   coins: number;
   classLevel: { id: string; name: string; slug: string } | null;
@@ -46,6 +50,10 @@ export interface UserDetail {
   id: string;
   email: string;
   name: string | null;
+  // 10-digit mobile number from sign-up; null for older accounts
+  phone: string | null;
+  // false until the student enters the code emailed at sign-up
+  emailVerified: boolean;
   role: Role;
   coins: number;
   classLevel: { id: string; name: string; slug: string } | null;
@@ -80,7 +88,7 @@ export const COIN_REASON: Record<CoinReason, string> = {
 export const QUIZ_STATUS: Record<QuizStatus, { label: string; className: string }> = {
   PASSED: { label: "Passed", className: "border-success/30 bg-success/10 text-success" },
   FAILED: { label: "Failed", className: "border-destructive/30 bg-destructive/10 text-destructive" },
-  IN_PROGRESS: { label: "In progress", className: "border-primary/30 bg-primary/10 text-primary" },
+  IN_PROGRESS: { label: "In progress", className: "border-primary/30 bg-primary/10 text-brand-amber-text" },
   PAUSED: { label: "Paused", className: "border-warning/40 bg-warning/10 text-warning" },
   EXPIRED: { label: "Expired", className: "text-muted-foreground" },
 };
@@ -124,3 +132,6 @@ export const quoteDiscount = (pricePaise: number, balance: number, c: CoinSettin
   }
   return { coinsUsed, amountPaise };
 };
+
+// "9876543210" → "+91 98765 43210"
+export const formatPhone = (phone: string) => `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`;
