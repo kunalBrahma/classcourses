@@ -383,17 +383,19 @@ current one is fully ticked.
 - [x] Full stack verified in Docker: build → migrate (9 migrations) → healthy → real data served (about 57 MB RAM of 512 MB).
 - [x] `DEPLOY.md` runbook: env tables, first deploy, seed and create-admin through `docker compose run`, reverse proxy, admin service setup, backups, post-deploy checks.
 - [x] Tests: 6 new (158 total).
-- [ ] **Deploy** once a VPS and domain exist: follow `DEPLOY.md`, run the preflight with `--host`, then enter the production R2/SMTP/Razorpay details in admin.
+- [x] **Deploy** once a VPS and domain exist: follow `DEPLOY.md`, run the preflight with `--host` (done 30 Oct 2026: GHCR images via GitHub Actions, `docker-compose.prod.yml`, nginx + certbot)
+- [ ] Enter the production R2/SMTP/Razorpay details in admin
 
 ### Admin
 - [x] **All admin phases (0–5) built**: dashboard, settings (general, quiz & coins, storage, email, payments), catalog, chapter content, users & coins, notes, orders, pages & FAQ
-- [ ] Deploy admin (and add its production domain to the backend `CORS_ORIGIN` and the R2 CORS policy), final QA
+- [x] Deploy admin (and add its production domain to the backend `CORS_ORIGIN`)
+- [ ] Add the admin domain to the R2 CORS policy, final QA
 
 ### Frontend
 - [ ] Final 3D design pass once the client clarifies what "3D" means. `prefers-reduced-motion` is respected (FD-6).
 - [x] Mobile QA at 360 px, plus an accessibility pass (contrast, tap targets, keyboard) (FD-6)
 - [x] Performance: font loading, lazy header, Lighthouse ≥ 90 on mobile (medians 90–92) (FD-6)
-- [ ] Deploy frontend, set up domain and SSL
+- [x] Deploy frontend, set up domain and SSL
 - [ ] Create the business email and replace the Gmail in the `contact` setting
 
 ## Admin UX pass (1 Oct 2026, before frontend Phase 1)
@@ -562,7 +564,8 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [x] Pages and FAQ were published only for the test, then set back to draft (owner approval still needed, #29)
 - [ ] Final 3D design pass once the client clarifies what "3D" means (#12/#37). Tokens are ready
 - [ ] Assamese check on a real Android phone and iPhone
-- [ ] Deploy frontend, domain + SSL (with the backend deploy, `DEPLOY.md`). Add a backend → frontend revalidate hook so admin edits show instantly (now up to ~1 minute)
+- [x] Deploy frontend, domain + SSL (with the backend deploy, `DEPLOY.md`)
+- [ ] Add a backend → frontend revalidate hook so admin edits show instantly (now up to ~1 minute)
 
 ### Home page matched to the client mock (28 Oct 2026, after FD-6)
 - [x] Home follows `docs/design/home-page-mock.html` section by section: coin strip ("N Coins Earned · Win quizzes, get discounts" + white Redeem pill → `/notes`; guests "Earn Coins" + Join Free), quiz box ("Chapter Quiz · 10 sec/question • Pass: 7/10", Start Quiz on the right, one paragraph of rules worded as enforced), 4-across class tiles, inline section titles (title case), notes, videos, Latest News, "What is Class Course?" (mock text), mock footer (socials, one row of links, email). No visible heading above the coin strip (an `sr-only` h1 stays for screen readers and search)
@@ -637,14 +640,14 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [x] Problem: one shared login/sign-up/forgot/reset limit of 10 per 15 min per IP, counting successful sign-ins — a school lab or mobile-NAT network would lock everyone out; no per-account limit (password guessing from many IPs); forgot-password could flood an inbox; no whole-API backstop
 - [x] Now: login 20 failed/15 min per IP + 5 failed/15 min per email (successes never count); sign-up 15/hour per IP; forgot 10/15 min per IP + 3/hour per email; reset 10/15 min; whole `/api` 600/min per IP (standard RateLimit headers); existing quiz/payment/search/check/contact/email-code limits kept. Forms show the server's specific message (this account vs this network)
 - [x] `tests/rateLimit.test.ts` (6 cases with limits switched on: 30 successful logins pass, per-account lock incl. other casing, per-network lock, sign-up cap, forgot-password per address, API backstop + /health outside) — 222 green
-- [ ] **Deploy:** set `TRUST_PROXY` to the number of proxies in front of the API, or every visitor shares the proxy's IP and its limits. A second API instance would need a shared (Redis) store
+- [x] **Deploy:** set `TRUST_PROXY` (=1, nginx) to the number of proxies in front of the API, or every visitor shares the proxy's IP and its limits. A second API instance would need a shared (Redis) store
 
 ### Domain: myclasscourse.in (30 Oct 2026)
 - [x] DNS (owner): A records `@`, `admin`, `api` → 91.108.111.237
 - [x] Production env examples with the domain: `backend/.env.production.example` (CORS incl. www + admin, `TRUST_PROXY=1`, `FRONTEND_URL`) — checked against the backend's production `envSchema`; `frontend/.env.production.example` (public API, site URL, `API_INTERNAL_URL=http://127.0.0.1:4000`); `admin/.env.production.example`
 - [x] `DEPLOY.md`: domain table, Next.js build + PM2 (memory caps, localhost ports 3100/3101), full Caddyfile (3 hosts + www redirect, 5 MB API bodies), admin settings (site address, R2 CORS origin, Razorpay webhook `https://api.myclasscourse.in/api/payments/webhook/razorpay`), post-deploy checks
 - [ ] **Owner:** add a `www` DNS record (CNAME → myclasscourse.in); say whether Cloudflare's proxy is on (then `TRUST_PROXY=2`)
-- [ ] Deploy (#31): run the deploy-preflight against the VPS first
+- [x] Deploy (#31): run the deploy-preflight against the VPS first
 
 ## Waiting on client
 | # | Item | Who |
