@@ -28,10 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5a623" },
-    { media: "(prefers-color-scheme: dark)", color: "#241805" },
-  ],
+  // The site opens in light mode whatever the device's setting, so the
+  // browser bar is amber too.
+  themeColor: "#f5a623",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -43,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${bengali.variable} ${display.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <a
             href="#main"
             className="sr-only rounded-lg bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
