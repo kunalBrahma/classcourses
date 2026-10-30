@@ -639,6 +639,13 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [x] `tests/rateLimit.test.ts` (6 cases with limits switched on: 30 successful logins pass, per-account lock incl. other casing, per-network lock, sign-up cap, forgot-password per address, API backstop + /health outside) — 222 green
 - [ ] **Deploy:** set `TRUST_PROXY` to the number of proxies in front of the API, or every visitor shares the proxy's IP and its limits. A second API instance would need a shared (Redis) store
 
+### Domain: myclasscourse.in (30 Oct 2026)
+- [x] DNS (owner): A records `@`, `admin`, `api` → 91.108.111.237
+- [x] Production env examples with the domain: `backend/.env.production.example` (CORS incl. www + admin, `TRUST_PROXY=1`, `FRONTEND_URL`) — checked against the backend's production `envSchema`; `frontend/.env.production.example` (public API, site URL, `API_INTERNAL_URL=http://127.0.0.1:4000`); `admin/.env.production.example`
+- [x] `DEPLOY.md`: domain table, Next.js build + PM2 (memory caps, localhost ports 3100/3101), full Caddyfile (3 hosts + www redirect, 5 MB API bodies), admin settings (site address, R2 CORS origin, Razorpay webhook `https://api.myclasscourse.in/api/payments/webhook/razorpay`), post-deploy checks
+- [ ] **Owner:** add a `www` DNS record (CNAME → myclasscourse.in); say whether Cloudflare's proxy is on (then `TRUST_PROXY=2`)
+- [ ] Deploy (#31): run the deploy-preflight against the VPS first
+
 ## Waiting on client
 | # | Item | Who |
 |---|---|---|

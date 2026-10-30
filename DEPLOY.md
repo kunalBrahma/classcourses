@@ -1,100 +1,108 @@
-# Deploying Class Course — backend
+# Deploying Class Course
 
-Backend + Postgres run with Docker Compose on a VPS, behind a reverse proxy
-(nginx or Caddy) that terminates HTTPS. The `admin` and `frontend` Next.js
-apps are deployed separately (not covered yet — see `task.md` Phase 6).
+Everything runs in Docker on the shared VPS `91.108.111.237`, in
+`/var/www/classcourse`, behind the host's **nginx** (HTTPS from certbot).
+Images are built in **GitHub Actions** and pushed to GHCR; the VPS only pulls
+them (`docker-compose.prod.yml`). Never run a build on the VPS: other apps
+share its memory.
 
-Everything below is checked by the backend's startup validation
-(`backend/src/config/env.ts`): with `NODE_ENV=production` the API **refuses to
-start** with `CORS_ORIGIN=*`, a short JWT secret, or a localhost `FRONTEND_URL`.
+## 0. Addresses
 
-## 1. Before the first deploy
+| Address | Serves | Container → host port (127.0.0.1 only) |
+|---|---|---|
+| `https://myclasscourse.in` | student site (`frontend`) | `3100` |
+| `https://www.myclasscourse.in` | 301 → `https://myclasscourse.in` | (nginx) |
+| `https://admin.myclasscourse.in` | admin panel (`admin`) | `3101` |
+| `https://api.myclasscourse.in` | API (`backend`) | `4150` (4000 belongs to another app) |
 
-1. **Run the preflight** from the repo root, against the target server:
-   ```sh
-   bash ~/.claude/skills/deploy-preflight/scripts/check.sh --host <vps> --user <ssh-user>
-   ```
-   Fix every FAIL. On a shared VPS, a name or port collision means another
-   app's containers — never force past it.
-2. **Root `.env`** (host-side, see `.env.example`):
-   - `POSTGRES_PASSWORD` — long random value, set **before** the first start
-     (it's only applied when the volume is created).
-   - `POSTGRES_PORT` / `BACKEND_PORT` — free ports on that host.
-   - `BIND_ADDRESS=127.0.0.1` — keep it. Postgres must never be public; the
-     API is reached through the reverse proxy.
-3. **`backend/.env`** (the app, see `backend/.env.example`):
-   | Variable | Production value |
-   |---|---|
-   | `NODE_ENV` | `production` |
-   | `JWT_ACCESS_SECRET` | new 64-hex secret (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
-   | `SETTINGS_ENCRYPTION_KEY` | new 64-hex key — **back it up**. Losing it makes saved R2/SMTP/Razorpay secrets unreadable (re-enter them in admin). |
-   | `CORS_ORIGIN` | `https://<site>,https://<admin-site>` |
-   | `TRUST_PROXY` | `1` behind nginx/Caddy (`2` if Cloudflare proxies too) |
-   | `FRONTEND_URL` | `https://<site>` (email links) |
-   | `DATABASE_URL` | ignored in Docker (compose builds it from the root `.env`) |
-   | `R2_*`, `SMTP_*`, `RAZORPAY_*` | optional fallbacks — normally entered in the admin panel |
-   Never copy the development `JWT_ACCESS_SECRET` / `SETTINGS_ENCRYPTION_KEY` to production.
+Postgres has no host port. Ports live in the server's root `.env` and in
+`deploy/nginx/classcourse.conf`; change both together, after running the
+preflight (`bash ~/.claude/skills/deploy-preflight/scripts/check.sh --host 91.108.111.237 --user kunal`).
 
-## 2. Deploy
+## 1. How a deploy runs (`.github/workflows/deploy.yml`, on every push to `main`)
+
+1. Build `backend` + `backend-tools` (the build stage: Prisma CLI, ts-node) → GHCR.
+2. SSH to the VPS: `git reset` to the commit, then `deploy/deploy.sh sha-<commit> backend`
+   (pulls, runs `migrate`, starts the API, waits until healthy).
+3. Build `frontend` + `admin`. The student site prerenders **from the live API**,
+   so it must be up; if it isn't, this build fails and the running site stays as it was.
+4. `deploy/deploy.sh sha-<commit> frontend admin`.
+
+Images are tagged `latest` and `sha-<commit>`. **Rollback:** on the VPS,
+`deploy/deploy.sh sha-<older commit> frontend admin` (or `backend`; migrations
+only go forward).
+
+Repo secrets: `VPS_HOST`, `VPS_USER` (`kunal`), `VPS_SSH_KEY` (a key used only
+by this workflow; its public half is in `~kunal/.ssh/authorized_keys`).
+
+## 2. Server files (created once, never committed)
+
+- `/var/www/classcourse/.env`: `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`
+  (only applied when the volume is first created), `BACKEND_PORT`, `FRONTEND_PORT`, `ADMIN_PORT`.
+- `/var/www/classcourse/backend/.env`: from `backend/.env.production.example`:
+  `NODE_ENV=production`, new `JWT_ACCESS_SECRET` and `SETTINGS_ENCRYPTION_KEY`
+  (**back this one up**: without it saved R2/SMTP/Razorpay secrets can't be read),
+  `CORS_ORIGIN`, `TRUST_PROXY=1` (nginx is the one hop), `FRONTEND_URL`.
+  The API refuses to start in production with `CORS_ORIGIN=*`, a short JWT
+  secret or a localhost `FRONTEND_URL`.
+- The `NEXT_PUBLIC_*` values are build args in the workflow, not server files.
+
+## 3. One-off commands (on the VPS, in `/var/www/classcourse`)
 
 ```sh
-docker compose up -d --build        # builds, starts Postgres, applies migrations, starts the API
-docker compose ps                    # backend should become "healthy"
-curl -s http://127.0.0.1:$BACKEND_PORT/health/ready   # {"status":"ok","database":"ok"}
+dc="docker compose -f docker-compose.prod.yml"
+$dc run --rm migrate npm run seed                                   # safe to re-run
+$dc run --rm migrate npm run create-admin -- you@example.com 'strong-password'
+$dc ps; $dc logs -f backend
+deploy/deploy.sh latest backend frontend admin                      # manual redeploy
 ```
 
-Build on a machine with enough free RAM (>2 GB) or move builds to CI — see the
-preflight skill's memory notes. Every service has `mem_limit` and a V8 heap cap.
+## 4. nginx
 
-First time only:
+`deploy/nginx/classcourse.conf` is the template (HTTP only). It was installed with:
 ```sh
-docker compose run --rm migrate npm run seed                                   # classes, mediums, subjects, chapters, draft pages
-docker compose run --rm migrate npm run create-admin -- you@example.com 'strong-password'
+sudo cp deploy/nginx/classcourse.conf /etc/nginx/sites-available/classcourse
+sudo ln -s /etc/nginx/sites-available/classcourse /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx --redirect -d myclasscourse.in -d www.myclasscourse.in -d admin.myclasscourse.in -d api.myclasscourse.in
 ```
-Both are safe to re-run (they never overwrite edits).
+Certbot then edits the live copy (443 + redirects) and renews it on its own. If you
+change the template, re-apply your change to `/etc/nginx/sites-available/classcourse`
+by hand rather than copying over certbot's edits.
 
-Updates: `git pull && docker compose up -d --build` — migrations run automatically
-before the new API starts; the old one gets 15 s to finish in-flight requests.
+## 5. Configure services in the admin panel
 
-## 3. Reverse proxy (example: Caddy)
-
-```
-api.classcourse.in {
-    reverse_proxy 127.0.0.1:4000
-}
-```
-nginx equivalent: `proxy_pass http://127.0.0.1:4000;` plus
-`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` and
-`proxy_set_header X-Forwarded-Proto $scheme;`, and `client_max_body_size 5m;`
-(bulk question imports are up to 3 MB).
-
-## 4. Configure services in the admin panel
-
-Settings → each page tests the connection before saving; secrets are encrypted.
+Sign in at `https://admin.myclasscourse.in`. Settings → each page tests the
+connection before saving; secrets are encrypted.
+0. **General** — site address `https://myclasscourse.in` (used in email links).
 1. **Storage (R2)** — public bucket for images **and a separate private bucket
    for premium notes** (paid notes can't be sold without it). Add a CORS rule on
-   both buckets allowing `PUT` from the admin site's origin.
+   both buckets allowing `PUT`/`GET`/`HEAD` from `https://admin.myclasscourse.in`
+   (Settings → Storage has a "Copy" button with the exact policy when opened there).
 2. **Email (SMTP)** — business mailbox; use "Send test email".
 3. **Payments (Razorpay)** — start with `rzp_test_` keys; switch to live after
-   KYC. Copy the **webhook URL** shown there into Razorpay Dashboard → Webhooks
+   KYC. Copy the **webhook URL** shown there
+   (`https://api.myclasscourse.in/api/payments/webhook/razorpay`) into Razorpay Dashboard → Webhooks
    with events `payment.captured`, `payment.authorized`, `payment.failed`, `order.paid`, `refund.processed`, and the same
    webhook secret. Keep **auto-capture ON**.
 4. **Pages** — publish About, Contact, Privacy, Terms, Refund policy (Razorpay
    KYC checks them), and the FAQ, after the owner approves the drafts.
 
-## 5. Backups
+## 6. Backups
 
 Postgres data lives in the `classcourse_postgres_data` volume. Daily dump (cron):
 ```sh
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > backup-$(date +%F).dump
+docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U classcourse -Fc classcourse_db > backup-$(date +%F).dump
 ```
 Keep copies off the server (e.g. a private R2 bucket). Restore with `pg_restore`.
 Also keep `SETTINGS_ENCRYPTION_KEY` somewhere safe — backups of the `Setting`
 table are useless without it.
 
-## 6. Checks after deploying
+## 7. Checks after deploying
 
-- `GET /health/ready` → 200
+- `https://api.myclasscourse.in/health/ready` → 200
+- `https://myclasscourse.in` loads with the padlock; `https://www.myclasscourse.in` redirects to it
+- `https://myclasscourse.in/sitemap.xml` lists `https://myclasscourse.in/...` links (not localhost)
 - Admin login works; Settings → Storage / Email / Payments "Test" all pass
 - A Razorpay **test-mode** purchase end to end, including closing the tab
   before returning (the webhook must unlock it)

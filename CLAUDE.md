@@ -203,6 +203,19 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   update the drafts and flag it to the owner.
 
 ### Production (Phase 6, backend ready; see `DEPLOY.md`)
+- **Domain:** `myclasscourse.in` → VPS `91.108.111.237`. Student site
+  `https://myclasscourse.in` (`www` redirects to it), admin
+  `https://admin.myclasscourse.in`, API `https://api.myclasscourse.in`.
+- **Deploy = push to `main`.** `.github/workflows/deploy.yml` builds images in
+  GitHub Actions → GHCR, the VPS (`/var/www/classcourse`, shared with other
+  apps) only pulls them via `deploy/deploy.sh <tag> <services>` and
+  `docker-compose.prod.yml`. Never build on the VPS. The API deploys first,
+  because the student site's `next build` prerenders from the live API (with
+  the API down that build fails; the readers' `cacheLife("seconds")` fallbacks
+  can't be prerendered). Host ports (127.0.0.1): API 4150, site 3100, admin
+  3101; nginx + certbot in front (`deploy/nginx/classcourse.conf`). Next apps
+  use `output: "standalone"`. Server-only files: root `.env` and
+  `backend/.env` (never committed).
 - `src/config/env.ts` exports `envSchema`.
   - In production it **refuses** `CORS_ORIGIN=*`, a short JWT secret, a
     localhost `FRONTEND_URL`, or an overridden `RAZORPAY_API_BASE`.

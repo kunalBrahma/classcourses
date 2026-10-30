@@ -1,0 +1,118 @@
+# Production (VPS 91.108.111.237, /var/www/classcourse). Pulls the images that
+# .github/workflows/deploy.yml builds and pushes to GHCR: nothing is built on
+# the VPS, which is shared with other apps. See DEPLOY.md.
+#
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d --remove-orphans
+#   docker compose -f docker-compose.prod.yml run --rm migrate npm run seed
+#   docker compose -f docker-compose.prod.yml run --rm migrate npm run create-admin -- you@example.com 'password'
+#
+# Host-side values come from the root .env on the server (POSTGRES_PASSWORD,
+# optional IMAGE_TAG / *_PORT). The API's own config is backend/.env.
+# Every host port binds to 127.0.0.1: nginx terminates HTTPS in front.
+# Memory: every service has mem_limit plus a V8 heap cap (shared host).
+
+name: classcourse
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-classcourse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the root .env}
+      POSTGRES_DB: ${POSTGRES_DB:-classcourse_db}
+    # No host port: only the API (and migrate) reach it, over the compose network.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-classcourse} -d ${POSTGRES_DB:-classcourse_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    memswap_limit: 512m
+    logging: *logging
+
+  # One-shot: applies pending migrations, then exits; the API waits for it.
+  # The "tools" image is the Dockerfile's build stage (it keeps the Prisma CLI
+  # and ts-node), so it also runs seed / create-admin.
+  migrate:
+    image: ghcr.io/kunalbrahma/classcourse-backend-tools:${IMAGE_TAG:-latest}
+    command: npx prisma migrate deploy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-classcourse}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-classcourse_db}
+      NODE_OPTIONS: --max-old-space-size=192
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 384m
+    memswap_limit: 640m
+    logging: *logging
+
+  backend:
+    image: ghcr.io/kunalbrahma/classcourse-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-classcourse}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-classcourse_db}
+      NODE_ENV: production
+      PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-4150}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # Lets in-flight requests (e.g. a payment verify) finish on deploys.
+    stop_grace_period: 15s
+    mem_limit: 512m
+    memswap_limit: 768m
+    logging: *logging
+
+  frontend:
+    image: ghcr.io/kunalbrahma/classcourse-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Server-side catalog reads stay on the compose network.
+      API_INTERNAL_URL: http://backend:3000
+      NODE_OPTIONS: --max-old-space-size=320
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3100}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 768m
+    memswap_limit: 1024m
+    logging: *logging
+
+  admin:
+    image: ghcr.io/kunalbrahma/classcourse-admin:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-3101}:3000"
+    mem_limit: 512m
+    memswap_limit: 768m
+    logging: *logging
+
+volumes:
+  postgres_data:
