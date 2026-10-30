@@ -407,7 +407,9 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
     email; reset 10/15 min; email code 20/15 min; contact 5/hour
   - quiz 90/min and payments 30/min per user; search 60/min; check answer 40/min
   - whole `/api` backstop 600/min per IP (`/health` is outside it; the
-    Razorpay webhook is registered before it)
+    Razorpay webhook is registered before it). The student site's server sends
+    `X-Internal-Key` (= `INTERNAL_API_KEY`, also a CI build secret) and skips
+    only this backstop: all its renders and its build share one IP
   - A new public endpoint that sends email or does heavy work gets its own
     limiter here.
   - `tests/setup.ts` turns HTTP keep-alive off: with Node 19+ and supertest's

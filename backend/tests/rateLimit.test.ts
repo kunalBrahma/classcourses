@@ -66,5 +66,11 @@ describe("rate limits", () => {
     expect(res.status).toBe(429);
     expect(res.headers["ratelimit-limit"] ?? res.headers["ratelimit"]).toBeDefined();
     expect((await api().get("/health")).status).toBe(200);
+
+    // The student site's server (all page renders share its IP) skips it with
+    // the shared key; a wrong key doesn't.
+    const key = process.env.INTERNAL_API_KEY!;
+    expect((await api().get("/api/catalog/mediums").set("X-Internal-Key", key)).status).toBe(200);
+    expect((await api().get("/api/catalog/mediums").set("X-Internal-Key", key.replace(/.$/, "x"))).status).toBe(429);
   });
 });

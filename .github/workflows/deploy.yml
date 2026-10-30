@@ -10,6 +10,8 @@
 #   VPS_HOST     91.108.111.237
 #   VPS_USER     kunal
 #   VPS_SSH_KEY  private key whose public half is in ~kunal/.ssh/authorized_keys
+#   INTERNAL_API_KEY  same value as in the server's root .env (lets the site's
+#                build skip the API's per-IP limit)
 #
 # One-time on the VPS (DEPLOY.md): /var/www/classcourse is a clone of this repo
 # with a root .env and backend/.env. This workflow never creates secrets.
@@ -111,6 +113,8 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ env.API_URL }}
             NEXT_PUBLIC_SITE_URL=${{ env.SITE_URL }}
             API_INTERNAL_URL=${{ env.API_URL }}
+          secrets: |
+            internal_api_key=${{ secrets.INTERNAL_API_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

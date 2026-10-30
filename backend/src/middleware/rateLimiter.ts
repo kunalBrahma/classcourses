@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { Request } from "express";
 import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
 import { AuthRequest } from "./auth.middleware";
@@ -147,8 +148,19 @@ export const checkAnswerLimiter = limiter({
 
 // Backstop for the whole API (scraping, runaway clients), per IP. Generous:
 // a page makes several calls and a whole classroom may share one IP.
+// The student site's server (SSR and its build) sends INTERNAL_API_KEY: all of
+// its renders share one IP, so it skips this backstop (only this one).
+const internalKey = env.INTERNAL_API_KEY ? Buffer.from(env.INTERNAL_API_KEY) : null;
+export const isInternalCaller = (req: Request) => {
+  const sent = req.get("x-internal-key");
+  if (!internalKey || !sent) return false;
+  const buf = Buffer.from(sent);
+  return buf.length === internalKey.length && timingSafeEqual(buf, internalKey);
+};
+
 export const apiLimiter = limiter({
   windowMs: 60 * 1000,
   limit: 600,
   error: "Too many requests. Please slow down and try again in a minute.",
+  skip: (req) => !rateLimitSwitch.enabled || isInternalCaller(req),
 });

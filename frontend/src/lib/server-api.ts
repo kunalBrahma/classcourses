@@ -8,9 +8,13 @@ import { cacheLife, cacheTag } from "next/cache";
 
 // Inside Docker/production the frontend can reach the API on a private URL.
 const API = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+// Every render comes from this server's one IP, so it identifies itself to skip
+// the API's per-IP backstop (backend INTERNAL_API_KEY). Never sent to browsers.
+const HEADERS: Record<string, string> = { Accept: "application/json" };
+if (process.env.INTERNAL_API_KEY) HEADERS["X-Internal-Key"] = process.env.INTERNAL_API_KEY;
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, { headers: { Accept: "application/json" } });
+  const res = await fetch(`${API}${path}`, { headers: HEADERS });
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -18,7 +22,7 @@ async function getJson<T>(path: string): Promise<T> {
 // For pages: 404 → null (the page calls notFound()); any other failure throws,
 // so an API outage shows the error page instead of a wrong "not found".
 async function getJsonOrNull<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API}${path}`, { headers: { Accept: "application/json" } });
+  const res = await fetch(`${API}${path}`, { headers: HEADERS });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res.json() as Promise<T>;

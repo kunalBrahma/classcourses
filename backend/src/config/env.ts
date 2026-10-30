@@ -81,6 +81,11 @@ export const envSchema = z
     SEED_ADMIN_EMAIL: z.preprocess((v) => (v === "" ? undefined : v), z.string().trim().toLowerCase().email().optional()),
     SEED_ADMIN_PASSWORD: optionalString,
 
+    // Shared with the student site's server (and its CI build): requests that
+    // send it as X-Internal-Key skip the per-IP /api backstop, because every
+    // server-side page render comes from that one IP. Unset = nobody skips.
+    INTERNAL_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(32, "INTERNAL_API_KEY must be at least 32 characters").optional()),
+
     // Public student site — used for links in emails (password reset, receipts)
     FRONTEND_URL: z.string().url().default("http://localhost:3100"),
   })

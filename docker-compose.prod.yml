@@ -8,7 +8,7 @@
 #   docker compose -f docker-compose.prod.yml run --rm migrate npm run create-admin -- you@example.com 'password'
 #
 # Host-side values come from the root .env on the server (POSTGRES_PASSWORD,
-# optional IMAGE_TAG / *_PORT). The API's own config is backend/.env.
+# INTERNAL_API_KEY, optional IMAGE_TAG / *_PORT). The API's own config is backend/.env.
 # Every host port binds to 127.0.0.1: nginx terminates HTTPS in front.
 # Memory: every service has mem_limit plus a V8 heap cap (shared host).
 
@@ -68,6 +68,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       NODE_OPTIONS: --max-old-space-size=256
+      # Shared with the frontend: its server-side reads skip the per-IP backstop.
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-4150}:3000"
     depends_on:
@@ -93,6 +95,7 @@ services:
     environment:
       # Server-side catalog reads stay on the compose network.
       API_INTERNAL_URL: http://backend:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       NODE_OPTIONS: --max-old-space-size=320
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3100}:3000"

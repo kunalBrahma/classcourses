@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Student site. Built in GitHub Actions and pushed to GHCR; the VPS only pulls
 # and runs it (docker-compose.prod.yml). Never build this on the shared VPS.
 
@@ -23,7 +24,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     API_INTERNAL_URL=$API_INTERNAL_URL \
     NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# The build's ~400 catalog reads would trip the API's per-IP limit, so they send
+# INTERNAL_API_KEY. A BuildKit secret: never stored in an image layer.
+RUN --mount=type=secret,id=internal_api_key,env=INTERNAL_API_KEY npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

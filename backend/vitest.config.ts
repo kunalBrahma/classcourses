@@ -23,6 +23,8 @@ export default defineConfig({
       RAZORPAY_KEY_ID: "",
       RAZORPAY_KEY_SECRET: "",
       RAZORPAY_WEBHOOK_SECRET: "",
+      // tests/rateLimit.test.ts checks the student site's backstop bypass.
+      INTERNAL_API_KEY: "test-internal-key-0123456789abcdef0123",
     },
   },
 });
