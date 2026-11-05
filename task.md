@@ -649,6 +649,19 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [ ] **Owner:** add a `www` DNS record (CNAME → myclasscourse.in); say whether Cloudflare's proxy is on (then `TRUST_PROXY=2`)
 - [x] Deploy (#31): run the deploy-preflight against the VPS first
 
+### Home banners (5 Nov 2026)
+- [x] `Banner` model + migration; admin `/api/admin/banners` (list, create, edit, reorder, delete) and public `GET /api/content/banners`; links are a site path or a full http(s) URL (`//host`, `/\\host`, `javascript:` refused); a picture and its sizes must be sent together; `tests/banners.test.ts`
+- [x] Admin → Pages, FAQ & News → Home banners: main picture, optional phone picture, description, link picker (no link / page on this site, including medium → class → subject → chapter / other website), show or hide, reorder
+- [x] Pictures are resized and compressed in the browser before upload (`admin/src/lib/banner-image.ts`): 1920 and 960 px wide, phone 1080 px; WebP, or JPEG where the browser can't write WebP. A 2.5 MB test PNG became 92 KB + 15 KB
+- [x] Home page slideshow above the coin strip (`components/home/banner-slider.tsx`): never cropped, swipe, arrows for mouse users, dots, 5 s auto-advance that pauses on hover, focus and touch and respects reduced motion; nothing shows when there are no banners
+- [x] Verified: tsc, lint, 228 backend tests, admin and site production builds; Chrome at 390 and 1440 px, light and dark, with 5, 1 and 0 banners (picture shape kept, no sideways overflow, no console errors); Lighthouse mobile 88/92/92, CLS 0
+- [ ] **Not yet tried with the real R2 bucket:** browser tests used a local stand-in for the upload. Upload one banner after deploy (it uses the same signed upload as news pictures)
+
+### Language switch (5 Nov 2026)
+- [x] 🌐 now changes the site's language through the free Google Translate widget (`src/lib/language.ts`): English + Assamese, no API or key. Google's script loads only for visitors who chose another language
+- [x] Not translated: Q&A, MCQs, chapter titles and intros, the quiz, the buy window, legal text, class names (Google wrote each a different way), email addresses and the pass mark ring. The globe is hidden during a quiz, because changing language reloads the page
+- [x] Medium moved to the home page tabs and the menu
+
 ## Waiting on client
 | # | Item | Who |
 |---|---|---|
@@ -685,7 +698,7 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 | 31 | **New:** VPS and domain(s) for the API, site and admin, plus SSH access for the deploy preflight | Client and developer |
 | 32 | **New:** Add the CORS policy (Settings → Storage → "Uploads from this panel need a CORS rule", Copy) to the public and private R2 buckets, and later add the production admin domain | Developer |
 | 33 | **New:** Confirm with the owner that custom quizzes are wanted, and whether some MCQs should be practice-only. The FAQ and guideline drafts quote the 10 / 10 s / 7 defaults, and a custom quiz can use different rules (the guidelines screen should show each quiz's own rules) | Client |
-| 34 | **New:** The mock's 🌐 menu lists English/Assamese/Hindi/Bengali. Is that the **medium** (content) or a **translated website**? We build it as a medium switcher. Translating the whole site is a separate, larger job. | Client |
+| 34 | **New:** The mock's 🌐 menu lists English/Assamese/Hindi/Bengali. Is that the **medium** (content) or a **translated website**? **Decided 5 Nov 2026 by the owner: a translated website.** 🌐 is now the language switch (Google Translate widget, English + Assamese); the medium moved to the home page tabs and the menu. | Done |
 | 35 | **New:** Which news sources to list (the mock includes Al Jazeera, international news for children). The admin can edit the list. | Client |
 | 36 | **New:** The mock is light only. Keep a dark mode (warm brown) or drop it? Default: keep it. | Client |
 | 37 | **New:** Confirm "3D" = accents (layered shadows, gradients, 3D coin, pressable buttons) as in the mock, not a full 3D style. This would close #12. | Client |

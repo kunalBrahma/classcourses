@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Geist, Geist_Mono, Noto_Sans_Bengali } from "next/
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
+import { LanguageLoader } from "@/components/site/language-loader";
 import { getSiteSettings } from "@/lib/server-api";
 import "./globals.css";
 
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {children}
           </main>
           <SiteFooter />
+          <LanguageLoader />
         </ThemeProvider>
       </body>
     </html>

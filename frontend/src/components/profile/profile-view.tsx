@@ -99,7 +99,7 @@ export function ProfileView() {
         <div>
           <p className="text-sm font-bold uppercase tracking-wider text-brand-amber-text">My profile</p>
           <h1 className="font-heading text-3xl font-extrabold tracking-tight">{me?.name || "Hello!"}</h1>
-          {me && <p className="text-muted-foreground">{me.email}</p>}
+          {me && <p translate="no" className="notranslate text-muted-foreground">{me.email}</p>}
         </div>
         <button
           type="button"

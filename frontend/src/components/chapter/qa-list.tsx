@@ -5,7 +5,7 @@ import type { QaItem } from "@/lib/server-api";
 // sanitised by the backend on save (the XSS boundary), so it renders as-is.
 export function QaList({ items }: { items: QaItem[] }) {
   return (
-    <ol className="grid gap-4">
+    <ol translate="no" className="notranslate grid gap-4">
       {items.map((q, i) => (
         <li key={q.id} className="card-3d rounded-xl p-4 sm:p-5">
           <div className="flex items-start gap-3">

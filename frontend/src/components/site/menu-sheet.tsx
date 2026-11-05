@@ -5,8 +5,10 @@ import { BookOpenIcon, FileTextIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIco
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AccountPanel } from "@/components/site/account-menu";
 import { ThemeRow } from "@/components/site/theme-toggle";
+import { MediumRows } from "@/components/site/medium-switcher";
+import { NoTranslate } from "@/components/site/no-translate";
 import { LogoMark } from "@/components/kit/logo-mark";
-import type { PageLink } from "@/lib/server-api";
+import type { Medium, PageLink } from "@/lib/server-api";
 
 // Only pages and home sections that exist are linked (videos/news only when
 // the admin has added some).
@@ -32,11 +34,12 @@ const PAGE_ICONS: Record<string, typeof HomeIcon> = {
 export interface MenuProps {
   siteName: string;
   pages: PageLink[];
+  mediums: Medium[];
   show: { videos: boolean; news: boolean };
 }
 
 // Loaded on the first tap of the menu button (lazy-header.tsx).
-export function MenuSheet({ siteName, pages, show, open, onOpenChange, returnFocus }: MenuProps & {
+export function MenuSheet({ siteName, pages, mediums, show, open, onOpenChange, returnFocus }: MenuProps & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocus: () => void;
@@ -56,7 +59,7 @@ export function MenuSheet({ siteName, pages, show, open, onOpenChange, returnFoc
       >
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="flex items-center gap-2 font-heading text-lg">
-            <LogoMark className="size-8" /> {siteName}
+            <LogoMark className="size-8" /> <NoTranslate>{siteName}</NoTranslate>
           </SheetTitle>
           <SheetDescription className="sr-only">Site menu</SheetDescription>
         </SheetHeader>
@@ -66,6 +69,7 @@ export function MenuSheet({ siteName, pages, show, open, onOpenChange, returnFoc
               <Icon className="size-5 text-brand-amber-text" aria-hidden="true" /> {label}
             </Link>
           ))}
+          <MediumRows mediums={mediums} onDone={close} />
           {pages.length > 0 && <p className="px-3 pb-1 pt-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">About &amp; help</p>}
           {pages.map((p) => {
             const Icon = PAGE_ICONS[p.slug] ?? FileTextIcon;

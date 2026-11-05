@@ -5,7 +5,7 @@ import { setMediumCookie } from "@/lib/medium";
 import type { Medium } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
 
-// Small medium switch above the class grid (same cookie as the header 🌐).
+// Small medium switch above the class grid (same cookie as the menu's medium list).
 export function MediumTabs({ mediums, current }: { mediums: Medium[]; current: string }) {
   const router = useRouter();
   if (mediums.length < 2) return null;

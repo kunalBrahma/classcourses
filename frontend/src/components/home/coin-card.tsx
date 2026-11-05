@@ -10,8 +10,9 @@ import { useMe, useSignedIn } from "@/components/site/account-menu";
 export function CoinCard() {
   const signedIn = useSignedIn();
   const me = useMe();
+  const title = signedIn ? (me ? `${me.coins} Coins Earned` : "Your Coins") : "Earn Coins";
   const pill =
-    "ml-auto inline-flex h-11 shrink-0 items-center rounded-[18px] bg-white px-5 font-extrabold text-brand-ink shadow-[0_3px_0_var(--press-edge)] transition active:translate-y-0.5 active:shadow-[0_1px_0_var(--press-edge)]";
+    "ml-auto inline-flex min-h-11 max-w-[45%] items-center justify-center rounded-[18px] bg-white px-5 py-1 text-center font-extrabold leading-tight text-brand-ink shadow-[0_3px_0_var(--press-edge)] transition active:translate-y-0.5 active:shadow-[0_1px_0_var(--press-edge)]";
 
   return (
     <section
@@ -20,9 +21,10 @@ export function CoinCard() {
       className="scroll-mt-24 flex items-center gap-3 rounded-3xl bg-[image:var(--header-bg)] px-4 py-3.5 text-brand-ink shadow-[var(--header-shadow)] dark:text-brand-cream"
     >
       <Coin3D />
-      <div className="min-w-0">
-        <p className="font-heading text-lg font-extrabold leading-tight tabular-nums">
-          {signedIn ? (me ? `${me.coins} Coins Earned` : "Your Coins") : "Earn Coins"}
+      <div className="min-w-0 flex-1">
+        {/* key: a new element when the words change, so Google Translate picks them up. */}
+        <p key={title} className="font-heading text-lg font-extrabold leading-tight tabular-nums">
+          {title}
         </p>
         <p className="text-sm">Win quizzes, get discounts</p>
       </div>

@@ -1,4 +1,4 @@
-// The student's chosen medium (header 🌐 switcher). A cookie, so the server
+// The student's chosen medium (home page tabs and the menu). A cookie, so the server
 // can read it too (the home page shows that medium's classes).
 export const MEDIUM_COOKIE = "cc_medium";
 const MEDIUM_EVENT = "cc-medium";

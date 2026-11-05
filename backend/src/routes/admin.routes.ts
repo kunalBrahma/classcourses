@@ -49,25 +49,33 @@ import {
   updateNoteSchema,
 } from "../validations/notes.validation";
 import {
+  createBanner,
   createFaq,
   createNews,
+  deleteBanner,
   deleteFaq,
   deleteNews,
   getPageAdmin,
+  listBannersAdmin,
   listFaqAdmin,
   listNewsAdmin,
   listPagesAdmin,
+  reorderBanners,
   reorderFaq,
   reorderNews,
+  updateBanner,
   updateFaq,
   updateNews,
   updatePage,
 } from "../controllers/pages.controller";
 import {
+  createBannerSchema,
   createFaqSchema,
   createNewsSchema,
+  reorderBannersSchema,
   reorderFaqSchema,
   reorderNewsSchema,
+  updateBannerSchema,
   updateFaqSchema,
   updateNewsSchema,
   updatePageSchema,
@@ -200,5 +208,12 @@ router.post("/news", validateBody(createNewsSchema), createNews);
 router.put("/news/reorder", validateBody(reorderNewsSchema), reorderNews);
 router.patch("/news/:id", validateBody(updateNewsSchema), updateNews);
 router.delete("/news/:id", deleteNews);
+
+// Home page banner slideshow
+router.get("/banners", listBannersAdmin);
+router.post("/banners", validateBody(createBannerSchema), createBanner);
+router.put("/banners/reorder", validateBody(reorderBannersSchema), reorderBanners);
+router.patch("/banners/:id", validateBody(updateBannerSchema), updateBanner);
+router.delete("/banners/:id", deleteBanner);
 
 export default router;

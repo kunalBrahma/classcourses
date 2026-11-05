@@ -364,7 +364,7 @@ live site).
 | Mock | Problem | Our build |
 |---|---|---|
 | One page that swaps "screens" with JS | No URLs, so no SEO, no back button, no sharing | Real routes: `/[medium]/[class]/[subject]/[chapter]` |
-| No medium step; the 🌐 menu offers English/Assamese/Hindi/Bengali | Mixes up *medium* (content) with *site language* (UI translation, which isn't in scope) | 🌐 = **medium switcher** read from the DB (remembered in a cookie). The class grid shows the classes of the chosen medium. Ask the client (#34). |
+| No medium step; the 🌐 menu offers English/Assamese/Hindi/Bengali | Mixes up *medium* (content) with *site language* (UI translation, which isn't in scope) | Medium comes from the DB (remembered in a cookie; home page tabs and the menu). The class grid shows the classes of the chosen medium. 🌐 = **site language** via the Google Translate widget (owner's decision, 5 Nov 2026; `src/lib/language.ts`). |
 | Subject → separate chapter-list screen | The requirements ask for a **chapter accordion on the class page** | Accordion on the class page, plus a subject page for SEO |
 | Text is 9.5–13.5 px | Too small for Class 1 readers, and Assamese conjuncts need more size | Body text ≥ 16 px, labels ≥ 13 px, Assamese at 17–18 px |
 | White text on `#F5A623`, `#b08347` and `#9a7a3f` on white | Contrast is 2–3.9:1, which fails WCAG AA | Buttons use dark ink on amber or white on `#B45309`. Muted text darkened to ≥ 4.5:1. |

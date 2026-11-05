@@ -227,7 +227,7 @@ export function QuizRunner({ coinRule }: { coinRule: CoinRule }) {
 }
 
 function Panel({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
-  return <div className={cn("card-3d mx-auto w-full rounded-3xl p-5 text-center sm:p-8", wide ? "max-w-2xl" : "max-w-md")}>{children}</div>;
+  return <div data-no-language translate="no" className={cn("notranslate card-3d mx-auto w-full rounded-3xl p-5 text-center sm:p-8", wide ? "max-w-2xl" : "max-w-md")}>{children}</div>;
 }
 
 function Progress({ attempt }: { attempt: Attempt }) {

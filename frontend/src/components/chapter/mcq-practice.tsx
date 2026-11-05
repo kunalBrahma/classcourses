@@ -107,7 +107,7 @@ function Mcq({ item, index }: { item: McqItem; index: number }) {
 
 export function McqPractice({ items }: { items: McqItem[] }) {
   return (
-    <ol className="grid gap-4">
+    <ol translate="no" className="notranslate grid gap-4">
       {items.map((item, i) => (
         <Mcq key={item.id} item={item} index={i} />
       ))}

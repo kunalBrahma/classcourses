@@ -409,3 +409,23 @@
   border: 1px solid var(--border);
   padding: 0.4em 0.6em;
 }
+
+/* Google Translate (lib/language.ts): only the translated words should show, not
+   Google's bar, the space it reserves at the top, or its hover highlights. */
+.goog-te-banner-frame,
+body > .skiptranslate,
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+body {
+  top: 0 !important;
+}
+.goog-text-highlight {
+  background: none !important;
+  box-shadow: none !important;
+}
+/* Changing language reloads the page, which would forfeit the question on screen. */
+body:has([data-no-language]) [data-language-button] {
+  display: none;
+}

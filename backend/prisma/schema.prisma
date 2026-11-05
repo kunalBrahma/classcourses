@@ -528,6 +528,31 @@ model Page {
 }
 
 // "Latest news" links on the home page (external sites, admin-managed).
+// Home page banner slideshow (admin → Home banners). Images are never cropped, so
+// their real sizes are stored: the browser reserves the right space before they load.
+model Banner {
+  id             String   @id @default(uuid())
+  // What the banner says, for screen readers; "" when the admin leaves it empty
+  altText        String
+  // Main (landscape) picture, plus a half-size copy for small screens
+  imageUrl       String
+  imageSmallUrl  String
+  width          Int
+  height         Int
+  // Optional separate picture for phones
+  mobileImageUrl String?
+  mobileWidth    Int?
+  mobileHeight   Int?
+  // A page on this site ("/notes") or a full http(s) link; null = not clickable
+  link           String?
+  order          Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([order])
+}
+
 model NewsLink {
   id        String   @id @default(uuid())
   source    String

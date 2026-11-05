@@ -83,7 +83,7 @@ export function AccountChip() {
       data-account="in"
     >
       <Coin3D className="size-7 text-xs" />
-      {me ? me.coins : "…"}
+      <span translate="no" className="notranslate">{me ? me.coins : "…"}</span>
     </Link>
   );
 }

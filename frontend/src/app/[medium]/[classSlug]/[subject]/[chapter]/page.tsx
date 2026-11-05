@@ -87,7 +87,7 @@ async function ChapterPageContent({ params }: { params: Props["params"] }) {
             {data.subject.name} · {data.classLevel.name}
             {c.part && <span lang="as"> · {c.part.title}</span>}
           </p>
-          <h1 className="font-heading text-2xl font-extrabold leading-tight tracking-tight sm:text-4xl" lang="as">
+          <h1 translate="no" className="notranslate font-heading text-2xl font-extrabold leading-tight tracking-tight sm:text-4xl" lang="as">
             {isPlaceholderTitle(c.number, c.title) ? `Chapter ${c.number}` : c.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -104,7 +104,7 @@ async function ChapterPageContent({ params }: { params: Props["params"] }) {
             <ChapterSection id="about" icon={BookOpenTextIcon} title="About the lesson">
               <div className="card-3d rounded-2xl p-5 sm:p-6">
                 {/* Sanitised by the backend on save (sanitizeHtml.ts allowlist). */}
-                <div className="rich" lang="as" dangerouslySetInnerHTML={{ __html: c.aboutHtml }} />
+                <div translate="no" className="notranslate rich" lang="as" dangerouslySetInnerHTML={{ __html: c.aboutHtml }} />
               </div>
             </ChapterSection>
           )}

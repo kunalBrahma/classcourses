@@ -53,6 +53,7 @@ export const NAV: NavGroup[] = [
           { title: "Site pages", url: "/pages" },
           { title: "FAQ", url: "/faq" },
           { title: "News links", url: "/news" },
+          { title: "Home banners", url: "/banners" },
         ],
       },
     ],

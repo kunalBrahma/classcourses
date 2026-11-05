@@ -416,6 +416,32 @@ export async function getNews(): Promise<NewsLink[]> {
   }
 }
 
+export interface Banner {
+  id: string;
+  altText: string;
+  imageUrl: string;
+  imageSmallUrl: string;
+  width: number;
+  height: number;
+  mobileImageUrl: string | null;
+  mobileWidth: number | null;
+  mobileHeight: number | null;
+  link: string | null;
+}
+
+export async function getBanners(): Promise<Banner[]> {
+  "use cache";
+  cacheTag("pages");
+  try {
+    const { items } = await getJson<{ items: Banner[] }>("/api/content/banners");
+    cacheLife("minutes");
+    return items;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
 // Reading the clock during prerender must be cached under Cache Components.
 export async function getCurrentYear(): Promise<number> {
   "use cache";

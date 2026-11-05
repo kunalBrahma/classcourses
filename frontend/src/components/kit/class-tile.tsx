@@ -45,7 +45,7 @@ export function ClassTile({ href, name, nativeName, index, className }: {
       className={cn("card-3d lift flex min-h-24 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-3.5 text-center", className)}
     >
       <BookIcon index={index} className="size-8" />
-      <span className="font-heading text-[13px] font-extrabold leading-tight text-brand-amber-text">{name}</span>
+      <span translate="no" className="notranslate font-heading text-[13px] font-extrabold leading-tight text-brand-amber-text">{name}</span>
       {nativeName && (
         <span lang="as" className="text-xs leading-tight text-muted-foreground">
           {nativeName}

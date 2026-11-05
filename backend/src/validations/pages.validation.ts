@@ -36,6 +36,52 @@ export const updateNewsSchema = createNewsSchema.partial();
 
 export const reorderNewsSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
 
+// Home page banners. The link is a page on this site ("/notes") or a full http(s)
+// URL. "//host" and "/\\host" are refused: browsers treat those as other websites.
+const bannerLink = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((v) => {
+    if (v.startsWith("/")) return /^\/(?![/\\])[^\s\\]*$/.test(v);
+    if (!/^https?:\/\//i.test(v)) return false;
+    return URL.canParse(v);
+  }, "The link must be a page on this site (starting with /) or start with http:// or https://");
+
+const imageSize = z.number().int().positive().max(20000);
+
+const bannerFields = z.object({
+  // Optional. Not .default(""): on a PATCH that would wipe the text when it isn't sent.
+  altText: z.string().trim().max(160).optional(),
+  imageUrl: httpUrl,
+  imageSmallUrl: httpUrl,
+  width: imageSize,
+  height: imageSize,
+  mobileImageUrl: httpUrl.nullable().optional(),
+  mobileWidth: imageSize.nullable().optional(),
+  mobileHeight: imageSize.nullable().optional(),
+  link: bannerLink.nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+type BannerFields = Partial<z.infer<typeof bannerFields>>;
+
+// A picture and its sizes only make sense together: a PATCH can't change one alone.
+const MAIN_PICTURE = ["imageUrl", "imageSmallUrl", "width", "height"] as const;
+const PHONE_PICTURE = ["mobileImageUrl", "mobileWidth", "mobileHeight"] as const;
+const pictureFieldsTogether = (body: BannerFields) => {
+  const main = MAIN_PICTURE.filter((f) => body[f] !== undefined).length;
+  const phoneSet = PHONE_PICTURE.filter((f) => body[f] !== undefined && body[f] !== null).length;
+  const phoneNull = PHONE_PICTURE.filter((f) => body[f] === null).length;
+  const mainOk = main === 0 || main === MAIN_PICTURE.length;
+  const phoneOk = (phoneSet === 0 && (phoneNull === 0 || phoneNull === PHONE_PICTURE.length)) || (phoneSet === PHONE_PICTURE.length);
+  return mainOk && phoneOk;
+};
+const PICTURE_FIELDS_MESSAGE = "A picture must be sent together with its sizes";
+
+export const createBannerSchema = bannerFields.refine(pictureFieldsTogether, PICTURE_FIELDS_MESSAGE);
+export const updateBannerSchema = bannerFields.partial().refine(pictureFieldsTogether, PICTURE_FIELDS_MESSAGE);
+export const reorderBannersSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
+
 // Contact form. Topics are fixed so the admin can sort messages; the
 // frontend shows the same list (frontend/src/lib/contact.ts).
 export const CONTACT_TOPICS = ["General question", "Account or sign-in", "Quizzes and coins", "Notes and payments", "Report a mistake", "Other"] as const;

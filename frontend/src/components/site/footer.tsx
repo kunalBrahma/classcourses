@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MailIcon } from "lucide-react";
 import { getCurrentYear, getFaq, getPublishedPages, getSiteSettings } from "@/lib/server-api";
 import { siteLinks } from "@/lib/site-links";
+import { NoTranslate } from "@/components/site/no-translate";
 import { SocialIcons } from "@/components/site/social-icons";
 import { Logo } from "@/components/site/logo";
 
@@ -31,7 +32,7 @@ export async function SiteFooter() {
           <MailIcon className="size-4 shrink-0" aria-hidden="true" /> {contact.email}
         </a>
         <p className="mt-4 border-t border-white/10 pt-4 text-sm text-footer-muted">
-          © {year} {site.name}. Made for the students of Assam.
+          <NoTranslate>© {year} {site.name}.{" "}</NoTranslate>Made for the students of Assam.
         </p>
       </div>
     </footer>

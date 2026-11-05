@@ -1,10 +1,10 @@
 import { Logo } from "@/components/site/logo";
 import { AccountChip } from "@/components/site/account-menu";
-import { MediumButton, MenuButton, SearchButton } from "@/components/site/lazy-header";
+import { LanguageButton, MenuButton, SearchButton } from "@/components/site/lazy-header";
 import { getFaq, getMediums, getPublishedPages, getSiteSettings } from "@/lib/server-api";
 import { siteLinks } from "@/lib/site-links";
 
-// The mock's sticky amber band: logo, coins (or Sign in), search, medium, menu.
+// The mock's sticky amber band: logo, coins (or Sign in), search, language, menu.
 // Text is ink on amber (the mock's white on amber fails contrast, 2:1).
 export async function SiteHeader() {
   const [{ site }, mediums, pages, faq] = await Promise.all([getSiteSettings(), getMediums(), getPublishedPages(), getFaq()]);
@@ -22,8 +22,8 @@ export async function SiteHeader() {
         <AccountChip />
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           <SearchButton />
-          <MediumButton mediums={mediums} />
-          <MenuButton siteName={site.name} pages={menuPages} show={{ videos: true, news: true }} />
+          <LanguageButton />
+          <MenuButton siteName={site.name} pages={menuPages} mediums={mediums} show={{ videos: true, news: true }} />
         </div>
       </div>
     </header>

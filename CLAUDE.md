@@ -629,6 +629,18 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   `GET /api/catalog/videos?medium&classSlug&format&page`) and `/news` (grid; falls
   back to `DEFAULT_NEWS`). `VideoCard` / `NewsCard` take `fluid` to fill a grid cell;
   news cards show `NewsLink.imageUrl` (admin upload) or an amber panel.
+- **Language (🌐):** the Google Translate widget, `src/lib/language.ts` (English + Assamese; Google's
+  `googtrans` cookie; its script loads only for visitors who chose another language). Keep out of translation with
+  `translate="no"` + `notranslate`: Q&A, MCQs, quiz, buy window, legal text (`<NoTranslate>` for a name standing alone,
+  never inside a sentence: Google reorders the words around it). Google takes
+  text away from React, so **text that changes in a live element goes stale when translated**: give the element a
+  `key` of its text, or mark it `notranslate`. Changing language reloads the page, so the globe is hidden on quizzes
+  (`data-no-language`). The medium is separate: home page tabs and the menu.
+- **Home banners:** `Banner` model, Admin → Home banners, public `GET /api/content/banners`, shown by
+  `components/home/banner-slider.tsx` above the coin strip. **Never crop them:** `h-auto w-full` with the stored
+  width and height, no `object-cover` or fixed height. The row is as tall as its tallest slide, so the page doesn't
+  jump. The admin resizes pictures before upload (`admin/src/lib/banner-image.ts`). `link` is a site path (`/notes`,
+  same tab) or a full http(s) URL (new tab), or null; it is stored as text, so it doesn't follow a later link change.
 - **Start Quiz** (home) opens `components/quiz/quiz-picker.tsx` (lazy, like the
   header panels): medium → class → every ready quiz from public
   `GET /api/catalog/quiz-picker?medium&classSlug` (`classQuizCatalog()` in

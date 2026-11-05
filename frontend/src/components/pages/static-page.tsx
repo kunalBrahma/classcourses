@@ -381,7 +381,7 @@ async function LegalPage({ slug, page }: { slug: StaticSlug; page: SitePage | nu
           )}
           {body ? (
             <article className="card-3d rounded-3xl p-5 sm:p-10">
-              <div className="rich mx-auto max-w-[68ch] text-[16px]" dangerouslySetInnerHTML={{ __html: body.html }} />
+              <div translate="no" className="notranslate rich mx-auto max-w-[68ch] text-[16px]" dangerouslySetInnerHTML={{ __html: body.html }} />
             </article>
           ) : (
             <ComingSoon email={contact.email} />

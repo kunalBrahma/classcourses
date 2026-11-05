@@ -23,7 +23,7 @@ export function NoteActions({ note }: { note: NoteItem }) {
 
   if (!signedIn) {
     return (
-      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="press-3d inline-flex h-11 items-center justify-center rounded-xl px-4 font-bold">
+      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="press-3d inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-1.5 text-center font-bold leading-tight">
         {note.isFree ? "Sign in to download" : "Sign in to buy"}
       </Link>
     );
@@ -45,7 +45,7 @@ export function NoteActions({ note }: { note: NoteItem }) {
   return (
     <div className="grid w-full justify-items-end gap-1 sm:w-auto">
       {canDownload ? (
-        <button type="button" onClick={download} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-success px-4 font-bold text-white shadow-[0_3px_0_color-mix(in_oklch,var(--success),black_30%)] active:translate-y-0.5">
+        <button type="button" onClick={download} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-success px-4 py-1.5 text-center font-bold leading-tight text-white shadow-[0_3px_0_color-mix(in_oklch,var(--success),black_30%)] active:translate-y-0.5">
           {busy ? <Loader2Icon className="size-4 animate-spin" /> : <DownloadIcon className="size-4" />} Download
         </button>
       ) : (
@@ -62,7 +62,7 @@ export function NoteActions({ note }: { note: NoteItem }) {
             type="button"
             onClick={() => setBuying({ coins: false })}
             disabled={owned === null}
-            className="press-3d inline-flex h-11 items-center gap-2 rounded-xl px-4 font-bold disabled:opacity-60"
+            className="press-3d inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-1.5 text-center font-bold leading-tight disabled:opacity-60"
           >
             <LockIcon className="size-4" /> Pay &amp; Download
           </button>

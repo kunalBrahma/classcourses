@@ -76,7 +76,7 @@ export function VerifyCodeStep({ email, retryAfter = 60, next, onBack }: { email
       <div className="flex gap-3 rounded-2xl border border-brand-amber/30 bg-accent p-4 text-sm">
         <MailCheckIcon className="mt-0.5 size-5 shrink-0 text-brand-amber-text" aria-hidden="true" />
         <p>
-          We&apos;ve sent a 6-digit code to <strong className="break-all">{email}</strong>. Enter it below to finish. It can take a minute, and may land in spam.
+          We&apos;ve sent a 6-digit code to <strong translate="no" className="notranslate break-all">{email}</strong>. Enter it below to finish. It can take a minute, and may land in spam.
         </p>
       </div>
       <FormError message={error} />

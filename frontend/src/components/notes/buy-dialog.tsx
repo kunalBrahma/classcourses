@@ -171,7 +171,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
 
   return (
     <Dialog open={open && !razorpayOpen} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent translate="no" className="notranslate sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="pr-8 font-heading text-xl leading-snug" lang="as">
             {note.title}

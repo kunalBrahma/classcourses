@@ -27,7 +27,7 @@ export function QuizCard({ quiz, coins }: Pick<PublicSettings, "quiz" | "coins">
             style={{ background: `conic-gradient(var(--brand-amber-dark) ${share}%, var(--accent) 0)` }}
             aria-hidden="true"
           >
-            <span className="grid size-[42px] place-items-center rounded-full bg-card font-heading text-xs font-extrabold tabular-nums text-brand-amber-text">
+            <span translate="no" className="notranslate grid size-[42px] place-items-center rounded-full bg-card font-heading text-xs font-extrabold tabular-nums text-brand-amber-text">
               {quiz.passMark}/{quiz.questionsPerQuiz}
             </span>
           </div>

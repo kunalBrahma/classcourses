@@ -2,50 +2,44 @@
 
 import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, GlobeIcon } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { CheckIcon } from "lucide-react";
 import { readMediumCookie, setMediumCookie, subscribeMedium } from "@/lib/medium";
 import type { Medium } from "@/lib/server-api";
-import { headerIconButton } from "@/components/site/header-styles";
 
-// 🌐 in the mock: picks the MEDIUM (Assamese / English …, from the database),
-// not a translated website (client question #34). Remembered in a cookie.
-// Loaded on the first tap (lazy-header.tsx), so it opens straight away.
-export function MediumSwitcher({ mediums }: { mediums: Medium[] }) {
+// The student's medium (Assamese / English …, from the database), in the menu.
+// Remembered in a cookie, the same one as the tabs above the home page's classes.
+// This is what they study in; the 🌐 button is the language of the site around it.
+export function MediumRows({ mediums, onDone }: { mediums: Medium[]; onDone: () => void }) {
   const router = useRouter();
   const current = useSyncExternalStore(subscribeMedium, readMediumCookie, () => null);
+  if (mediums.length < 2) return null;
 
   return (
-    <DropdownMenu defaultOpen>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={headerIconButton} aria-label="Choose your medium">
-          <GlobeIcon className="size-5" />
+    <div className="grid gap-0.5">
+      <p className="px-3 pb-1 pt-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Your medium</p>
+      {mediums.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          aria-pressed={current === m.slug}
+          onClick={() => {
+            setMediumCookie(m.slug);
+            router.refresh();
+            onDone();
+          }}
+          className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left transition hover:bg-accent"
+        >
+          <span className="flex-1">
+            <span className="block text-base font-semibold">{m.name}</span>
+            {m.nativeName && (
+              <span lang="as" className="block text-xs text-muted-foreground">
+                {m.nativeName}
+              </span>
+            )}
+          </span>
+          {current === m.slug && <CheckIcon className="size-5 text-brand-amber-text" aria-hidden="true" />}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Your medium</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {mediums.map((m) => (
-          <DropdownMenuItem
-            key={m.id}
-            className="min-h-11"
-            onSelect={() => {
-              setMediumCookie(m.slug);
-              router.refresh();
-            }}
-          >
-            <span className="flex-1">
-              <span className="block font-semibold">{m.name}</span>
-              {m.nativeName && (
-                <span lang="as" className="block text-xs text-muted-foreground">
-                  {m.nativeName}
-                </span>
-              )}
-            </span>
-            {current === m.slug && <CheckIcon className="size-4 text-brand-amber-text" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      ))}
+    </div>
   );
 }

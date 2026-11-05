@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, BookOpenIcon, FileTextIcon, InfoIcon, NewspaperIcon, VideoIcon } from "lucide-react";
+import { BannerSlider } from "@/components/home/banner-slider";
 import { ClassPicker, ClassPickerSkeleton } from "@/components/home/class-picker";
 import { CoinCard } from "@/components/home/coin-card";
 import { NotePlaceholders, VideoPlaceholders } from "@/components/home/placeholders";
@@ -12,17 +13,18 @@ import { VideoCard } from "@/components/kit/video-card";
 import { NoteList } from "@/components/notes/note-list";
 import { placeLine } from "@/components/notes/place-line";
 import { Container } from "@/components/site/container";
-import { getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
+import { getBanners, getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
 import { classRange } from "@/lib/class-range";
 import { DEFAULT_NEWS } from "@/lib/site-links";
 
 // The client's home-page mock (docs/design/home-page-mock.html), in its order:
-// coins → quizzes → classes → notes → videos → news → about. Every section is
+// (admin banners, when there are any) → coins → quizzes → classes → notes → videos → news → about. Every section is
 // always there: until the admin adds notes, videos or news links, a
 // "coming soon" placeholder (or the mock's news sources) fills the spot.
 export default async function HomePage() {
-  const [{ site, quiz, coins }, videos, news, pages, notes, range] = await Promise.all([
+  const [{ site, quiz, coins }, banners, videos, news, pages, notes, range] = await Promise.all([
     getSiteSettings(),
+    getBanners(),
     getFeaturedVideos(),
     getNews(),
     getPublishedPages(),
@@ -38,6 +40,8 @@ export default async function HomePage() {
       <h1 className="sr-only">
         {site.name}: chapter-wise question-answers, MCQs, quizzes and notes for students of Assam
       </h1>
+
+      <BannerSlider banners={banners} />
 
       <CoinCard />
 

@@ -200,3 +200,73 @@ export const reorderNews = asyncHandler(async (req: Request, res: Response) => {
   await prisma.$transaction(ids.map((id, order) => prisma.newsLink.update({ where: { id }, data: { order } })));
   res.json({ message: "News links reordered" });
 });
+
+// ===========================================================================
+// Home page banners
+// ===========================================================================
+
+type BannerBody = {
+  altText?: string;
+  imageUrl: string;
+  imageSmallUrl: string;
+  width: number;
+  height: number;
+  mobileImageUrl?: string | null;
+  mobileWidth?: number | null;
+  mobileHeight?: number | null;
+  link?: string | null;
+  isActive?: boolean;
+};
+
+export const getPublicBanners = asyncHandler(async (_req: Request, res: Response) => {
+  const items = await prisma.banner.findMany({
+    where: { isActive: true },
+    orderBy: { order: "asc" },
+    select: {
+      id: true,
+      altText: true,
+      imageUrl: true,
+      imageSmallUrl: true,
+      width: true,
+      height: true,
+      mobileImageUrl: true,
+      mobileWidth: true,
+      mobileHeight: true,
+      link: true,
+    },
+  });
+  res.json({ items });
+});
+
+export const listBannersAdmin = asyncHandler(async (_req: Request, res: Response) => {
+  const items = await prisma.banner.findMany({ orderBy: { order: "asc" } });
+  res.json({ items });
+});
+
+export const createBanner = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as BannerBody;
+  const last = await prisma.banner.findFirst({ orderBy: { order: "desc" }, select: { order: true } });
+  const item = await prisma.banner.create({ data: { ...body, altText: body.altText ?? "", order: (last?.order ?? -1) + 1 } });
+  res.status(201).json({ item });
+});
+
+export const updateBanner = asyncHandler(async (req: Request, res: Response) => {
+  const item = await prisma.banner.update({ where: { id: req.params.id }, data: req.body as Partial<BannerBody> });
+  res.json({ item });
+});
+
+export const deleteBanner = asyncHandler(async (req: Request, res: Response) => {
+  await prisma.banner.delete({ where: { id: req.params.id } });
+  res.json({ message: "Banner deleted" });
+});
+
+export const reorderBanners = asyncHandler(async (req: Request, res: Response) => {
+  const { ids } = req.body as { ids: string[] };
+  const all = await prisma.banner.findMany({ select: { id: true } });
+  const set = new Set(all.map((i) => i.id));
+  if (ids.length !== set.size || new Set(ids).size !== ids.length || ids.some((id) => !set.has(id))) {
+    throw new AppError(400, "Send every banner exactly once, in the new order");
+  }
+  await prisma.$transaction(ids.map((id, order) => prisma.banner.update({ where: { id }, data: { order } })));
+  res.json({ message: "Banners reordered" });
+});
