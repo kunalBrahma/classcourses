@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import prisma from "../src/config/prisma";
 import { hashCode, MAX_ATTEMPTS } from "../src/services/emailVerification.service";
-import { api, createUserAndLogin } from "./helpers";
+import { api, createUserAndLogin, signupProfile } from "./helpers";
 
 // Tests can't read the email, so they swap the stored code for a known one.
 const useKnownCode = async (email: string, code = "123456") => {
@@ -16,7 +16,7 @@ const verifyWithKnownCode = async (email: string) => {
   return res;
 };
 const signUp = (email: string, extra: Record<string, unknown> = {}) =>
-  api().post("/api/auth/register").send({ email, password: "Password123!", name: "Asha", phone: "9876543210", ...extra });
+  signupProfile().then((profile) => api().post("/api/auth/register").send({ email, password: "Password123!", name: "Asha", phone: "9876543210", ...profile, ...extra }));
 
 describe("auth & roles", () => {
   it("health check", async () => {
@@ -26,7 +26,7 @@ describe("auth & roles", () => {
 
   it("registers a new user as STUDENT and returns the role on login and /me", async () => {
     const email = `new-${Date.now()}@test.local`;
-    const reg = await api().post("/api/auth/register").send({ email, password: "Password123!", name: "New", phone: "98765 43210" });
+    const reg = await api().post("/api/auth/register").send({ email, password: "Password123!", name: "New", phone: "98765 43210", ...(await signupProfile()) });
     expect(reg.status).toBe(201);
     expect(reg.body.needsVerification).toBe(true);
     expect(reg.body.accessToken).toBeUndefined();
@@ -60,7 +60,10 @@ describe("sign-up email code", () => {
     expect((await signUp("p1@test.local", { phone: "12345" })).status).toBe(400);
     expect((await signUp("p2@test.local", { phone: "5876543210" })).status).toBe(400);
     expect((await signUp("p3@test.local", { name: "" })).status).toBe(400);
-    expect((await signUp("p4@test.local", { phone: undefined })).status).toBe(400);
+    // Phone is optional (client, 6 Nov 2026): missing or empty = no phone
+    expect((await signUp("p4@test.local", { phone: undefined })).status).toBe(201);
+    expect((await prisma.user.findUnique({ where: { email: "p4@test.local" } }))?.phone).toBeNull();
+    expect((await signUp("p4b@test.local", { phone: "" })).status).toBe(201);
     expect((await signUp("p5@test.local", { phone: "+91 98765-43210" })).status).toBe(201);
     expect((await prisma.user.findUnique({ where: { email: "p5@test.local" } }))?.phone).toBe("9876543210");
     expect((await signUp("p6@test.local", { phone: "09876543210" })).status).toBe(201);

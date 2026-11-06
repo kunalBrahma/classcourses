@@ -64,8 +64,8 @@ describe("SMTP settings", () => {
     const student = await createUserAndLogin("STUDENT");
     const res = await api().post("/api/auth/forgot-password").send({ email: student.email });
     expect(res.status).toBe(200);
-    const user = await prisma.user.findUnique({ where: { email: student.email }, include: { resetTokens: true } });
-    expect(user?.resetTokens).toHaveLength(1);
+    const user = await prisma.user.findUnique({ where: { email: student.email }, include: { authCodes: true } });
+    expect(user?.authCodes).toMatchObject([{ purpose: "RESET_PASSWORD" }]);
   });
 
   it("refuses to save an unreachable host", async () => {
@@ -147,15 +147,16 @@ describe("SMTP settings", () => {
     expect(lastMailTo(admin.email)).toBeDefined();
   });
 
-  it("forgot-password delivers a reset link through the saved SMTP", async () => {
+  it("forgot-password delivers a 6-digit code through the saved SMTP", async () => {
     const student = await createUserAndLogin("STUDENT");
     await api().post("/api/auth/forgot-password").send({ email: student.email });
     const mail = lastMailTo(student.email);
     expect(mail).toBeDefined();
     // Quoted-printable may soft-wrap long lines; undo that before matching.
     const body = mail!.raw.replace(/=\r?\n/g, "");
-    expect(body).toMatch(/Reset your Class Course password/);
-    expect(body).toMatch(/http:\/\/localhost:3100\/reset-password\?token=3D[0-9a-f]{64}|reset-password\?token=[0-9a-f]{64}/);
+    expect(body).toMatch(/is your Class Course password reset code/);
+    expect(body).toMatch(/works for 5 minutes/);
+    expect(body).not.toMatch(/reset-password\?token/);
   });
 
   it("reset returns to unconfigured", async () => {

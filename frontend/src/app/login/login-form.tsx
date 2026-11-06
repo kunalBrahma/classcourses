@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/auth/password-input";
 import { FormError, SubmitButton } from "@/components/auth/form-bits";
+import { GoogleButton } from "@/components/auth/google-button";
 import { VerifyCodeStep } from "@/components/auth/verify-code";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
+import { PausedHelp } from "@/components/auth/unlock-code";
+import { whereAfterSignIn } from "@/lib/profile";
 
 // Only same-site paths may be used as the post-login destination.
 export const safeNext = (next: string | null) => (next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
@@ -26,10 +29,13 @@ export function LoginForm() {
   // The account exists but its email was never verified: the backend has
   // sent a code, so show the code step.
   const [needsCode, setNeedsCode] = useState<string | null>(null);
+  // Sign-in paused after wrong passwords: offer a reset or an unlock code.
+  const [paused, setPaused] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setPaused(false);
     setLoading(true);
     try {
       const data = await publicJson<{ accessToken: string; refreshToken: string }>("/api/auth/login", {
@@ -37,7 +43,7 @@ export function LoginForm() {
         json: { email: email.trim(), password },
       });
       setTokens(data.accessToken, data.refreshToken);
-      router.push(next);
+      router.push(await whereAfterSignIn(next));
       router.refresh();
     } catch (err) {
       const e = err as ApiError;
@@ -45,11 +51,9 @@ export function LoginForm() {
         setNeedsCode(email.trim());
         return;
       }
-      setError(
-        e.status === 401
-          ? "That email and password don't match. Check them and try again."
-          : e.message // 429s carry the server's own wording (this account / this network)
-      );
+      setPaused(e.code === "LOGIN_LOCKED");
+      // The server's wording: tries left, or how long sign-in is paused
+      setError(e.status === 401 && !/\b(try|tries) left\b/.test(e.message) ? "That email and password don't match. Check them and try again." : e.message);
     } finally {
       setLoading(false);
     }
@@ -58,6 +62,8 @@ export function LoginForm() {
   if (needsCode) return <VerifyCodeStep email={needsCode} next={next} onBack={() => setNeedsCode(null)} />;
 
   return (
+    <div className="grid gap-5">
+    <GoogleButton next={next} />
     <form onSubmit={submit} className="grid gap-5" aria-describedby={error ? `${id}-err` : undefined}>
       <FormError id={`${id}-err`} message={error} />
       <div className="grid gap-2">
@@ -88,5 +94,15 @@ export function LoginForm() {
       </div>
       <SubmitButton loading={loading} loadingText="Signing in…">Sign in</SubmitButton>
     </form>
+    {paused && (
+      <PausedHelp
+        email={email.trim()}
+        onUnlocked={() => {
+          setPaused(false);
+          setError(null);
+        }}
+      />
+    )}
+    </div>
   );
 }

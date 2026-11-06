@@ -18,7 +18,7 @@ import { useAdmin } from "@/components/admin/session";
 import { useConfirm } from "@/components/admin/confirm";
 import { formCard, inputClass, pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { COIN_REASON, formatDate, formatPhone, initials, QUIZ_STATUS, Role, UserDetail } from "@/lib/people";
+import { COIN_REASON, formatDate, formatPhone, initials, MISSING_LABEL, QUIZ_STATUS, Role, UserDetail } from "@/lib/people";
 import { UnverifiedBadge } from "@/components/admin/unverified-badge";
 import { cn } from "@/lib/utils";
 
@@ -212,6 +212,86 @@ function AccountCard({ user, onDone }: { user: UserDetail; onDone: () => void })
   );
 }
 
+// Shown only while this account's sign-in is paused after wrong passwords.
+function SignInPause({ userId }: { userId: string }) {
+  const [status, setStatus] = useState<{ locked: boolean; lockedUntil: string | null; failures: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    apiJson<{ signIn: { locked: boolean; lockedUntil: string | null; failures: number } }>(`/api/admin/users/${userId}/sign-in`)
+      .then(({ signIn }) => setStatus(signIn))
+      .catch(() => setStatus(null));
+  }, [userId]);
+  if (!status?.locked) return null;
+  const clear = async () => {
+    setBusy(true);
+    try {
+      const { signIn } = await apiJson<{ signIn: typeof status }>(`/api/admin/users/${userId}/sign-in/clear`, { method: "POST" });
+      setStatus(signIn);
+      toast.success("Sign-in unpaused", { description: "They can sign in again with their password." });
+    } catch (err) {
+      toast.error((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Alert className="border-warning/40 bg-warning/10">
+      <AlertTitle>Sign-in is paused</AlertTitle>
+      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Too many wrong passwords. It ends on its own at {status.lockedUntil ? formatDate(status.lockedUntil, true) : "—"}. If the student asked for
+          help (for example from the Helpline), you can end it now.
+        </span>
+        <Button type="button" variant="outline" className="h-10 shrink-0" disabled={busy} onClick={clear}>
+          {busy && <Loader2Icon className="animate-spin" />} Unpause sign-in
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+// What the student gave at sign-up / "complete your profile".
+function ProfileCard({ user }: { user: UserDetail }) {
+  const dob = user.dateOfBirth
+    ? new Date(`${user.dateOfBirth}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    : null;
+  const rows: { label: string; value: React.ReactNode }[] = [
+    { label: "Class", value: user.classLevel?.name },
+    { label: "District", value: user.district?.name },
+    {
+      label: "Date of birth",
+      value: dob && (
+        <>
+          {dob} <span className="text-muted-foreground">· {user.age} yrs</span>
+          {user.isMinor && <Badge variant="outline" className="ml-2 h-5 px-1.5 text-[10px]">Under 18</Badge>}
+        </>
+      ),
+    },
+    { label: "Mobile (optional)", value: user.phone ? formatPhone(user.phone) : <span className="text-muted-foreground">Not given</span> },
+    { label: "Signs in with", value: user.signsInWithGoogle ? "Google" : "Email and password" },
+  ];
+  return (
+    <Card className={cn(formCard, "gap-0 py-0")}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+        <p className="font-heading font-bold">Profile</p>
+        {user.role === "STUDENT" && !user.profileComplete && (
+          <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
+            Missing {user.missingProfile.map((m) => MISSING_LABEL[m]).join(", ")}
+          </Badge>
+        )}
+      </div>
+      <dl className="grid gap-x-6 gap-y-3 px-4 py-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map((r) => (
+          <div key={r.label} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{r.label}</dt>
+            <dd className="mt-0.5 font-medium">{r.value ?? <span className="text-warning">Not given yet</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [user, setUser] = useState<UserDetail | null>(null);
@@ -309,6 +389,9 @@ export default function UserDetailPage() {
           </Card>
         </div>
       </div>
+
+      <SignInPause userId={user.id} />
+      <ProfileCard user={user} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <CoinAdjust user={user} onDone={() => void load()} />

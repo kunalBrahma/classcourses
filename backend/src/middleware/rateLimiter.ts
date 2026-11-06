@@ -1,21 +1,27 @@
 import { timingSafeEqual } from "crypto";
-import { Request } from "express";
-import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
+import { NextFunction, Request, RequestHandler, Response } from "express";
+import rateLimit, { ipKeyGenerator, MemoryStore } from "express-rate-limit";
 import { AuthRequest } from "./auth.middleware";
 import { env } from "../config/env";
+import { RequestLimitName } from "../config/limits";
+import { requireSetting, securityDefaults, SecuritySettings } from "../services/settings.service";
 
-// All limits are in memory, per API process (one instance is assumed; see
+// Request limits, in memory per API process (one instance is assumed; see
 // CLAUDE.md "Production"). Keys are the client IP (needs TRUST_PROXY right),
 // the signed-in user, or the email an auth request is about.
 //
+// Every number comes from the `security` setting (Admin → Settings →
+// Security; defaults in src/config/limits.ts), read on each request, so a
+// change applies at once. Changing a window starts that limit's count afresh.
+//
 // Many students share one IP (mobile carrier NAT, school Wi-Fi), so IP limits
 // are generous and the tight ones follow the account (email) instead.
+// Failed sign-ins are NOT counted here: services/loginThrottle.service.ts
+// keeps them in the database.
 
 // Off in tests so the suite can sign in many users; tests/rateLimit.test.ts
 // turns them on and starts each case from empty counters.
 export const rateLimitSwitch = { enabled: env.NODE_ENV !== "test" };
-const stores: MemoryStore[] = [];
-export const resetRateLimits = () => stores.forEach((s) => s.resetAll());
 
 const ipKey = (req: Request) => ipKeyGenerator(req.ip ?? "");
 const userOrIpKey = (req: Request) => (req as AuthRequest).user?.userId ?? ipKey(req);
@@ -26,124 +32,117 @@ const emailKey = (prefix: string) => (req: Request) => {
   return email ? `${prefix}:${email}` : `${prefix}:ip:${ipKey(req)}`;
 };
 
-const limiter = (opts: Partial<Options> & { windowMs: number; limit: number; error: string }) => {
-  const store = new MemoryStore();
-  stores.push(store);
-  const { error, ...rest } = opts;
-  return rateLimit({
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: ipKey,
-    message: { error },
-    store,
-    skip: () => !rateLimitSwitch.enabled,
-    ...rest,
-  });
+const minutes = (n: number) => (n === 1 ? "a minute" : n < 60 ? `${n} minutes` : n % 60 === 0 ? `${n / 60} hour${n === 60 ? "" : "s"}` : `${n} minutes`);
+
+interface Instance {
+  windowMs: number;
+  store: MemoryStore;
+  handler: RequestHandler;
+}
+const instances = new Map<string, Instance>();
+export const resetRateLimits = () => instances.forEach((i) => i.store.resetAll());
+
+const readSecurity = async (): Promise<SecuritySettings> => {
+  try {
+    return await requireSetting("security");
+  } catch {
+    return securityDefaults();
+  }
+};
+
+/**
+ * A limit named in src/config/limits.ts. Its count and window are read from
+ * the `security` setting each time; `error` gets the window in plain words.
+ */
+const limiter = (
+  name: RequestLimitName,
+  opts: { error: (window: string) => string; keyGenerator?: (req: Request) => string; skip?: (req: Request) => boolean }
+): RequestHandler => {
+  const id = `${name}:${opts.keyGenerator ? "custom" : "ip"}`;
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!rateLimitSwitch.enabled || opts.skip?.(req)) return next();
+    const security = await readSecurity();
+    const limit = security[`${name}Limit`];
+    const windowMinutes = security[`${name}WindowMinutes`];
+    const windowMs = windowMinutes * 60_000;
+
+    let instance = instances.get(id);
+    if (!instance || instance.windowMs !== windowMs) {
+      const store = new MemoryStore();
+      instance = {
+        windowMs,
+        store,
+        handler: rateLimit({
+          windowMs,
+          // The current setting, passed per request (see below)
+          limit: (_req, r) => r.locals.rateLimitMax as number,
+          standardHeaders: true,
+          legacyHeaders: false,
+          keyGenerator: opts.keyGenerator ?? ipKey,
+          message: (_req: Request, r: Response) => ({ error: r.locals.rateLimitError as string }),
+          store,
+          // Made on the first request (the window comes from a setting)
+          validate: { creationStack: false },
+        }),
+      };
+      instances.set(id, instance);
+    }
+    res.locals.rateLimitMax = limit;
+    res.locals.rateLimitError = opts.error(minutes(windowMinutes));
+    return instance.handler(req, res, next);
+  };
 };
 
 // ---------------------------------------------------------------------------
-// Sign-in, sign-up and passwords
+// Sign-up, sign-in codes and passwords
 // ---------------------------------------------------------------------------
 
-// Login, per IP: only FAILED attempts count, so a class signing in correctly
-// from one school network never trips it.
-export const loginIpLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  skipSuccessfulRequests: true,
-  error: "Too many failed sign-ins from this network. Please wait 15 minutes and try again.",
-});
-
-// Login, per account: stops password guessing on one account even from many
-// IPs. Only failed attempts count.
-export const loginAccountLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 5,
-  skipSuccessfulRequests: true,
-  keyGenerator: emailKey("login"),
-  error: "Too many wrong passwords for this account. Wait 15 minutes, or use “Forgot password?”.",
-});
-
 // New accounts, per IP: room for a classroom signing up together.
-export const signupLimiter = limiter({
-  windowMs: 60 * 60 * 1000,
-  limit: 15,
-  error: "Too many new accounts from this network. Please try again in an hour.",
-});
+export const signupLimiter = limiter("signup", { error: (w) => `Too many new accounts from this network. Please try again in ${w}.` });
+
+// Google sign-in, per IP (bad or replayed tokens; the token itself is checked by Google's keys).
+export const googleLimiter = limiter("googleSignIn", { error: (w) => `Too many Google sign-ins from this network. Please wait ${w} and try again.` });
 
 // Forgot password, per IP and per email (stops filling someone's inbox).
-export const forgotIpLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  error: "Too many password reset requests. Please wait 15 minutes and try again.",
-});
-export const forgotAccountLimiter = limiter({
-  windowMs: 60 * 60 * 1000,
-  limit: 3,
+export const forgotIpLimiter = limiter("forgotPassword", { error: (w) => `Too many password reset requests. Please wait ${w} and try again.` });
+export const forgotAccountLimiter = limiter("forgotPasswordEmail", {
   keyGenerator: emailKey("forgot"),
-  error: "We've already sent reset emails to this address. Check your inbox (and spam), or try again in an hour.",
+  error: (w) => `We've already sent several codes to this address. Check your inbox (and spam), or try again in ${w}.`,
 });
 
-// Choosing a new password with a reset link (the token itself is unguessable).
-export const resetPasswordLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  error: "Too many attempts, please try again later",
-});
+// Entering the emailed reset code (wrong guesses are also capped per code).
+export const resetPasswordLimiter = limiter("resetPassword", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
 
-// Email code entry / resend: separate from the login limits so typing a wrong
-// code a few times doesn't also lock the student out of logging in. Wrong
-// guesses are capped per code too (emailVerification.service.ts).
-export const otpLimiter = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  error: "Too many attempts, please try again later",
-});
+// Sign-up email code entry / resend: separate from sign-in, so typing a wrong
+// code a few times doesn't also lock the student out of logging in.
+export const otpLimiter = limiter("emailCode", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
+
+// "Email me an unlock code" and entering it.
+export const unlockLimiter = limiter("unlockCode", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
 
 // ---------------------------------------------------------------------------
 // Other public / student endpoints
 // ---------------------------------------------------------------------------
 
-// Contact form: a person sends a message or two; this stops floods.
-export const contactLimiter = limiter({
-  windowMs: 60 * 60 * 1000,
-  limit: 5,
-  error: "You've sent several messages already. Please wait an hour, or email us directly.",
-});
+// Helpline: a person sends a message or two; this stops floods.
+export const contactLimiter = limiter("contact", { error: (w) => `You've sent several messages already. Please wait ${w}, or email us directly.` });
 
 // Quiz endpoints: generous for real use (a 10-question quiz is ~25 calls),
-// tight enough to stop scripted hammering. Keyed per user, not per IP, so a
-// class of students on one school Wi-Fi don't throttle each other.
-export const quizLimiter = limiter({
-  windowMs: 60 * 1000,
-  limit: 90,
-  keyGenerator: userOrIpKey,
-  error: "Too many requests, slow down a little",
-});
+// tight enough to stop scripted hammering. Per user, not per IP, so a class
+// on one school Wi-Fi don't throttle each other.
+export const quizLimiter = limiter("quiz", { keyGenerator: userOrIpKey, error: () => "Too many requests, slow down a little" });
 
 // Checkout: a real purchase is ~3 calls; this stops scripted order spam.
-export const paymentLimiter = limiter({
-  windowMs: 60 * 1000,
-  limit: 30,
-  keyGenerator: userOrIpKey,
-  error: "Too many requests, slow down a little",
-});
+export const paymentLimiter = limiter("payments", { keyGenerator: userOrIpKey, error: () => "Too many requests, slow down a little" });
 
 // Public search runs a few LIKE queries per call; this caps scripted scraping
 // while leaving room for search-as-you-type.
-export const searchLimiter = limiter({
-  windowMs: 60 * 1000,
-  limit: 60,
-  error: "Too many searches, slow down a little",
-});
+export const searchLimiter = limiter("search", { error: () => "Too many searches, slow down a little" });
 
 // Practice "check my answer" reveals an MCQ's answer, and quizzes reuse those
 // MCQs: cap it so answers can't be scraped or looked up quickly mid-quiz.
-// 40/min is plenty for a student working through a chapter by hand.
-export const checkAnswerLimiter = limiter({
-  windowMs: 60 * 1000,
-  limit: 40,
-  error: "You're checking answers very fast. Take a breath and try again in a minute.",
+export const checkAnswerLimiter = limiter("checkAnswer", {
+  error: (w) => `You're checking answers very fast. Take a breath and try again in ${w}.`,
 });
 
 // Backstop for the whole API (scraping, runaway clients), per IP. Generous:
@@ -158,9 +157,7 @@ export const isInternalCaller = (req: Request) => {
   return buf.length === internalKey.length && timingSafeEqual(buf, internalKey);
 };
 
-export const apiLimiter = limiter({
-  windowMs: 60 * 1000,
-  limit: 600,
-  error: "Too many requests. Please slow down and try again in a minute.",
-  skip: (req) => !rateLimitSwitch.enabled || isInternalCaller(req),
+export const apiLimiter = limiter("api", {
+  error: (w) => `Too many requests. Please slow down and try again in ${w}.`,
+  skip: isInternalCaller,
 });

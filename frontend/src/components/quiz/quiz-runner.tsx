@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, ClockIcon, Loader2Icon, PauseIcon, PlayIcon, RotateCwIcon, TimerIcon, TrophyIcon, XIcon } from "lucide-react";
 import { Coin3D } from "@/components/kit/coin";
-import { announceCoinsChanged } from "@/components/site/account-menu";
+import { announceCoinsChanged, useRequireSignIn } from "@/components/site/account-menu";
 import { ApiError, apiJson } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { AnswerResult, Attempt, attemptLabel, chapterHrefOf, isFinished, OpenQuestion, pauseOnLeave, quizHref, ReviewItem, startQuiz } from "@/lib/quiz";
@@ -26,7 +26,6 @@ const liveOf = (a: Attempt): Live | null => (a.question ? { question: a.question
 export function QuizRunner({ coinRule }: { coinRule: CoinRule }) {
   const { attemptId } = useParams<{ attemptId: string }>();
   const router = useRouter();
-  const pathname = usePathname();
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [live, setLive] = useState<Live | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -54,14 +53,13 @@ export function QuizRunner({ coinRule }: { coinRule: CoinRule }) {
       .catch((err: ApiError) => setError(err));
   }, [attemptId, apply]);
 
+  // Guests, and a sign-out mid-quiz (header menu, another tab), go to sign in.
+  const signedIn = useRequireSignIn();
   useEffect(() => {
     // Read the token directly: the signed-in hook is still "false" on the first render.
-    if (!getAccessToken()) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-      return;
-    }
+    if (!getAccessToken()) return; // useRequireSignIn() redirects
     load();
-  }, [load, pathname, router]);
+  }, [load, signedIn]);
 
   // Leaving (tab switch, closing, navigating away) pauses the quiz. With a
   // question on screen, the server counts that question as wrong.

@@ -32,7 +32,7 @@ describe("seeded drafts", () => {
   it("the drafts survive the sanitiser intact (links, lists, headings)", async () => {
     const refund = await prisma.page.findUniqueOrThrow({ where: { slug: "refund-policy" } });
     expect(refund.bodyHtml).toContain('<a href="mailto:{{contact.email}}"');
-    expect(refund.bodyHtml).toContain("<h3>Refunds</h3>");
+    expect(refund.bodyHtml).toContain("<h3>2. When a refund or correction may be provided</h3>");
     const terms = await prisma.page.findUniqueOrThrow({ where: { slug: "terms" } });
     expect(terms.bodyHtml).toContain('<a href="/refund-policy"');
   });
@@ -54,7 +54,27 @@ describe("publishing & live tokens", () => {
     expect(res.body.page.bodyHtml).not.toContain("{{");
 
     const terms = await api().get("/api/content/pages/terms");
-    expect(terms.body.page.bodyHtml).toContain("A quiz has 10 questions with 10 seconds for each");
+    // Operator and Grievance Officer come from the `operator` setting
+    expect(terms.body.page.bodyHtml).toContain("Operated by Class Course, managed by Mr. Ajaharul Ahmed, Founder");
+    expect(terms.body.page.bodyHtml).toContain("The Grievance Officer is Mr. Ajaharul Ahmed, Founder, Class Course");
+    expect(terms.body.page.bodyHtml).toContain("acknowledge complaints within 48 hours and resolve ordinary complaints within 7 days");
+    expect(terms.body.page.bodyHtml).not.toContain("{{");
+    expect(terms.body.page.bodyHtml).not.toMatch(/\bCEO\b/);
+  });
+
+  it("operator details follow the admin's settings", async () => {
+    const saved = await put("/api/admin/settings/operator", { address: "New Road, Nagaon, Assam", replyWithinHours: 24 });
+    expect(saved.status).toBe(200);
+    const privacy = await api().get("/api/content/pages/privacy");
+    expect(privacy.body.page.bodyHtml).toContain("<strong>Address:</strong> New Road, Nagaon, Assam");
+    expect((await api().get("/api/content/pages/terms")).body.page.bodyHtml).toContain("within 24 hours");
+    // Public (no secrets), so the footer can show it
+    expect((await api().get("/api/settings/public")).body.settings.operator).toMatchObject({
+      address: "New Road, Nagaon, Assam",
+      grievanceEmail: "mrajaharulahmed.business@gmail.com",
+    });
+    expect((await put("/api/admin/settings/operator", { grievanceEmail: "not-an-email" })).status).toBe(400);
+    await api().delete("/api/admin/settings/operator").set("Authorization", admin);
   });
 
   it("the FAQ follows the admin's quiz and coin settings", async () => {
@@ -133,8 +153,28 @@ describe("editing", () => {
     expect((await put("/api/admin/faq/reorder", { ids: ids.slice(1, 3) })).status).toBe(400);
   });
 
+  it("standard text: the client's own policies, loaded into the editor without saving", async () => {
+    const res = await api().get("/api/admin/pages/refund-policy/standard").set("Authorization", admin);
+    expect(res.status).toBe(200);
+    expect(res.body.standard.title).toBe("Refund Policy");
+    expect(res.body.standard.bodyHtml).toContain("{{operator.grievanceName}}");
+    expect(res.body.standard.preview).toContain("Mr. Ajaharul Ahmed");
+    expect(res.body.standard.preview).toContain("Cashfree Payments");
+
+    const before = await prisma.page.findUniqueOrThrow({ where: { slug: "terms" } });
+    const terms = await api().get("/api/admin/pages/terms/standard").set("Authorization", admin);
+    expect(terms.body.standard.title).toBe("Terms and Conditions");
+    expect(await prisma.page.findUniqueOrThrow({ where: { slug: "terms" } })).toEqual(before);
+
+    // Saving it makes the page "match" the standard text
+    await put("/api/admin/pages/terms", { title: terms.body.standard.title, bodyHtml: terms.body.standard.bodyHtml });
+    expect((await api().get("/api/admin/pages/terms/standard").set("Authorization", admin)).body.matchesCurrent).toBe(true);
+    expect((await api().get("/api/admin/pages/nope/standard").set("Authorization", admin)).status).toBe(404);
+  });
+
   it("is admin-only", async () => {
     const student = await createUserAndLogin("STUDENT");
+    expect((await api().get("/api/admin/pages/terms/standard").set("Authorization", student.auth)).status).toBe(403);
     expect((await api().put("/api/admin/pages/about").set("Authorization", student.auth).send({ title: "x" })).status).toBe(403);
     expect((await api().post("/api/admin/faq").set("Authorization", student.auth).send({})).status).toBe(403);
   });

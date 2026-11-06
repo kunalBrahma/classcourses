@@ -44,6 +44,18 @@ export interface PublicSettings {
   social: SocialLinks;
   quiz: { questionsPerQuiz: number; secondsPerQuestion: number; passMark: number; dailyLimit: number };
   coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number; awardRule?: "firstPassPerChapter" | "firstPassPerChapterPerDay" | "everyPass" };
+  // Who runs the site and the Grievance Officer (footer, About, Helpline)
+  operator: OperatorDetails;
+}
+
+export interface OperatorDetails {
+  operatorLine: string;
+  address: string;
+  grievanceName: string;
+  grievanceDesignation: string;
+  grievanceEmail: string;
+  replyWithinHours: number;
+  resolveWithinDays: number;
 }
 
 const FALLBACK_SETTINGS: PublicSettings = {
@@ -52,6 +64,15 @@ const FALLBACK_SETTINGS: PublicSettings = {
   social: { youtube: null, facebook: null, instagram: null, twitter: null, linkedin: null },
   quiz: { questionsPerQuiz: 10, secondsPerQuestion: 10, passMark: 7, dailyLimit: 10 },
   coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50, awardRule: "firstPassPerChapter" },
+  operator: {
+    operatorLine: "Class Course, managed by Mr. Ajaharul Ahmed, Founder",
+    address: "Rangaloo, Nagaon, Assam, 782427",
+    grievanceName: "Mr. Ajaharul Ahmed",
+    grievanceDesignation: "Founder, Class Course",
+    grievanceEmail: "mrajaharulahmed.business@gmail.com",
+    replyWithinHours: 48,
+    resolveWithinDays: 7,
+  },
 };
 
 export async function getSiteSettings(): Promise<PublicSettings> {
@@ -60,7 +81,8 @@ export async function getSiteSettings(): Promise<PublicSettings> {
   try {
     const { settings } = await getJson<{ settings: PublicSettings }>("/api/settings/public");
     cacheLife("minutes");
-    return settings;
+    // An older API (before a group existed) still renders with the defaults.
+    return { ...FALLBACK_SETTINGS, ...settings };
   } catch {
     cacheLife("seconds");
     return FALLBACK_SETTINGS;
@@ -341,9 +363,12 @@ export interface VideoPage {
   page: number;
   totalPages: number;
   classes: { name: string; slug: string }[];
+  // Once a medium and class are chosen: that class's subjects with videos
+  // (missing from an older API)
+  subjects?: { name: string; nativeName: string | null; slug: string }[];
 }
 
-export const EMPTY_VIDEO_PAGE: VideoPage = { videos: [], total: 0, page: 1, totalPages: 1, classes: [] };
+export const EMPTY_VIDEO_PAGE: VideoPage = { videos: [], total: 0, page: 1, totalPages: 1, classes: [], subjects: [] };
 
 // First page of /videos (all mediums and classes); the page filters further in the browser.
 export async function getVideoPage(format: "LANDSCAPE" | "SHORT"): Promise<VideoPage> {

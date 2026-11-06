@@ -6,31 +6,45 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { applyCoinChange } from "../services/coin.service";
+import { profileStatus } from "../services/profile.service";
+
+// Shapes a user row for the admin: date of birth as "YYYY-MM-DD", age, under 18,
+// and whether the profile (class, district, date of birth) is complete.
+const withProfile = <T extends { classLevelId: string | null; districtId: string | null; dateOfBirth: Date | null }>(u: T) => {
+  const { dateOfBirth: _dob, ...rest } = u;
+  return { ...rest, ...profileStatus(u) };
+};
 
 // Admin: students & admins, their coins and quiz activity.
 
 const listQuery = z.object({
   search: z.string().trim().max(100).optional(),
   role: z.enum(["STUDENT", "ADMIN"]).optional(),
+  classLevelId: z.string().uuid().optional(),
+  districtId: z.string().uuid().optional(),
+  // incomplete = class, district or date of birth missing
+  profile: z.enum(["complete", "incomplete"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 
 export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) => {
-  const { search, role, page, pageSize } = listQuery.parse(req.query);
-  const where: Prisma.UserWhereInput = {
-    role,
-    ...(search
-      ? {
-          OR: [
-            { email: { contains: search, mode: "insensitive" } },
-            { name: { contains: search, mode: "insensitive" } },
-            // Phone: match on digits only, once there are enough to mean something.
-            ...(/^[\d\s+-]{3,}$/.test(search) ? [{ phone: { contains: search.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "") } }] : []),
-          ],
-        }
-      : {}),
-  };
+  const { search, role, classLevelId, districtId, profile, page, pageSize } = listQuery.parse(req.query);
+  // Every filter is one condition in AND, so none can overwrite another.
+  const and: Prisma.UserWhereInput[] = [];
+  if (profile === "complete") and.push({ classLevelId: { not: null }, districtId: { not: null }, dateOfBirth: { not: null } });
+  if (profile === "incomplete") and.push({ OR: [{ classLevelId: null }, { districtId: null }, { dateOfBirth: null }] });
+  if (search) {
+    and.push({
+      OR: [
+        { email: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+        // Phone: match on digits only, once there are enough to mean something.
+        ...(/^[\d\s+-]{3,}$/.test(search) ? [{ phone: { contains: search.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "") } }] : []),
+      ],
+    });
+  }
+  const where: Prisma.UserWhereInput = { role, classLevelId, districtId, AND: and };
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
@@ -45,7 +59,11 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
         emailVerified: true,
         role: true,
         coins: true,
+        classLevelId: true,
         classLevel: { select: { id: true, name: true, slug: true } },
+        districtId: true,
+        district: { select: { id: true, name: true } },
+        dateOfBirth: true,
         medium: { select: { name: true } },
         createdAt: true,
         _count: { select: { quizAttempts: true } },
@@ -54,7 +72,7 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
     prisma.user.count({ where }),
   ]);
   res.json({
-    users: users.map(({ _count, ...u }) => ({ ...u, quizAttempts: _count.quizAttempts })),
+    users: users.map(({ _count, ...u }) => ({ ...withProfile(u), quizAttempts: _count.quizAttempts })),
     total,
     page,
     pageSize,
@@ -73,7 +91,12 @@ export const getUserAdmin = asyncHandler(async (req: Request, res: Response) => 
       emailVerified: true,
       role: true,
       coins: true,
+      googleId: true,
+      classLevelId: true,
       classLevel: { select: { id: true, name: true, slug: true } },
+      districtId: true,
+      district: { select: { id: true, name: true } },
+      dateOfBirth: true,
       medium: { select: { id: true, name: true } },
       createdAt: true,
       coinTxns: { orderBy: { createdAt: "desc" }, take: 50 },
@@ -97,7 +120,9 @@ export const getUserAdmin = asyncHandler(async (req: Request, res: Response) => 
     },
   });
   if (!user) throw new AppError(404, "User not found");
-  res.json({ user });
+  // Google's id stays on the server; the admin only sees that Google is linked.
+  const { googleId, ...rest } = user;
+  res.json({ user: { ...withProfile(rest), signsInWithGoogle: Boolean(googleId) } });
 });
 
 export const updateUserAdmin = asyncHandler(async (req: AuthRequest, res: Response) => {

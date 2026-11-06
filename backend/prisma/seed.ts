@@ -11,6 +11,7 @@ import { FAQ, PAGES } from "./seed-data/pages";
 import { sanitizeRichText } from "../src/utils/sanitizeHtml";
 import { hashPassword } from "../src/utils/password";
 import { env } from "../src/config/env";
+import { ensureDefaultDistricts } from "../src/services/profile.service";
 
 type Db = typeof prisma;
 
@@ -156,6 +157,7 @@ if (require.main === module) {
     .then(async (stats) => {
       console.log("[seed] catalog:", stats);
       console.log("[seed] pages:", await seedPages());
+      console.log("[seed] districts:", await ensureDefaultDistricts());
       console.log("[seed]", await seedAdmin());
     })
     .catch((err) => {

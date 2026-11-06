@@ -38,6 +38,8 @@ interface ListResponse {
   page: number;
   totalPages: number;
   counts: Partial<Record<Status, number>>;
+  // The Helpline's current topics (older messages may carry earlier ones)
+  topics: string[];
 }
 
 const STATUS: Record<Status, { label: string; className: string }> = {
@@ -140,6 +142,7 @@ export default function MessagesPage() {
   const [tab, setTab] = useState<"inbox" | Status>("inbox");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [topic, setTopic] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,13 +152,14 @@ export default function MessagesPage() {
     const q = new URLSearchParams({ page: String(page), pageSize: "20" });
     if (tab !== "inbox") q.set("status", tab);
     if (query) q.set("search", query);
+    if (topic) q.set("topic", topic);
     return apiJson<ListResponse>(`/api/admin/messages?${q}`)
       .then((d) => {
         setData(d);
         setError(null);
       })
       .catch((err: ApiError) => setError(err.message));
-  }, [tab, query, page]);
+  }, [tab, query, topic, page]);
 
   useEffect(() => {
     void load();
@@ -197,7 +201,7 @@ export default function MessagesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Messages" description="Sent from the Contact page on the website. Each one is also emailed to your contact address; replies go straight to the student." />
+      <PageHeader title="Messages" description="Helpline messages from the website (Refund, Bug or Error, Other Help, data requests). Each one is also emailed to your support address; replies go straight to the student." />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs
@@ -229,6 +233,27 @@ export default function MessagesPage() {
         </form>
       </div>
 
+      {data && data.topics.length > 0 && (
+        <div role="group" aria-label="Filter by topic" className="flex flex-wrap gap-2">
+          {[null, ...data.topics].map((t) => (
+            <Button
+              key={t ?? "all"}
+              type="button"
+              size="sm"
+              variant={topic === t ? "default" : "outline"}
+              aria-pressed={topic === t}
+              className="h-10 rounded-full px-4"
+              onClick={() => {
+                setTopic(t);
+                setPage(1);
+              }}
+            >
+              {t ?? "All topics"}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -241,7 +266,7 @@ export default function MessagesPage() {
           {data.messages.length === 0 ? (
             <div className="grid place-items-center gap-2 px-6 py-14 text-center">
               <InboxIcon className="size-8 text-muted-foreground" />
-              <p className="font-heading font-bold">{query ? "No messages match" : tab === "inbox" ? "No messages yet" : "Nothing here"}</p>
+              <p className="font-heading font-bold">{query || topic ? "No messages match" : tab === "inbox" ? "No messages yet" : "Nothing here"}</p>
               <p className="max-w-sm text-sm text-muted-foreground">Messages students send from the website&apos;s Contact page appear here.</p>
             </div>
           ) : (

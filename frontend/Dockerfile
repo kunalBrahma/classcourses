@@ -14,6 +14,7 @@ COPY . .
 # NEXT_PUBLIC_* are inlined into the browser bundle, so they are build args.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 # Where `next build` reads the catalog while prerendering. The build runs in CI,
 # outside the VPS, so this is the public API; at runtime compose sets the
 # private address (http://backend:3000). The API must be up: with it down the
@@ -22,6 +23,7 @@ ARG NEXT_PUBLIC_SITE_URL
 ARG API_INTERNAL_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
     API_INTERNAL_URL=$API_INTERNAL_URL \
     NEXT_TELEMETRY_DISABLED=1
 # The build's ~400 catalog reads would trip the API's per-IP limit, so they send

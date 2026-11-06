@@ -64,7 +64,7 @@ describe("public settings", () => {
   it("exposes only non-secret groups, without auth", async () => {
     const res = await api().get("/api/settings/public");
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body.settings).sort()).toEqual(["coins", "contact", "quiz", "site", "social"]);
+    expect(Object.keys(res.body.settings).sort()).toEqual(["coins", "contact", "operator", "quiz", "site", "social"]);
     const raw = JSON.stringify(res.body);
     expect(raw).not.toMatch(/secret|password|accessKey/i);
     if (process.env.R2_SECRET_ACCESS_KEY) expect(raw).not.toContain(process.env.R2_SECRET_ACCESS_KEY);

@@ -56,6 +56,7 @@ import {
   deleteFaq,
   deleteNews,
   getPageAdmin,
+  getStandardPageAdmin,
   listBannersAdmin,
   listFaqAdmin,
   listNewsAdmin,
@@ -81,6 +82,7 @@ import {
   updatePageSchema,
 } from "../validations/pages.validation";
 import adminCatalogRoutes from "./adminCatalog.routes";
+import { clearUserSignInLock, getUserSignInStatus, listAdminLogins, securityLimitsMeta } from "../controllers/adminSecurity.controller";
 import adminContentRoutes from "./adminContent.routes";
 import { getQuizAttempt, getQuizStatsHandler, listQuizAttempts } from "../controllers/adminQuiz.controller";
 import { adjustUserCoins, getUserAdmin, listUsersAdmin, updateUserAdmin } from "../controllers/adminUsers.controller";
@@ -172,6 +174,12 @@ router.get("/users", listUsersAdmin);
 router.get("/users/:id", getUserAdmin);
 router.patch("/users/:id", validateBody(updateUserAdminSchema), updateUserAdmin);
 router.post("/users/:id/coins", validateBody(adjustCoinsSchema), adjustUserCoins);
+router.get("/users/:id/sign-in", getUserSignInStatus);
+router.post("/users/:id/sign-in/clear", clearUserSignInLock);
+
+// Security: every sign-in attempt on an admin account
+router.get("/security/admin-logins", listAdminLogins);
+router.get("/security/limits", securityLimitsMeta);
 
 // Premium notes (PDFs in the private bucket)
 router.get("/notes", listNotesAdmin);
@@ -190,6 +198,7 @@ router.post("/orders/:id/reconcile", reconcileOrderAdmin);
 // Static pages & FAQ
 router.get("/pages", listPagesAdmin);
 router.get("/pages/:slug", getPageAdmin);
+router.get("/pages/:slug/standard", getStandardPageAdmin);
 router.put("/pages/:slug", validateBody(updatePageSchema), updatePage);
 // Contact-form messages
 router.get("/messages", listContactMessages);

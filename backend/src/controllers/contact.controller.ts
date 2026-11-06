@@ -5,6 +5,7 @@ import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { asyncHandler } from "../utils/asyncHandler";
 import { sendContactNotificationEmail } from "../utils/mailer";
+import { ALL_CONTACT_TOPICS, CONTACT_TOPICS } from "../validations/pages.validation";
 
 type ContactBody = { name: string; email: string; phone: string | null; topic: string; message: string; website?: string };
 
@@ -46,15 +47,17 @@ export const submitContact = asyncHandler(async (req: AuthRequest, res: Response
 const listQuery = z.object({
   status: z.nativeEnum(ContactStatus).optional(),
   search: z.string().trim().max(100).optional(),
+  topic: z.enum(ALL_CONTACT_TOPICS).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export const listContactMessages = asyncHandler(async (req: Request, res: Response) => {
-  const { status, search, page, pageSize } = listQuery.parse(req.query);
+  const { status, search, topic, page, pageSize } = listQuery.parse(req.query);
   // "Inbox" (no status) hides archived messages.
   const where: Prisma.ContactMessageWhereInput = {
     ...(status ? { status } : { status: { not: "ARCHIVED" } }),
+    ...(topic ? { topic } : {}),
     ...(search
       ? {
           OR: [
@@ -83,6 +86,8 @@ export const listContactMessages = asyncHandler(async (req: Request, res: Respon
     pageSize,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
     counts: Object.fromEntries(counts.map((c) => [c.status, c._count])),
+    // The Helpline's current topics (old messages may carry earlier ones)
+    topics: CONTACT_TOPICS,
   });
 });
 

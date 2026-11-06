@@ -5,9 +5,9 @@ import type { PageLink } from "@/lib/server-api";
 export const STATIC_LINKS: { slug: string; title: string }[] = [
   { slug: "about", title: "About Us" },
   { slug: "privacy", title: "Privacy Policy" },
-  { slug: "terms", title: "Terms & Conditions" },
+  { slug: "terms", title: "Terms and Conditions" },
   { slug: "refund-policy", title: "Refund Policy" },
-  { slug: "contact", title: "Contact Us" },
+  { slug: "contact", title: "Helpline" },
 ];
 
 // Published titles win (the owner may rename a page).

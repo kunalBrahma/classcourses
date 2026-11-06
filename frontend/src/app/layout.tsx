@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, Noto_Sans_Bengali } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
 import { LanguageLoader } from "@/components/site/language-loader";
+import { ProfileGate } from "@/components/auth/profile-gate";
 import { getSiteSettings } from "@/lib/server-api";
 import "./globals.css";
 
@@ -56,6 +58,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </main>
           <SiteFooter />
           <LanguageLoader />
+          {/* Signed-in students with missing details → /welcome */}
+          <Suspense fallback={null}>
+            <ProfileGate />
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>

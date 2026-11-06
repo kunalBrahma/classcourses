@@ -375,6 +375,14 @@ describe("videos", () => {
     expect((await list("?format=LANDSCAPE")).videos.map((v: { title: string }) => v.title)).toEqual(["Older"]);
     expect((await api().get("/api/catalog/videos?format=SQUARE")).status).toBe(400);
 
+    // Subject filter: subjects are per medium + class, so both are needed
+    expect(all.subjects).toEqual([]);
+    const inClass = await list("?medium=english-medium&classSlug=class-9");
+    expect(inClass.subjects).toEqual([{ name: "English", nativeName: null, slug: "english" }].map((x) => expect.objectContaining({ name: x.name, slug: x.slug })));
+    expect((await list("?medium=english-medium&classSlug=class-9&subject=english")).total).toBe(2);
+    expect((await list("?medium=english-medium&classSlug=class-9&subject=maths")).total).toBe(0);
+    expect(all.videos[0].subject).toMatchObject({ name: "English" });
+
     await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: false } });
     expect((await list()).total).toBe(0);
     await prisma.chapter.update({ where: { id: chapterId }, data: { isPublished: true } });

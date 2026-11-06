@@ -86,6 +86,10 @@ export const envSchema = z
     // server-side page render comes from that one IP. Unset = nobody skips.
     INTERNAL_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(32, "INTERNAL_API_KEY must be at least 32 characters").optional()),
 
+    // Google sign-in. The same value as the student site's NEXT_PUBLIC_GOOGLE_CLIENT_ID.
+    // Empty or the example placeholder = Google sign-in is off.
+    GOOGLE_CLIENT_ID: z.preprocess((v) => (v === "" || (typeof v === "string" && v.startsWith("your-")) ? undefined : v), z.string().optional()),
+
     // Public student site — used for links in emails (password reset, receipts)
     FRONTEND_URL: z.string().url().default("http://localhost:3100"),
   })

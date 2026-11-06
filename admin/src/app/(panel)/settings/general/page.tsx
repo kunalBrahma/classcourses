@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
-import { GlobeIcon, Loader2Icon, MailIcon, RotateCcwIcon, Share2Icon, type LucideIcon } from "lucide-react";
+import { GlobeIcon, Loader2Icon, MailIcon, RotateCcwIcon, Share2Icon, ShieldCheckIcon, type LucideIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { actionButton, formCard, inputClass, pressable } from "@/components/admi
 import { ApiError, apiJson } from "@/lib/api";
 import { useConfirm } from "@/components/admin/confirm";
 
-type Values = Record<string, string | null>;
+type Values = Record<string, string | number | null>;
 
 interface SettingRow {
   key: string;
@@ -26,13 +26,15 @@ interface SettingRow {
 interface FieldDef {
   name: string;
   label: string;
-  type?: "text" | "url" | "email";
+  type?: "text" | "url" | "email" | "number";
   placeholder?: string;
   hint?: string;
+  // Takes the whole row in a two-column card
+  wide?: boolean;
 }
 
 interface GroupDef {
-  key: "site" | "contact" | "social";
+  key: "site" | "contact" | "operator" | "social";
   title: string;
   description: string;
   icon: LucideIcon;
@@ -59,9 +61,24 @@ const GROUPS: GroupDef[] = [
   {
     key: "contact",
     title: "Contact",
-    description: "Shown on the Contact page and in the footer. Email only — no phone or address (client's choice).",
+    description: "The support email, shown on the Helpline, in the footer and in the policies. No phone number is ever shown.",
     icon: MailIcon,
-    fields: [{ name: "email", label: "Contact email", type: "email", placeholder: "hello@classcourse.in" }],
+    fields: [{ name: "email", label: "Support email", type: "email", placeholder: "about.classcourse@gmail.com" }],
+  },
+  {
+    key: "operator",
+    title: "Operator & Grievance Officer",
+    description: "Who runs the site, shown in the footer, on the About page and in the Privacy, Terms and Refund pages.",
+    icon: ShieldCheckIcon,
+    fields: [
+      { name: "operatorLine", label: "Operated by", placeholder: "Class Course, managed by Mr. Ajaharul Ahmed, Founder", wide: true },
+      { name: "address", label: "Address", placeholder: "Rangaloo, Nagaon, Assam, 782427", wide: true },
+      { name: "grievanceName", label: "Grievance Officer", placeholder: "Mr. Ajaharul Ahmed" },
+      { name: "grievanceDesignation", label: "Designation", placeholder: "Founder, Class Course", hint: "Shown after the name. Don't use \"CEO\"." },
+      { name: "grievanceEmail", label: "Grievance Officer email", type: "email", wide: true },
+      { name: "replyWithinHours", label: "Reply within (hours)", type: "number", hint: "Promised on the Helpline and in the policies." },
+      { name: "resolveWithinDays", label: "Resolve within (days)", type: "number" },
+    ],
   },
   {
     key: "social",
@@ -133,12 +150,13 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
         </CardHeader>
         <CardContent className={group.fields.length > 2 ? "grid gap-5 sm:grid-cols-2" : "grid gap-5"}>
           {group.fields.map((f) => (
-            <Field key={f.name} id={`${id}-${f.name}`} label={f.label} hint={f.hint}>
+            <Field key={f.name} id={`${id}-${f.name}`} label={f.label} hint={f.hint} className={f.wide ? "sm:col-span-2" : undefined}>
               <Input
                 id={`${id}-${f.name}`}
                 className={inputClass}
                 type={f.type ?? "text"}
-                inputMode={f.type === "url" ? "url" : f.type === "email" ? "email" : undefined}
+                inputMode={f.type === "url" ? "url" : f.type === "email" ? "email" : f.type === "number" ? "numeric" : undefined}
+                min={f.type === "number" ? 1 : undefined}
                 autoCapitalize={f.type ? "none" : undefined}
                 spellCheck={f.type ? false : undefined}
                 value={values[f.name] ?? ""}
@@ -183,7 +201,7 @@ export default function GeneralSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="General" description="Site details, contact email and social links used across the student site and emails." />
+      <PageHeader title="General" description="Site details, support email, operator and Grievance Officer, and social links used across the student site and emails." />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Couldn&apos;t load settings</AlertTitle>

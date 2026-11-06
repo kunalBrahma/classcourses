@@ -341,11 +341,14 @@ export const featuredVideos = asyncHandler(async (_req: Request, res: Response) 
 });
 
 // The /videos page: every video on a public chapter, newest first, optionally
-// for one medium, class and shape (Shorts / long videos). Also returns the
-// classes that have videos, for the class filter.
+// for one medium, class, subject and shape (Shorts / long videos). Also returns
+// the classes that have videos (class filter) and, once a medium and class are
+// chosen, that class's subjects with videos (subject filter: subjects are per
+// medium and class, so the subject filter needs both).
 const videoListQuery = z.object({
   medium: z.string().trim().max(80).optional(),
   classSlug: z.string().trim().max(80).optional(),
+  subject: z.string().trim().max(120).optional(),
   format: z.enum(["LANDSCAPE", "SHORT"]).optional(),
   page: z.coerce.number().int().min(1).max(500).default(1),
 });
@@ -354,17 +357,15 @@ const VIDEOS_PER_PAGE = 24;
 export const listVideos = asyncHandler(async (req: Request, res: Response) => {
   const q = videoListQuery.parse(req.query);
   const mediumWhere: Prisma.ChapterWhereInput = q.medium ? { subject: { medium: { slug: q.medium } } } : {};
+  const classWhere: Prisma.ChapterWhereInput = q.classSlug ? { subject: { classLevel: { slug: classSlugFrom(q.classSlug) } } } : {};
+  const bySubject = Boolean(q.medium && q.classSlug && q.subject);
   const where: Prisma.VideoWhereInput = {
     format: q.format,
     chapter: {
-      AND: [
-        publicChapterWhere,
-        mediumWhere,
-        q.classSlug ? { subject: { classLevel: { slug: classSlugFrom(q.classSlug) } } } : {},
-      ],
+      AND: [publicChapterWhere, mediumWhere, classWhere, bySubject ? { subject: { slug: q.subject } } : {}],
     },
   };
-  const [videos, total, classRows] = await Promise.all([
+  const [videos, total, classRows, subjectRows] = await Promise.all([
     prisma.video.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
@@ -378,6 +379,19 @@ export const listVideos = asyncHandler(async (req: Request, res: Response) => {
       orderBy: { order: "asc" },
       select: { name: true, slug: true },
     }),
+    q.medium && q.classSlug
+      ? prisma.subject.findMany({
+          where: {
+            AND: [
+              publicSubjectWhere,
+              { medium: { slug: q.medium }, classLevel: { slug: classSlugFrom(q.classSlug) } },
+              { chapters: { some: { AND: [publicChapterWhere, { videos: { some: {} } }] } } },
+            ],
+          },
+          orderBy: { order: "asc" },
+          select: { name: true, nativeName: true, slug: true },
+        })
+      : Promise.resolve([]),
   ]);
   res.json({
     videos: videos.map(videoView),
@@ -385,6 +399,7 @@ export const listVideos = asyncHandler(async (req: Request, res: Response) => {
     page: q.page,
     totalPages: Math.max(1, Math.ceil(total / VIDEOS_PER_PAGE)),
     classes: classRows,
+    subjects: subjectRows,
   });
 });
 

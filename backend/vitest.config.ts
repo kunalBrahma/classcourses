@@ -23,6 +23,8 @@ export default defineConfig({
       RAZORPAY_KEY_ID: "",
       RAZORPAY_KEY_SECRET: "",
       RAZORPAY_WEBHOOK_SECRET: "",
+      // tests/googleAuth.test.ts sets its own; ignore any real one in .env.
+      GOOGLE_CLIENT_ID: "",
       // tests/rateLimit.test.ts checks the student site's backstop bypass.
       INTERNAL_API_KEY: "test-internal-key-0123456789abcdef0123",
     },

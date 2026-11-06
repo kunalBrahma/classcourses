@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CoinsIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,21 @@ import { apiJson, logout } from "@/lib/api";
 import { Coin3D } from "@/components/kit/coin";
 import { getAccessToken, subscribeAuth } from "@/lib/auth";
 
-interface Me {
+export interface Me {
   id: string;
   email: string;
   name: string | null;
   phone?: string | null;
   coins: number;
   role: "STUDENT" | "ADMIN";
+  // Profile asked at sign-up (6 Nov 2026). Google sign-ups and older accounts
+  // fill it in at /welcome ("complete your profile").
+  classLevel: { id: string; name: string; slug: string } | null;
+  district: { id: string; name: string; nativeName: string | null } | null;
+  dateOfBirth: string | null; // "YYYY-MM-DD"
+  isMinor: boolean | null;
+  profileComplete: boolean;
+  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
 }
 
 export const initials = (name: string | null, email: string) =>
@@ -32,10 +40,45 @@ export function useSignedIn() {
   return useSyncExternalStore(subscribeAuth, () => Boolean(getAccessToken()), () => false);
 }
 
+// For pages that need a signed-in student (profile, quiz). Sends guests to
+// sign in, and does it again the moment the student signs out anywhere: the
+// header menu, a button on the page, or another tab. The token is read
+// directly because useSignedIn() is still false on the first render.
+export function useRequireSignIn() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const signedIn = useSignedIn();
+  useEffect(() => {
+    if (!getAccessToken()) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [signedIn, pathname, router]);
+  return signedIn;
+}
+
 // Fire after anything that changes the balance (a passed quiz, a purchase)
 // so every coin display reloads.
 const COINS_EVENT = "cc-coins";
-export const announceCoinsChanged = () => window.dispatchEvent(new Event(COINS_EVENT));
+
+// Several components read /me on one page (header, menu, profile gate…):
+// calls within a few seconds share one request, unless something changed.
+let shared: { token: string; at: number; promise: Promise<Me> } | null = null;
+const SHARE_MS = 3000;
+const fetchMe = () => {
+  const token = getAccessToken() ?? "";
+  if (shared && shared.token === token && Date.now() - shared.at < SHARE_MS) return shared.promise;
+  const promise = apiJson<{ user: Me }>("/api/auth/me").then(({ user }) => user);
+  shared = { token, at: Date.now(), promise };
+  promise.catch(() => {
+    if (shared?.promise === promise) shared = null;
+  });
+  return promise;
+};
+
+export const announceCoinsChanged = () => {
+  shared = null;
+  window.dispatchEvent(new Event(COINS_EVENT));
+};
+// After the student saves their details: everything re-reads /me.
+export const announceProfileChanged = announceCoinsChanged;
 
 export function useMe() {
   const signedIn = useSignedIn();
@@ -44,8 +87,8 @@ export function useMe() {
     if (!signedIn) return;
     let cancelled = false;
     const load = () =>
-      apiJson<{ user: Me }>("/api/auth/me")
-        .then(({ user }) => !cancelled && setMe(user))
+      fetchMe()
+        .then((user) => !cancelled && setMe(user))
         .catch(() => !cancelled && setMe(null));
     load();
     window.addEventListener(COINS_EVENT, load);

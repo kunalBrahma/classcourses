@@ -6,24 +6,33 @@ import { ScrollRow } from "@/components/kit/scroll-row";
 import { SectionTitle } from "@/components/kit/section-title";
 import { VideoCard } from "@/components/kit/video-card";
 import { publicJson } from "@/lib/api";
+import { chapterName } from "@/lib/catalog";
 import type { FeaturedVideo, Medium, VideoPage } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
 
 type Format = "LANDSCAPE" | "SHORT";
 
-const query = (format: Format, medium: string, classSlug: string, page = 1) => {
+interface Filters {
+  medium: string;
+  classSlug: string;
+  subject: string;
+}
+
+const query = (format: Format, f: Filters, page = 1) => {
   const p = new URLSearchParams({ format, page: String(page) });
-  if (medium) p.set("medium", medium);
-  if (classSlug) p.set("classSlug", classSlug);
+  if (f.medium) p.set("medium", f.medium);
+  if (f.classSlug) p.set("classSlug", f.classSlug);
+  if (f.subject) p.set("subject", f.subject);
   return `/api/catalog/videos?${p}`;
 };
 
+// Every card says which class, subject and chapter it belongs to.
 const cardProps = (v: FeaturedVideo) => ({
   youtubeId: v.youtubeId,
   format: v.format,
   title: v.title,
   tag: `${v.classLevel.name} · ${v.subject.name}`,
-  chapterLabel: `Chapter ${v.chapter.number}`,
+  chapterLabel: chapterName(v.chapter),
   href: v.chapter.href,
 });
 
@@ -58,12 +67,13 @@ function Chips<T extends string>({ label, value, options, onChange }: {
   );
 }
 
-// The /videos page body: filters (medium, class), a sideways row of Shorts and
+// The /videos page body: filters (medium, class, subject), a sideways row of Shorts and
 // a grid of lessons with "Load more". The first page comes from the server;
 // filters and more pages are fetched in the browser.
 export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediums: Medium[]; initialShorts: VideoPage; initialLessons: VideoPage }) {
   const [medium, setMedium] = useState("");
   const [classSlug, setClassSlug] = useState("");
+  const [subject, setSubject] = useState("");
   const [shorts, setShorts] = useState(initialShorts);
   const [lessons, setLessons] = useState(initialLessons);
   const [loading, setLoading] = useState(false);
@@ -72,17 +82,20 @@ export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediu
   // Guards against an older filter's answer arriving after a newer one.
   const latest = useRef(0);
 
-  const applyFilters = async (nextMedium: string, nextClass: string) => {
+  // Subjects belong to one medium and class. With a single medium its chips are
+  // hidden, so that medium is used for the subject filter.
+  const filters = (m: string, c: string, s: string): Filters => ({ medium: m || (mediums.length === 1 ? mediums[0].slug : ""), classSlug: c, subject: c ? s : "" });
+
+  const applyFilters = async (nextMedium: string, nextClass: string, nextSubject = "") => {
     setMedium(nextMedium);
     setClassSlug(nextClass);
+    setSubject(nextClass ? nextSubject : "");
+    const f = filters(nextMedium, nextClass, nextSubject);
     const ticket = ++latest.current;
     setLoading(true);
     setError(null);
     try {
-      const [s, l] = await Promise.all([
-        publicJson<VideoPage>(query("SHORT", nextMedium, nextClass)),
-        publicJson<VideoPage>(query("LANDSCAPE", nextMedium, nextClass)),
-      ]);
+      const [s, l] = await Promise.all([publicJson<VideoPage>(query("SHORT", f)), publicJson<VideoPage>(query("LANDSCAPE", f))]);
       if (ticket !== latest.current) return;
       setShorts(s);
       setLessons(l);
@@ -96,7 +109,7 @@ export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediu
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const next = await publicJson<VideoPage>(query("LANDSCAPE", medium, classSlug, lessons.page + 1));
+      const next = await publicJson<VideoPage>(query("LANDSCAPE", filters(medium, classSlug, subject), lessons.page + 1));
       setLessons((cur) => ({ ...next, videos: [...cur.videos, ...next.videos] }));
     } catch (err) {
       setError((err as Error).message);
@@ -107,7 +120,10 @@ export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediu
 
   // Classes that have videos (for the chosen medium); keep the chosen one listed.
   const classes = lessons.classes.length ? lessons.classes : shorts.classes;
+  // A subject may have only Shorts or only lessons: list both.
+  const subjects = [...(lessons.subjects ?? []), ...(shorts.subjects ?? [])].filter((x, i, all) => all.findIndex((y) => y.slug === x.slug) === i);
   const nothing = shorts.total === 0 && lessons.total === 0;
+  const filtered = Boolean(medium || classSlug || subject);
 
   return (
     <div className="flex flex-col gap-8">
@@ -128,6 +144,14 @@ export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediu
             options={[{ value: "", label: "All classes" }, ...classes.map((c) => ({ value: c.slug, label: c.name }))]}
           />
         )}
+        {classSlug && subjects.length > 0 && (
+          <Chips
+            label="Subject"
+            value={subject}
+            onChange={(v) => void applyFilters(medium, classSlug, v)}
+            options={[{ value: "", label: "All subjects" }, ...subjects.map((x) => ({ value: x.slug, label: x.name, native: x.nativeName }))]}
+          />
+        )}
       </div>
 
       {error && (
@@ -142,9 +166,9 @@ export function VideoBrowser({ mediums, initialShorts, initialLessons }: { mediu
             <span className="grid size-14 place-items-center rounded-full bg-accent text-brand-amber-text">
               <PlayIcon className="ml-0.5 size-6 fill-current" />
             </span>
-            <p className="font-heading text-lg font-bold">{medium || classSlug ? "No videos here yet" : "Videos are on the way"}</p>
+            <p className="font-heading text-lg font-bold">{filtered ? "No videos here yet" : "Videos are on the way"}</p>
             <p className="max-w-sm text-muted-foreground">
-              {medium || classSlug ? "Try another class or medium." : "Chapter video lessons will appear here soon."}
+              {filtered ? "Try another subject, class or medium." : "Chapter video lessons will appear here soon."}
             </p>
           </div>
         ) : (

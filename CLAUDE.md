@@ -196,11 +196,14 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   filled from live settings at read time by `renderTokens()`.
   - Values are escaped in HTML and left raw in plain-text FAQ questions.
   - When a setting that appears in public text is added, add its token there.
-- **Draft copy** lives in `prisma/seed-data/pages.ts`. It is seeded
-  unpublished and never overwrites pages that already exist. The legal text
-  must match how the code actually behaves (coins, 30-minute order
-  cancellation, quiz pause rule, refunds). If you change that behaviour,
-  update the drafts and flag it to the owner.
+- **Standard text** lives in `src/content/pages.ts` (re-exported by
+  `prisma/seed-data/pages.ts` for the seed). Privacy, Terms and Refund are the
+  **client's own text** (requirements of 6 Nov 2026): change only tokens/links,
+  never the wording, without the client. It is seeded unpublished and never
+  overwrites existing pages; the admin loads it with "Load the standard text"
+  (`GET /api/admin/pages/:slug/standard`, saves nothing). If code behaviour
+  stops matching that text (coins, refunds, consent, payments), flag it to the owner.
+- Client update work is tracked in `task-client-update.md` (Phases 7–15).
 
 ### Production (Phase 6, backend ready; see `DEPLOY.md`)
 - **Domain:** `myclasscourse.in` → VPS `91.108.111.237`. Student site
@@ -251,7 +254,10 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - A premium note unlocks **only after server-side Razorpay verification**
   (signature check plus webhook). PDFs are served through short-lived signed
   URLs, never a public link.
-- Never show a phone number, WhatsApp number or address. Contact is email only.
+- Never show a phone number or WhatsApp number. Contact is email only (Helpline form + support email).
+  The operator line, **address** and Grievance Officer ARE shown (client, 6 Nov 2026): footer, About,
+  Helpline and policies, all from the `operator` setting (`{{operator.*}}` tokens). The designation is
+  "Founder, Class Course", never "CEO".
 
 ### UI / content rules
 - Must render **Assamese script** correctly. Font stack is `Noto Sans Bengali`
@@ -283,7 +289,7 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - All runtime configuration lives in the `Setting` table, one row per group,
   and is resolved in this order: **database row → env fallback → defaults**.
   The groups are:
-  - `quiz`, `coins`, `social`, `contact`, `site`
+  - `quiz`, `coins`, `social`, `contact`, `operator`, `site`
   - `storage` (R2) and `smtp`, which have secrets
 - **To add a group:**
   1. Add a Zod schema and an entry in the `SETTINGS` registry. The entry
@@ -301,7 +307,7 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   secret, but changing the field it is bound to (e.g. the access key ID or
   SMTP user) requires re-entering it.
 - `GET /api/settings/public` returns only `isPublic` groups that have no
-  secrets (quiz, coins, social, contact, site).
+  secrets (quiz, coins, social, contact, operator, site).
 - The value cache is per process and cleared on save. Services that hold
   clients (the S3 client, the SMTP transport) rebuild them when the config
   fingerprint changes, so no restart is needed.
@@ -398,22 +404,45 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
     env vars exist.
   - Rate limiters are off when `NODE_ENV=test` (`rateLimitSwitch`);
     `tests/rateLimit.test.ts` switches them on and calls `resetRateLimits()`.
-- **Rate limits** (`src/middleware/rateLimiter.ts`, all built with `limiter()`;
-  in memory, one API instance assumed; IP keys need `TRUST_PROXY` right):
-  - login: 20 **failed** per 15 min per IP + 5 failed per email per 15 min
-    (successful sign-ins never count: a class shares one IP on school Wi-Fi /
-    mobile NAT, so tight limits follow the account, not the IP)
-  - sign-up 15/hour per IP; forgot password 10/15 min per IP + 3/hour per
-    email; reset 10/15 min; email code 20/15 min; contact 5/hour
-  - quiz 90/min and payments 30/min per user; search 60/min; check answer 40/min
+    The failed sign-in pause (database) is always on: a test that makes many
+    wrong sign-ins clears `loginThrottle` or raises `loginIpMax`.
+- **Rate limits** (`src/middleware/rateLimiter.ts`, all built with `limiter(name)`;
+  in memory, one API instance assumed; IP keys need `TRUST_PROXY` right).
+  **Every number is a setting**: the list and defaults are `REQUEST_LIMITS` in
+  `src/config/limits.ts`, the values live in the `security` setting
+  (`<name>Limit` / `<name>WindowMinutes`, Admin → Settings → Security & limits,
+  labels served by `GET /api/admin/security/limits`), read on each request.
+  Never hard-code a limit; add it to `REQUEST_LIMITS`.
+  - defaults: sign-up 15/hour per IP; Google sign-in 30/15 min; forgot password
+    10/15 min per IP + 3/hour per email; reset code 10/15 min; email code
+    20/15 min; unlock code 10/15 min; Helpline 5/hour; quiz 90/min and payments
+    30/min per user; search 60/min; check answer 40/min
   - whole `/api` backstop 600/min per IP (`/health` is outside it; the
     Razorpay webhook is registered before it). The student site's server sends
     `X-Internal-Key` (= `INTERNAL_API_KEY`, also a CI build secret) and skips
     only this backstop: all its renders and its build share one IP
-  - A new public endpoint that sends email or does heavy work gets its own
-    limiter here.
-  - `tests/setup.ts` turns HTTP keep-alive off: with Node 19+ and supertest's
-    per-request servers it caused random "socket hang up" failures.
+- **Failed sign-ins are in the database**, not the limiter
+  (`src/services/loginThrottle.service.ts`, table `LoginThrottle`, keys
+  `account:<email>` / `ip:<address>`): 5 wrong passwords per account in 15 min
+  → pause 15 min, doubling each time up to 24 h (a quiet day forgets); 20 per
+  network; admin accounts their own count with a 60-minute cap. Unknown emails
+  count too. Successful sign-ins never count (a class shares one IP). A pause is
+  ended by a password reset, an unlock code (`/api/auth/unlock/request` +
+  `/api/auth/unlock`) or the admin (Users → Unpause). Every attempt on an admin
+  account goes to `AdminLoginAttempt` (Admin → Sign-in log). The 429 carries
+  `code: "LOGIN_LOCKED"` and `retryAfter` (AppError's 4th argument).
+- **Forgot password is a 6-digit code** (`src/services/authCode.service.ts`,
+  table `AuthCode`, purposes RESET_PASSWORD / UNLOCK_ACCOUNT): valid exactly
+  5 minutes, a new code replaces the old one (one a minute), 5 wrong tries use
+  it up, used once. Old `/reset-password?token=` links show a "use a code" page;
+  `PasswordResetToken` is no longer written.
+- A new public endpoint that sends email or does heavy work gets its own
+  limit in `REQUEST_LIMITS`.
+- **Tests:** `tests/setup.ts` turns HTTP keep-alive off and starts **one API server per
+    test file on 127.0.0.1** (`api()` in `tests/helpers.ts`). Never use
+    `request(app)` for the real app: supertest then starts a server on `::` per
+    request, and on macOS another local process listening on 127.0.0.1 with the
+    same port (Next dev workers) can answer instead (random empty 400/404s).
 
 ### Admin UI (shadcn, sidebar-07)
 - **Setup:** shadcn is initialised (`admin/components.json`: Radix base, Nova
@@ -581,10 +610,18 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   (`components/quiz/quiz-runner.tsx`) and `/profile`. Types and helpers in
   `src/lib/quiz.ts` (`startQuiz`, `pauseOnLeave` = keepalive pause,
   `attemptLabel`). The runner follows the server's attempt state and never
-  decides anything itself. Guard login by reading `getAccessToken()` in an
-  effect (the `useSignedIn` hook is `false` on the first render). After a
+  decides anything itself. Guard login-only pages with `useRequireSignIn()`
+  (`account-menu.tsx`): it reads `getAccessToken()` in an effect (the
+  `useSignedIn` hook is `false` on the first render) and redirects again the
+  moment the student signs out anywhere (header menu, page button, other tab). After a
   balance change call `announceCoinsChanged()` (`account-menu.tsx`) so every
   coin display reloads.
+- **Checkout box:** the buy window has an **unticked** "My parent or guardian has
+  permitted this purchase" box and Terms/Privacy/Refund links; `POST /api/payments/orders`
+  refuses an order without `parentConfirmed: true` and stores `Order.purchaseConfirmedAt`.
+- **Helpline** = `/contact` (topics Refund / Bug or Error / Other Help / My data;
+  `?topic=refund|bug|help|data` preselects; lists in `frontend/src/lib/contact.ts` and
+  `backend/src/validations/pages.validation.ts`, older topics still accepted).
 - **Notes & checkout (client):** `src/lib/notes.ts` (`useOwnedNotes`,
   `downloadNote`, `loadRazorpay`, `announceNotesChanged`), components in
   `components/notes/` (`NoteList`, `NoteActions`, `BuyDialog`, `NotesStore`;
@@ -650,15 +687,29 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   12 marked MCQs each + 2 class tests; `npm run seed:demo -- --remove` deletes only
   those. It refuses to run in production.
 - **Auth pages** take `?next=`. Only same-site paths are allowed (`safeNext`).
-- **Sign-up needs an email code.** `/register` (name, email, phone, password) creates the
+- **Google sign-in:** `components/auth/google-button.tsx` (hidden until `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set).
+  Students see our own button (h-12, rounded-xl, like the inputs); Google's real
+  button lies on top, invisible and scaled to cover it, because its iframe allows
+  only 4 px or pill corners and drew a white box in dark mode. It sends Google's
+  ID token to `POST /api/auth/google`; `src/services/googleAuth.service.ts` holds every rule. `User.password` can be null, so
+  check for that before comparing. Admins can't use it. An unverified sign-up with the same email loses its password.
+- **Student profile (6 Nov 2026):** class (`User.classLevelId`), district (`District` table,
+  admin Catalog → Districts, never an enum) and date of birth (`User.dateOfBirth`, DATE; set once
+  by the student) are asked at `/register`; phone is optional. Rules only in
+  `backend/src/services/profile.service.ts`. `/me` has `profileComplete`, `missingProfile`,
+  `isMinor`. Google sign-ups and older accounts are sent to `/welcome` by `ProfileGate`
+  (root layout) and by `whereAfterSignIn()` after any sign-in. Default districts are added by
+  `ensureDefaultDistricts()` at API start-up only while the table is empty.
+- **Sign-up needs an email code.** `/register` (name, email, class, district, date of birth, optional phone, password) creates the
   student with `emailVerified: false` and emails a 6-digit code; no tokens until
   `POST /api/auth/verify-email`. Login of an unverified account answers 403 with
   `code: "EMAIL_NOT_VERIFIED"` (AppError's optional third argument; the frontend's
   `ApiError.code`). Code rules live only in `backend/src/services/emailVerification.service.ts`;
   the UI step is `components/auth/verify-code.tsx`. Accounts made any other way
-  (seed, create-admin, tests) default to verified. Phone is a 10-digit Indian mobile
-  (`phoneSchema` in `auth.validation.ts`), shown to admins only; the "no phone number"
-  rule is about the site's own contact details.
+  (seed, create-admin, tests) default to verified. Phone is an **optional** 10-digit Indian
+  mobile (`phoneSchema` / `optionalPhoneSchema` in `auth.validation.ts`), shown to admins
+  only; the "no phone number" rule is about the site's own contact details. Tests that sign
+  up use `signupProfile()` from `tests/helpers.ts`.
 
 ### Roles
 - `User.role` is `STUDENT | ADMIN` (default STUDENT).

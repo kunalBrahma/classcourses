@@ -17,11 +17,12 @@ const rupees = (paise: number) => {
 // {{tokens}} usable in page and FAQ text, filled from live settings when
 // served — so the FAQ never goes stale when the admin changes quiz or coin rules.
 export const getPageTokens = async (): Promise<Record<string, string>> => {
-  const [quiz, coins, contact, site] = await Promise.all([
+  const [quiz, coins, contact, site, operator] = await Promise.all([
     requireSetting("quiz"),
     requireSetting("coins"),
     requireSetting("contact"),
     requireSetting("site"),
+    requireSetting("operator"),
   ]);
   return {
     "site.name": site.name,
@@ -33,6 +34,13 @@ export const getPageTokens = async (): Promise<Record<string, string>> => {
     "coins.perPass": String(coins.perPass),
     "coins.coinValue": rupees(coins.coinValuePaise),
     "coins.maxDiscountPercent": String(coins.maxDiscountPercent),
+    "operator.line": operator.operatorLine,
+    "operator.address": operator.address,
+    "operator.grievanceName": operator.grievanceName,
+    "operator.grievanceDesignation": operator.grievanceDesignation,
+    "operator.grievanceEmail": operator.grievanceEmail,
+    "operator.replyWithinHours": String(operator.replyWithinHours),
+    "operator.resolveWithinDays": String(operator.resolveWithinDays),
   };
 };
 
@@ -46,6 +54,13 @@ export const PAGE_TOKEN_NAMES = [
   "coins.perPass",
   "coins.coinValue",
   "coins.maxDiscountPercent",
+  "operator.line",
+  "operator.address",
+  "operator.grievanceName",
+  "operator.grievanceDesignation",
+  "operator.grievanceEmail",
+  "operator.replyWithinHours",
+  "operator.resolveWithinDays",
 ];
 
 // Unknown tokens are left as-is so typos are visible, not silently blanked.

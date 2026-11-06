@@ -3,6 +3,7 @@ import prisma from "../config/prisma";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 import { decryptSecret, encryptSecret, maskSecret } from "../utils/crypto";
+import { LOGIN_DEFAULTS, REQUEST_LIMIT_NAMES, REQUEST_LIMITS } from "../config/limits";
 
 // Admin-editable app configuration, stored one row per group in `Setting`.
 // Resolution order for every group: database row → env fallback → defaults.
@@ -51,6 +52,54 @@ export const socialSettingsSchema = z.object({
 export const contactSettingsSchema = z.object({
   email: z.string().trim().email(),
 });
+
+// Who runs the site and the Grievance Officer, shown in the footer, About and the
+// policy pages (client requirements of 6 Nov 2026). The designation is
+// "Founder, Class Course": never "CEO".
+export const operatorSettingsSchema = z.object({
+  operatorLine: z.string().trim().min(1).max(200),
+  address: z.string().trim().min(1).max(300),
+  grievanceName: z.string().trim().min(1).max(120),
+  grievanceDesignation: z.string().trim().min(1).max(120),
+  grievanceEmail: z.string().trim().email(),
+  // Complaint service targets quoted on the Helpline and in the policies
+  replyWithinHours: z.coerce.number().int().min(1).max(720),
+  resolveWithinDays: z.coerce.number().int().min(1).max(90),
+});
+
+// Every rate limit and the failed sign-in rule (src/config/limits.ts).
+// Request limits are `<name>Limit` + `<name>WindowMinutes`.
+const count = (max: number) => z.coerce.number().int().min(1).max(max);
+export const securitySettingsSchema = z.object({
+  ...Object.fromEntries(
+    REQUEST_LIMIT_NAMES.flatMap((name) => [
+      [`${name}Limit`, count(100_000)],
+      [`${name}WindowMinutes`, count(1440)],
+    ])
+  ),
+  loginAccountMax: z.coerce.number().int().min(3).max(50),
+  loginIpMax: z.coerce.number().int().min(5).max(1000),
+  loginWindowMinutes: count(1440),
+  loginLockMinutes: count(1440),
+  loginLockMaxHours: count(168),
+  adminLoginMax: z.coerce.number().int().min(3).max(50),
+  adminLockMaxMinutes: count(1440),
+}) as unknown as z.ZodType<SecuritySettings, z.ZodTypeDef, unknown>;
+
+export type SecuritySettings = {
+  [K in (typeof REQUEST_LIMIT_NAMES)[number] as `${K}Limit` | `${K}WindowMinutes`]: number;
+} & typeof LOGIN_DEFAULTS;
+
+export const securityDefaults = (): SecuritySettings =>
+  ({
+    ...Object.fromEntries(
+      REQUEST_LIMIT_NAMES.flatMap((name) => [
+        [`${name}Limit`, REQUEST_LIMITS[name].limit],
+        [`${name}WindowMinutes`, REQUEST_LIMITS[name].windowMinutes],
+      ])
+    ),
+    ...LOGIN_DEFAULTS,
+  }) as SecuritySettings;
 
 export const siteSettingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -106,6 +155,7 @@ export type CoinSettings = z.infer<typeof coinSettingsSchema>;
 export type SocialSettings = z.infer<typeof socialSettingsSchema>;
 export type ContactSettings = z.infer<typeof contactSettingsSchema>;
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
+export type OperatorSettings = z.infer<typeof operatorSettingsSchema>;
 export type StorageSettings = z.infer<typeof storageSettingsSchema>;
 export type SmtpSettings = z.infer<typeof smtpSettingsSchema>;
 export type RazorpaySettings = z.infer<typeof razorpaySettingsSchema>;
@@ -169,6 +219,30 @@ const SETTINGS = {
     genericAdminEdit: true,
     isPublic: true,
   } satisfies SettingDefinition<ContactSettings>,
+
+  operator: {
+    schema: operatorSettingsSchema,
+    defaults: () => ({
+      operatorLine: "Class Course, managed by Mr. Ajaharul Ahmed, Founder",
+      address: "Rangaloo, Nagaon, Assam, 782427",
+      grievanceName: "Mr. Ajaharul Ahmed",
+      grievanceDesignation: "Founder, Class Course",
+      grievanceEmail: "mrajaharulahmed.business@gmail.com",
+      replyWithinHours: 48,
+      resolveWithinDays: 7,
+    }),
+    secretFields: [],
+    genericAdminEdit: true,
+    isPublic: true,
+  } satisfies SettingDefinition<OperatorSettings>,
+
+  security: {
+    schema: securitySettingsSchema,
+    defaults: securityDefaults,
+    secretFields: [],
+    genericAdminEdit: true,
+    isPublic: false,
+  } satisfies SettingDefinition<SecuritySettings>,
 
   site: {
     schema: siteSettingsSchema,

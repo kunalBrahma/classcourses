@@ -16,7 +16,7 @@ export const globalErrorHandler = (
   next: NextFunction
 ) => {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+    return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}), ...(err.details ?? {}) });
   }
 
   if (err instanceof ZodError) {

@@ -1,4 +1,4 @@
-import { FileTextIcon, InboxIcon, LayoutDashboardIcon, NewspaperIcon, TimerIcon, LibraryBigIcon, ReceiptIndianRupeeIcon, Settings2Icon, UsersIcon, type LucideIcon } from "lucide-react";
+import { FileTextIcon, InboxIcon, ShieldCheckIcon, LayoutDashboardIcon, NewspaperIcon, TimerIcon, LibraryBigIcon, ReceiptIndianRupeeIcon, Settings2Icon, UsersIcon, type LucideIcon } from "lucide-react";
 
 // Single source for the sidebar and the header breadcrumbs.
 // Each development phase adds its section here (task.md) — only link pages that exist.
@@ -35,6 +35,7 @@ export const NAV: NavGroup[] = [
           { title: "Subjects & chapters", url: "/catalog/subjects" },
           { title: "Mediums", url: "/catalog/mediums" },
           { title: "Classes", url: "/catalog/classes" },
+          { title: "Districts", url: "/catalog/districts" },
         ],
       },
       {
@@ -70,6 +71,7 @@ export const NAV: NavGroup[] = [
     sections: [
       { title: "Users", icon: UsersIcon, url: "/users" },
       { title: "Messages", icon: InboxIcon, url: "/messages" },
+      { title: "Sign-in log", icon: ShieldCheckIcon, url: "/security/sign-ins" },
     ],
   },
   {
@@ -84,6 +86,7 @@ export const NAV: NavGroup[] = [
           { title: "Storage (R2)", url: "/settings/storage" },
           { title: "Email (SMTP)", url: "/settings/email" },
           { title: "Payments (Razorpay)", url: "/settings/payments" },
+          { title: "Security & limits", url: "/settings/security" },
         ],
       },
     ],

@@ -61,6 +61,20 @@ describe("contact form", () => {
     expect(await prisma.contactMessage.count()).toBe(before);
   });
 
+  it("Helpline topics: Refund, Bug or Error, Other Help and data requests; old topics still accepted; admin filters by topic", async () => {
+    for (const topic of ["Refund", "Bug or Error", "Other Help", "My data (see, correct or delete)"]) {
+      expect((await send({ name: `Topic ${topic}`, topic })).status).toBe(201);
+    }
+    const refunds = await api().get("/api/admin/messages").query({ topic: "Refund" }).set("Authorization", admin.auth);
+    expect(refunds.status).toBe(200);
+    expect(refunds.body.messages.map((m: { topic: string }) => m.topic)).toEqual(["Refund"]);
+    expect(refunds.body.topics).toEqual(["Refund", "Bug or Error", "Other Help", "My data (see, correct or delete)"]);
+    // A message with an earlier topic still lists under its own topic
+    const old = await api().get("/api/admin/messages").query({ topic: "Notes and payments" }).set("Authorization", admin.auth);
+    expect(old.body.total).toBeGreaterThanOrEqual(1);
+    expect((await api().get("/api/admin/messages").query({ topic: "Nope" }).set("Authorization", admin.auth)).status).toBe(400);
+  });
+
   it("admin inbox: lists with counts, changes status, archives and deletes; students can't", async () => {
     const list = await api().get("/api/admin/messages").set("Authorization", admin.auth);
     expect(list.status).toBe(200);

@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { formCard } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { formatDate, formatPhone, initials, UserRow } from "@/lib/people";
+import { formatDate, formatPhone, initials, profileLine, UserRow } from "@/lib/people";
 import { UnverifiedBadge } from "@/components/admin/unverified-badge";
 
 interface Page {
@@ -26,6 +27,33 @@ interface Page {
 }
 
 const PAGE_SIZE = 25;
+const ALL = "all";
+
+// Class / district / profile filters, kept in the URL like the rest.
+function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger aria-label={label} className="h-10 w-full sm:w-48">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function IncompleteBadge() {
+  return (
+    <Badge variant="outline" className="h-5 border-warning/40 bg-warning/10 px-1.5 text-[10px] text-warning" title="Class, district or date of birth missing">
+      Needs details
+    </Badge>
+  );
+}
 
 function UsersList() {
   const router = useRouter();
@@ -34,6 +62,11 @@ function UsersList() {
   const role = params.get("role") ?? "all";
   const page = Math.max(1, Number(params.get("page")) || 1);
   const query = params.get("q") ?? "";
+  const classFilter = params.get("class") ?? ALL;
+  const districtFilter = params.get("district") ?? ALL;
+  const profileFilter = params.get("profile") ?? ALL;
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [districts, setDistricts] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
 
   const [search, setSearch] = useState(query);
   const [data, setData] = useState<Page | null>(null);
@@ -56,10 +89,19 @@ function UsersList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to typing
   }, [search]);
 
+  // Filter choices (hidden ones too: older students may have them).
+  useEffect(() => {
+    apiJson<{ classes: { id: string; name: string }[] }>("/api/admin/classes").then((r) => setClasses(r.classes)).catch(() => undefined);
+    apiJson<{ districts: { id: string; name: string; isActive: boolean }[] }>("/api/admin/districts").then((r) => setDistricts(r.districts)).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     const q = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (role !== "all") q.set("role", role);
     if (query) q.set("search", query);
+    if (classFilter !== ALL) q.set("classLevelId", classFilter);
+    if (districtFilter !== ALL) q.set("districtId", districtFilter);
+    if (profileFilter !== ALL) q.set("profile", profileFilter);
     let cancelled = false;
     apiJson<Page>(`/api/admin/users?${q.toString()}`)
       .then((res) => !cancelled && (setData(res), setError(null)))
@@ -67,11 +109,12 @@ function UsersList() {
     return () => {
       cancelled = true;
     };
-  }, [role, page, query]);
+  }, [role, page, query, classFilter, districtFilter, profileFilter]);
+  const filtered = Boolean(query) || classFilter !== ALL || districtFilter !== ALL || profileFilter !== ALL;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Users" description="Students and admins. Open someone to see their coins and quizzes, adjust coins, or change their role." />
+      <PageHeader title="Users" description="Students and admins. Open someone to see their profile, coins and quizzes, adjust coins, or change their role." />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs value={role} onValueChange={(v) => update({ role: v === "all" ? null : v, page: null })}>
@@ -94,6 +137,31 @@ function UsersList() {
         </div>
       </div>
 
+      <div role="group" aria-label="Filters" className="grid gap-2 sm:flex sm:flex-wrap">
+        <FilterSelect
+          label="Class"
+          value={classFilter}
+          onChange={(v) => update({ class: v === ALL ? null : v, page: null })}
+          options={[{ value: ALL, label: "All classes" }, ...classes.map((c) => ({ value: c.id, label: c.name }))]}
+        />
+        <FilterSelect
+          label="District"
+          value={districtFilter}
+          onChange={(v) => update({ district: v === ALL ? null : v, page: null })}
+          options={[{ value: ALL, label: "All districts" }, ...districts.map((d) => ({ value: d.id, label: d.isActive ? d.name : `${d.name} (hidden)` }))]}
+        />
+        <FilterSelect
+          label="Profile"
+          value={profileFilter}
+          onChange={(v) => update({ profile: v === ALL ? null : v, page: null })}
+          options={[
+            { value: ALL, label: "Any profile" },
+            { value: "complete", label: "Profile complete" },
+            { value: "incomplete", label: "Needs details" },
+          ]}
+        />
+      </div>
+
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -109,7 +177,7 @@ function UsersList() {
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">User</th>
-                <th className="px-3 py-3 font-medium">Class</th>
+                <th className="px-3 py-3 font-medium">Class · district · age</th>
                 <th className="px-3 py-3 text-right font-medium">Coins</th>
                 <th className="px-3 py-3 text-right font-medium">Quizzes</th>
                 <th className="px-4 py-3 text-right font-medium">Joined</th>
@@ -128,6 +196,7 @@ function UsersList() {
                           {u.name || "—"}
                           {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
                           {!u.emailVerified && <UnverifiedBadge />}
+                          {u.role === "STUDENT" && !u.profileComplete && <IncompleteBadge />}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
                         {u.phone && <span className="block text-xs text-muted-foreground tabular-nums">{formatPhone(u.phone)}</span>}
@@ -135,8 +204,8 @@ function UsersList() {
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-muted-foreground">
-                    {u.classLevel ? u.classLevel.name : "—"}
-                    {u.medium && <span className="block text-xs">{u.medium.name}</span>}
+                    {profileLine(u) || "—"}
+                    {u.isMinor && <span className="block text-xs">Under 18</span>}
                   </td>
                   <td className="px-3 py-3 text-right font-medium tabular-nums">{u.coins.toLocaleString("en-IN")}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{u.quizAttempts}</td>
@@ -159,11 +228,13 @@ function UsersList() {
                       <span className="truncate">{u.name || u.email}</span>
                       {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
                       {!u.emailVerified && <UnverifiedBadge />}
+                      {u.role === "STUDENT" && !u.profileComplete && <IncompleteBadge />}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {u.email}
                       {u.phone && ` · ${formatPhone(u.phone)}`}
                     </span>
+                    {profileLine(u) && <span className="block truncate text-xs text-muted-foreground">{profileLine(u)}</span>}
                   </span>
                   <span className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums">
                     <CoinsIcon className="size-4 text-warning" /> {u.coins}
@@ -174,7 +245,7 @@ function UsersList() {
           </ul>
 
           {data.users.length === 0 && (
-            <p className="px-4 py-12 text-center text-sm text-muted-foreground">{query ? `No users match “${query}”.` : "No users yet."}</p>
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">{filtered ? "No users match these filters." : "No users yet."}</p>
           )}
 
           <div className="flex items-center justify-between gap-2 border-t px-4 py-3 text-sm">

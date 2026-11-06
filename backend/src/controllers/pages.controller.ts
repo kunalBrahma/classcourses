@@ -4,6 +4,7 @@ import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { hasVisibleContent, sanitizeRichText } from "../utils/sanitizeHtml";
 import { getPageTokens, isPageSlug, PAGE_SLUGS, PAGE_TOKEN_NAMES, renderTokens } from "../services/pages.service";
+import { PAGES as STANDARD_PAGES } from "../content/pages";
 
 // Static pages (About, Contact, Privacy, Terms, Refund policy) and the FAQ.
 // Public responses have {{tokens}} filled from live settings; admin responses
@@ -91,6 +92,21 @@ export const getPageAdmin = asyncHandler(async (req: Request, res: Response) => 
   // `preview` = what students will see with the current settings.
   const tokens = await getPageTokens();
   res.json({ page, preview: renderTokens(page.bodyHtml, tokens), tokens: PAGE_TOKEN_NAMES });
+});
+
+// The standard text for a page (for the legal pages: the client's own text).
+// Nothing is saved: the admin loads it into the editor, reviews it and saves.
+export const getStandardPageAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const slug = knownSlug(req);
+  const standard = STANDARD_PAGES.find((p) => p.slug === slug);
+  if (!standard) throw new AppError(404, "There is no standard text for this page");
+  const [page, tokens] = await Promise.all([prisma.page.findUnique({ where: { slug } }), getPageTokens()]);
+  const bodyHtml = sanitizeRichText(standard.bodyHtml);
+  res.json({
+    standard: { title: standard.title, bodyHtml, preview: renderTokens(bodyHtml, tokens) },
+    // Lets the editor say "already using the standard text"
+    matchesCurrent: page ? page.bodyHtml === bodyHtml && page.title === standard.title : false,
+  });
 });
 
 // Creates the page on first save.

@@ -226,6 +226,8 @@ export const createOrder = async (userId: string, noteId: string, useCoins: bool
         coinsUsed: quote.coinsUsed,
         discountPaise: quote.discountPaise,
         amountPaise: quote.amountPaise,
+        // The route only lets an order through with the box ticked.
+        purchaseConfirmedAt: new Date(),
       },
     });
     if (quote.coinsUsed > 0) {

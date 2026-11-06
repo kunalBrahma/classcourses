@@ -87,11 +87,11 @@ export function VideoCard({ youtubeId, format, title, tag, chapterLabel, href, f
         </p>
         {chapterLabel &&
           (href ? (
-            <Link href={href} className="mt-auto -mb-2 inline-flex min-h-11 w-fit items-center gap-0.5 text-sm font-semibold text-brand-amber-text hover:underline">
-              {chapterLabel} <ChevronRightIcon className="size-4" aria-hidden="true" />
+            <Link href={href} title={chapterLabel} className="mt-auto -mb-2 inline-flex min-h-11 max-w-full min-w-0 items-center gap-0.5 text-sm font-semibold text-brand-amber-text hover:underline">
+              <span className="truncate" lang="as">{chapterLabel}</span> <ChevronRightIcon className="size-4 shrink-0" aria-hidden="true" />
             </Link>
           ) : (
-            <p className="mt-auto text-sm text-muted-foreground">{chapterLabel}</p>
+            <p className="mt-auto truncate text-sm text-muted-foreground" lang="as">{chapterLabel}</p>
           ))}
       </div>
     </article>

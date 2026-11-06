@@ -17,7 +17,10 @@ model User {
   name            String?
   // 10-digit Indian mobile number, asked for at sign-up (null for older accounts)
   phone           String?
-  password        String
+  // Null for accounts made with Google, until they set one through "Forgot password"
+  password        String?
+  // Google's permanent ID for this person; set once they sign in with Google
+  googleId        String?                 @unique
   // /register creates students with false until they enter the emailed code.
   // Defaults to true so older accounts, admins and seeded users count as verified.
   emailVerified   Boolean                 @default(true)
@@ -25,8 +28,15 @@ model User {
   // Student's preferred medium/class, used to open the site where they left off
   mediumId        String?
   medium          Medium?                 @relation(fields: [mediumId], references: [id], onDelete: SetNull)
+  // The student's class (asked at sign-up / "complete your profile")
   classLevelId    String?
   classLevel      ClassLevel?             @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
+  // Asked at sign-up (client requirements of 6 Nov 2026). Null for accounts made
+  // before that and for Google sign-ups, until "complete your profile".
+  districtId      String?
+  district        District?               @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  // Date only. Used only to know whether the student is under 18.
+  dateOfBirth     DateTime?               @db.Date
   // Cached balance; the source of truth is the CoinTransaction ledger
   coins           Int                     @default(0)
   quizAttempts    QuizAttempt[]
@@ -36,6 +46,8 @@ model User {
   refreshTokens   RefreshToken[]
   resetTokens     PasswordResetToken[]
   emailCodes      EmailVerificationCode[]
+  authCodes       AuthCode[]
+  adminLogins     AdminLoginAttempt[]
   contactMessages ContactMessage[]
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
@@ -52,6 +64,68 @@ model RefreshToken {
   @@index([userId])
 }
 
+// Failed sign-ins, kept in the database so a restart, a page refresh or a new
+// browser can't reset them (services/loginThrottle.service.ts). One row per
+// key: "account:<email>" or "ip:<address>". The wait grows with lockLevel.
+model LoginThrottle {
+  key           String    @id
+  // Failures in the current window (windowStart + loginWindowMinutes)
+  failures      Int       @default(0)
+  windowStart   DateTime  @default(now())
+  lockedUntil   DateTime?
+  // How many times it has been locked recently; each lock doubles the wait
+  lockLevel     Int       @default(0)
+  lastFailureAt DateTime  @default(now())
+
+  @@index([lockedUntil])
+}
+
+enum AuthCodePurpose {
+  RESET_PASSWORD
+  UNLOCK_ACCOUNT
+}
+
+// 6-digit codes emailed for "forgot password" and "unlock my account". Only a
+// hash is stored; valid exactly 5 minutes; a new code replaces the old one.
+model AuthCode {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   AuthCodePurpose
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int             @default(0)
+  createdAt DateTime        @default(now())
+
+  @@index([userId, purpose])
+}
+
+enum AdminLoginResult {
+  SUCCESS
+  WRONG_PASSWORD
+  LOCKED
+  UNLOCK_CODE_SENT
+  UNLOCKED
+}
+
+// Every sign-in attempt on an admin account (shown to the Founder in
+// Admin → Security → Sign-in log). Kept if the account is deleted.
+model AdminLoginAttempt {
+  id        String           @id @default(uuid())
+  email     String
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  result    AdminLoginResult
+  ip        String
+  userAgent String?
+  createdAt DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+// Old emailed reset links. Replaced by AuthCode (RESET_PASSWORD) on 6 Nov
+// 2026; nothing creates these any more.
 model PasswordResetToken {
   id        String   @id @default(uuid())
   token     String   @unique
@@ -70,6 +144,21 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// Districts students choose at sign-up (Assam's districts, admin-managed and
+// extendable: never an enum). A district in use can be hidden, not deleted.
+model District {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  nativeName String?
+  order      Int      @default(0)
+  isActive   Boolean  @default(true)
+  users      User[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([order])
 }
 
 // ---------------------------------------------------------------------------
@@ -468,30 +557,33 @@ enum OrderStatus {
 }
 
 model Order {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  noteId            String
-  note              Note        @relation(fields: [noteId], references: [id], onDelete: Restrict)
-  listPricePaise    Int
-  coinsUsed         Int         @default(0)
-  discountPaise     Int         @default(0)
+  id                  String      @id @default(uuid())
+  userId              String
+  user                User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  noteId              String
+  note                Note        @relation(fields: [noteId], references: [id], onDelete: Restrict)
+  listPricePaise      Int
+  coinsUsed           Int         @default(0)
+  discountPaise       Int         @default(0)
   // What the student actually pays (listPrice − discount); 0 = fully covered by coins
-  amountPaise       Int
-  currency          String      @default("INR")
-  status            OrderStatus @default(CREATED)
-  razorpayOrderId   String?     @unique
-  razorpayPaymentId String?     @unique
-  paidAt            DateTime?
+  amountPaise         Int
+  currency            String      @default("INR")
+  status              OrderStatus @default(CREATED)
+  razorpayOrderId     String?     @unique
+  razorpayPaymentId   String?     @unique
+  paidAt              DateTime?
   // Razorpay refund id once the payment was refunded
-  refundId          String?     @unique
-  refundedAt        DateTime?
+  refundId            String?     @unique
+  refundedAt          DateTime?
   // How the payment was confirmed: "verify" | "webhook" | "reconcile" | "coins"
-  confirmedVia      String?
-  lastError         String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  access            NoteAccess?
+  confirmedVia        String?
+  // When the student ticked "a parent or guardian has permitted this purchase"
+  // at checkout (null for orders from before the box existed)
+  purchaseConfirmedAt DateTime?
+  lastError           String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  access              NoteAccess?
 
   @@index([userId, noteId, status])
   @@index([status, createdAt])

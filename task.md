@@ -662,17 +662,27 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 - [x] Not translated: Q&A, MCQs, chapter titles and intros, the quiz, the buy window, legal text, class names (Google wrote each a different way), email addresses and the pass mark ring. The globe is hidden during a quiz, because changing language reloads the page
 - [x] Medium moved to the home page tabs and the menu
 
+### Google sign-in (5 Nov 2026)
+- [x] "Continue with Google" on sign-in and sign-up: `POST /api/auth/google` (`src/services/googleAuth.service.ts`) verifies Google's signed ID token. `User.password` is now optional and `User.googleId` is new
+- [x] Verified email accounts are linked and keep their password; an unverified sign-up with that email loses its password and phone; admin accounts are refused
+- [x] `tests/googleAuth.test.ts` checks real signatures against a test key
+- [ ] **Needs the real client ID:** set `GOOGLE_CLIENT_ID` in `backend/.env`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in `frontend/.env.local`, the server's `backend/.env` and the `GOOGLE_CLIENT_ID` GitHub Actions variable (the site's build reads it). Then try a real sign-in; no real Google account has been tested yet
+- [ ] Google accounts don't give class or state: asking for them is part of the sign-up change
+
+## Client update of 6 Nov 2026
+The new requirements PDF is tracked phase by phase in **`task-client-update.md`** (Phases 7–15).
+
 ## Waiting on client
 | # | Item | Who |
 |---|---|---|
 | 1 | Mission and vision text for About Us | Client (developer may draft) |
 | 2 | Business email for the website | Developer |
-| 3 | Address: show it or not | Client |
-| 4 | Privacy Policy and Terms of Service | Developer drafts, client reviews |
+| 3 | ~~Address: show it or not~~ **Resolved 6 Nov:** shown (footer, About, Helpline, policies) | Done |
+| 4 | ~~Privacy Policy and Terms of Service~~ **Resolved 6 Nov:** client supplied the text (Admin → Pages → Load the standard text) | Done |
 | 5 | Chapter names and content (PDF files) | Client |
 | 6 | Explanations for answers: yes or no | Client |
 | 7 | Difficulty levels: yes or no (textbook vs extra advanced?) | Client |
-| 8 | Confirm the daily limit of 10 quizzes | Client |
+| 8 | ~~Confirm the daily limit of 10 quizzes~~ **Resolved 6 Nov:** 10, changeable | Done |
 | 9 | Coin values (coins per pass, coin → ₹ discount, max discount) | Client (developer may suggest) |
 | 10 | Which notes are free and which are premium; note prices | Client |
 | 11 | FAQ content | Developer drafts, client approves |
@@ -682,19 +692,19 @@ look. Tick both places as you go. Each step: build, then check at 360/390 and
 | 15 | **New:** Confirm that the PDF subject list is for **English Medium** | Client |
 | 16 | **New:** Assamese Medium chapter counts and names for every subject | Client |
 | 17 | **New:** Other mediums wanted at launch (Hindi, Bengali, …) | Client |
-| 18 | **New:** Class 1: in scope? The PDF says Class 2–12, the screenshot shows Class 1 | Client |
+| 18 | **Resolved 6 Nov: Class 1–12.** Class 1: in scope? The PDF says Class 2–12, the screenshot shows Class 1 | Client |
 | 19 | **New:** Class 11 English: does the 14 include the 6 Writing Skills chapters? | Client |
 | 20 | **New:** Check the Assamese subject name spellings (read from a low-resolution screenshot) | Client |
 | 21 | **New:** Cloudflare R2 account and bucket (in the client's name?), access keys, custom domain for public images | Client and developer |
 | 22 | **Decided:** create a separate **private** R2 bucket for premium notes and set it as "Private bucket" in storage settings. The backend supports this. | Developer |
 | 23 | **New:** SMTP credentials for the business email (host, port, user, app password) | Client and developer |
 | 24 | **New:** Razorpay test and live keys, and the webhook secret | Client |
-| 25 | **New:** Coins for re-passing the same chapter? Default: first pass per chapter only (setting `coins.awardRule`: `firstPassPerChapter` / `firstPassPerChapterPerDay` / `everyPass`) | Client |
+| 25 | **Resolved 6 Nov: first pass per chapter only.** Coins for re-passing the same chapter? Default: first pass per chapter only (setting `coins.awardRule`: `firstPassPerChapter` / `firstPassPerChapterPerDay` / `everyPass`) | Client |
 | 26 | **New:** Confirm with the client: pausing while a question is on screen forfeits that question (it prevents pause-and-search). Leaving between questions costs nothing. | Client |
-| 27 | **New:** Free notes need login to download. Confirm with the client. | Client |
+| 27 | ~~Free notes need login~~ **Resolved 6 Nov:** yes | Done |
 | 28 | **New:** Razorpay dashboard: add the webhook (URL shown in Admin → Settings → Payments; events `payment.captured`, `payment.failed`, `order.paid`) and keep **auto-capture ON** | Developer |
-| 29 | **New:** Owner to read and approve the draft About, Contact, FAQ, Privacy, Terms and Refund texts (Admin → Pages → publish). Ideally a lawyer reviews the legal pages. | Client |
-| 30 | **New:** Students are minors. The drafts ask for parent/guardian consent. Confirm whether India's DPDP Act needs verifiable parental consent at sign-up (for example a checkbox or a parent email) before launch. | Client (legal) |
+| 29 | **6 Nov:** Privacy, Terms, Refund are now the client's own text. Owner to load + publish them, and approve About, Helpline, FAQ (Admin → Pages → publish). Ideally a lawyer reviews the legal pages. | Client |
+| 30 | **Decided 6 Nov:** parent email + consent link for under-18 (task-client-update.md Phase 13). Was: Students are minors. The drafts ask for parent/guardian consent. Confirm whether India's DPDP Act needs verifiable parental consent at sign-up (for example a checkbox or a parent email) before launch. | Client (legal) |
 | 31 | **New:** VPS and domain(s) for the API, site and admin, plus SSH access for the deploy preflight | Client and developer |
 | 32 | **New:** Add the CORS policy (Settings → Storage → "Uploads from this panel need a CORS rule", Copy) to the public and private R2 buckets, and later add the production admin domain | Developer |
 | 33 | **New:** Confirm with the owner that custom quizzes are wanted, and whether some MCQs should be practice-only. The FAQ and guideline drafts quote the 10 / 10 s / 7 defaults, and a custom quiz can use different rules (the guidelines screen should show each quiz's own rules) | Client |

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createDistrict, deleteDistrict, listDistrictsAdmin, reorderDistricts, updateDistrict } from "../controllers/adminDistricts.controller";
 import { validateBody } from "../middleware/validate.middleware";
 import {
   bulkCreateChapters,
@@ -41,6 +42,8 @@ import {
   updatePartSchema,
   updateSubjectSchema,
   createClassLevelSchema,
+  createDistrictSchema,
+  updateDistrictSchema,
 } from "../validations/catalog.validation";
 
 // Mounted inside admin.routes.ts, which already enforces authenticate + ADMIN.
@@ -59,6 +62,13 @@ router.post("/classes", validateBody(createClassLevelSchema), createClassLevel);
 router.put("/classes/reorder", validateBody(reorderSchema), reorderClassLevels);
 router.patch("/classes/:id", validateBody(updateClassLevelSchema), updateClassLevel);
 router.delete("/classes/:id", deleteClassLevel);
+
+// Districts students choose at sign-up
+router.get("/districts", listDistrictsAdmin);
+router.post("/districts", validateBody(createDistrictSchema), createDistrict);
+router.put("/districts/reorder", validateBody(reorderSchema), reorderDistricts);
+router.patch("/districts/:id", validateBody(updateDistrictSchema), updateDistrict);
+router.delete("/districts/:id", deleteDistrict);
 
 // Subjects
 router.get("/subjects", listSubjectsAdmin);

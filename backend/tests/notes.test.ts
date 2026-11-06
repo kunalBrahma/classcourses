@@ -55,7 +55,7 @@ const as = (who: { auth: string }) => ({
   post: (path: string, body: object = {}) => api().post(path).set("Authorization", who.auth).send(body),
 });
 
-const order = (noteId: string, useCoins = false, who = student) => as(who).post("/api/payments/orders", { noteId, useCoins });
+const order = (noteId: string, useCoins = false, who = student) => as(who).post("/api/payments/orders", { noteId, useCoins, parentConfirmed: true });
 const verify = (orderId: string, paid: ReturnType<FakeRazorpay["pay"]>, who = student) =>
   as(who).post("/api/payments/verify", {
     orderId,
@@ -285,8 +285,15 @@ describe("buying a note", () => {
     const note = await makeNote();
     expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(403);
 
+    // The unticked "a parent or guardian has permitted this purchase" box
+    const unticked = await as(student).post("/api/payments/orders", { noteId: note.id });
+    expect(unticked.status).toBe(400);
+    expect(JSON.stringify(unticked.body)).toContain("parent or guardian");
+    expect((await as(student).post("/api/payments/orders", { noteId: note.id, parentConfirmed: false })).status).toBe(400);
+
     const created = await order(note.id);
     expect(created.status).toBe(201);
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: created.body.order.id } })).purchaseConfirmedAt).toBeInstanceOf(Date);
     expect(created.body.checkout).toMatchObject({ keyId: FAKE_KEY_ID, amount: 4900, currency: "INR", description: note.title });
     expect(created.body.order).toMatchObject({ status: "CREATED", amountPaise: 4900, coinsUsed: 0 });
 

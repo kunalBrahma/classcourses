@@ -1,25 +1,31 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import Link from "next/link";
 import { AuthShell, AuthLink } from "@/components/auth/auth-shell";
-import { ResetForm } from "./reset-form";
 
-export const metadata: Metadata = { title: "Choose a new password", robots: { index: false } };
+export const metadata: Metadata = { title: "Reset your password", robots: { index: false } };
 
-// Linked from the password-reset email: /reset-password?token=…
+// Older reset emails linked here (/reset-password?token=…). Since 6 Nov 2026
+// a password is reset with a 6-digit code on /forgot-password instead, so
+// these links no longer work. The page stays so old links don't 404.
 export default function ResetPasswordPage() {
   return (
     <AuthShell
-      title="Choose a new password"
-      subtitle="Pick something you'll remember — at least 8 characters."
+      title="Reset your password"
+      subtitle="We now send a 6-digit code instead of a link."
       footer={
         <>
           Back to <AuthLink href="/login">Sign in</AuthLink>
         </>
       }
     >
-      <Suspense>
-        <ResetForm />
-      </Suspense>
+      <div className="grid gap-5">
+        <p className="rounded-xl bg-accent px-4 py-3 text-[15px] leading-relaxed">
+          This reset link no longer works. Ask for a code instead: it arrives by email and works for 5 minutes.
+        </p>
+        <Link href="/forgot-password" className="press-3d inline-flex h-12 items-center justify-center rounded-xl text-base font-semibold">
+          Get a reset code
+        </Link>
+      </div>
     </AuthShell>
   );
 }

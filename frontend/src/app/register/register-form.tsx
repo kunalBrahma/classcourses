@@ -3,27 +3,27 @@
 import { FormEvent, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckIcon, MailIcon, PhoneIcon, UserIcon } from "lucide-react";
+import { CheckIcon, Loader2Icon, MailIcon, UserIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/auth/password-input";
 import { FormError, SubmitButton } from "@/components/auth/form-bits";
+import { GoogleButton } from "@/components/auth/google-button";
 import { VerifyCodeStep } from "@/components/auth/verify-code";
+import { ProfileFields } from "@/components/auth/profile-fields";
+import { dobString, draftProblem, EMPTY_DRAFT, normalisePhone, ProfileDraft, useProfileOptions } from "@/lib/profile";
 import { ApiError, publicJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { safeNext } from "../login/login-form";
-
-// Same rule as the backend (auth.validation.ts): spaces, dashes and a
-// +91 / 91 / 0 prefix are fine; what's left must be a 10-digit mobile number.
-const normalisePhone = (v: string) => v.replace(/[\s()-]/g, "").replace(/^(\+?91|0)(?=\d{10}$)/, "");
-const validPhone = (v: string) => /^[6-9]\d{9}$/.test(normalisePhone(v));
 
 export function RegisterForm({ termsPublished, privacyPublished }: { termsPublished: boolean; privacyPublished: boolean }) {
   const id = useId();
   const next = safeNext(useSearchParams().get("next"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  // Class, district, date of birth, optional mobile (client, 6 Nov 2026)
+  const [profile, setProfile] = useState<ProfileDraft>(EMPTY_DRAFT);
+  const { options, error: optionsError } = useProfileOptions();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +35,9 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!validPhone(phone)) {
-      setError("Enter a 10-digit mobile number, e.g. 98765 43210.");
+    const problem = draftProblem(profile);
+    if (problem) {
+      setError(problem);
       return;
     }
     if (!longEnough) {
@@ -52,7 +53,15 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
     try {
       const data = await publicJson<{ email: string; retryAfter: number }>("/api/auth/register", {
         method: "POST",
-        json: { name: name.trim(), email: email.trim(), phone: normalisePhone(phone), password },
+        json: {
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          classLevelId: profile.classLevelId,
+          districtId: profile.districtId,
+          dateOfBirth: dobString(profile),
+          phone: profile.phone.trim() ? normalisePhone(profile.phone) : "",
+        },
       });
       setSent({ email: data.email, retryAfter: data.retryAfter });
     } catch (err) {
@@ -77,6 +86,8 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
   if (sent) return <VerifyCodeStep email={sent.email} retryAfter={sent.retryAfter} next={next} onBack={() => setSent(null)} />;
 
   return (
+    <div className="grid gap-5">
+    <GoogleButton next={next} />
     <form onSubmit={submit} className="grid gap-5">
       <FormError message={error} />
       <div className="grid gap-2">
@@ -105,26 +116,15 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
           />
         </div>
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`${id}-phone`} className="text-sm font-semibold">Mobile number</Label>
-        <div className="relative">
-          <PhoneIcon className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-base text-muted-foreground" aria-hidden="true">+91</span>
-          <Input
-            id={`${id}-phone`}
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/[^\d\s+()-]/g, ""))}
-            placeholder="98765 43210"
-            maxLength={16}
-            aria-invalid={phone.length >= 10 && !validPhone(phone) ? true : undefined}
-            className="h-12 rounded-xl pl-[4.75rem] text-base tabular-nums"
-          />
-        </div>
-      </div>
+      {options ? (
+        <ProfileFields value={profile} onChange={setProfile} options={options} />
+      ) : optionsError ? (
+        <FormError message={`We couldn't load the class and district lists. ${optionsError}`} />
+      ) : (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2Icon className="size-4 animate-spin" /> Loading classes and districts…
+        </p>
+      )}
       <div className="grid gap-2">
         <Label htmlFor={`${id}-pw`} className="text-sm font-semibold">Create a password</Label>
         <PasswordInput id={`${id}-pw`} value={password} onChange={setPassword} autoComplete="new-password" placeholder="At least 8 characters" describedBy={`${id}-pw-hint`} minLength={8} />
@@ -151,7 +151,8 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
         By joining you agree to our {legal("terms", "Terms", termsPublished)} and {legal("privacy", "Privacy Policy", privacyPublished)}. If you are under 18,
         please ask a parent or guardian before signing up.
       </p>
-      <SubmitButton loading={loading} loadingText="Sending your code…">Join free</SubmitButton>
+      <SubmitButton loading={loading || !options} loadingText={options ? "Sending your code…" : "Loading…"}>Join free</SubmitButton>
     </form>
+    </div>
   );
 }

@@ -34,7 +34,16 @@ export const noteFileSchema = z.object({ key: z.string().min(1).max(300) });
 
 export const grantNoteSchema = z.object({ userId: id });
 
-export const createOrderSchema = z.object({ noteId: id, useCoins: z.boolean().default(false) });
+// `parentConfirmed`: the unticked checkout box "a parent or guardian has
+// permitted this purchase" (client requirements of 6 Nov 2026). The order is
+// refused without it; the time is stored on the order.
+export const createOrderSchema = z.object({
+  noteId: id,
+  useCoins: z.boolean().default(false),
+  parentConfirmed: z.literal(true, {
+    errorMap: () => ({ message: "Please tick the box to confirm a parent or guardian has permitted this purchase" }),
+  }),
+});
 
 // Field names exactly as Razorpay Checkout's success handler returns them.
 export const verifyPaymentSchema = z.object({

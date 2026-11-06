@@ -16,10 +16,28 @@ export interface UserRow {
   role: Role;
   coins: number;
   classLevel: { id: string; name: string; slug: string } | null;
+  // Profile asked at sign-up (6 Nov 2026); null for older and Google accounts
+  // until "complete your profile"
+  district: { id: string; name: string } | null;
+  dateOfBirth: string | null; // "YYYY-MM-DD"
+  age: number | null;
+  isMinor: boolean | null; // null = no date of birth yet
+  profileComplete: boolean;
+  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
   medium: { name: string } | null;
   createdAt: string;
   quizAttempts: number;
 }
+
+// "Class 7 · Nagaon · 13 yrs", leaving out what isn't known.
+export const profileLine = (u: Pick<UserRow, "classLevel" | "district" | "age">) =>
+  [u.classLevel?.name, u.district?.name, u.age !== null ? `${u.age} yrs` : null].filter(Boolean).join(" · ");
+
+export const MISSING_LABEL: Record<UserRow["missingProfile"][number], string> = {
+  classLevel: "class",
+  district: "district",
+  dateOfBirth: "date of birth",
+};
 
 export interface CoinTxn {
   id: string;
@@ -57,6 +75,15 @@ export interface UserDetail {
   role: Role;
   coins: number;
   classLevel: { id: string; name: string; slug: string } | null;
+  // Profile asked at sign-up (6 Nov 2026); null for older and Google accounts
+  // until "complete your profile"
+  district: { id: string; name: string } | null;
+  dateOfBirth: string | null; // "YYYY-MM-DD"
+  age: number | null;
+  isMinor: boolean | null; // null = no date of birth yet
+  profileComplete: boolean;
+  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
+  signsInWithGoogle: boolean;
   medium: { id: string; name: string } | null;
   createdAt: string;
   coinTxns: CoinTxn[];

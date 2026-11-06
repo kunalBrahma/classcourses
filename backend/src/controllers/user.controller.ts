@@ -3,6 +3,7 @@ import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
+import { parseDateOfBirth, profileStatus, requireActiveClass, requireActiveDistrict } from "../services/profile.service";
 
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const users = await prisma.user.findMany({
@@ -43,4 +44,45 @@ export const getMyCoins = asyncHandler(async (req: AuthRequest, res: Response) =
     }),
   ]);
   res.json({ balance: user.coins, transactions });
+});
+
+// "Complete your profile" (Google sign-ups, older accounts) and later edits:
+// name, phone, class, district, date of birth. The date of birth can be set
+// once by the student; changing it goes through the Helpline, because it
+// decides whether parental consent is needed.
+export const updateMyProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const body = req.body as { name?: string; phone?: string | null; classLevelId?: string; districtId?: string; dateOfBirth?: string };
+  const current = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId }, select: { dateOfBirth: true } });
+
+  let dateOfBirth: Date | undefined;
+  if (body.dateOfBirth !== undefined) {
+    const parsed = parseDateOfBirth(body.dateOfBirth);
+    if (current.dateOfBirth && current.dateOfBirth.getTime() !== parsed.getTime()) {
+      throw new AppError(400, "Your date of birth is already saved. To correct it, write to us from the Helpline.");
+    }
+    dateOfBirth = parsed;
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user!.userId },
+    data: {
+      name: body.name,
+      phone: body.phone,
+      classLevelId: body.classLevelId === undefined ? undefined : await requireActiveClass(body.classLevelId),
+      districtId: body.districtId === undefined ? undefined : await requireActiveDistrict(body.districtId),
+      dateOfBirth,
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      classLevelId: true,
+      classLevel: { select: { id: true, name: true, slug: true } },
+      districtId: true,
+      district: { select: { id: true, name: true, nativeName: true } },
+      dateOfBirth: true,
+    },
+  });
+  const { dateOfBirth: _dob, ...rest } = user;
+  res.json({ user: { ...rest, ...profileStatus(user) } });
 });

@@ -16,6 +16,7 @@ import { Container } from "@/components/site/container";
 import { getBanners, getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
 import { classRange } from "@/lib/class-range";
 import { DEFAULT_NEWS } from "@/lib/site-links";
+import { chapterName } from "@/lib/catalog";
 
 // The client's home-page mock (docs/design/home-page-mock.html), in its order:
 // (admin banners, when there are any) → coins → quizzes → classes → notes → videos → news → about. Every section is
@@ -76,7 +77,7 @@ export default async function HomePage() {
                 format={v.format}
                 title={v.title}
                 tag={`${v.classLevel.name} · ${v.subject.name}`}
-                chapterLabel={`Chapter ${v.chapter.number}`}
+                chapterLabel={chapterName(v.chapter)}
                 href={v.chapter.href}
               />
             ))}

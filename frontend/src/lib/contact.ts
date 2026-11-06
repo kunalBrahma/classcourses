@@ -2,7 +2,26 @@ import { z } from "zod";
 
 // Same topics and rules as the backend (backend/src/validations/pages.validation.ts
 // contactMessageSchema). The server checks everything again.
-export const CONTACT_TOPICS = ["General question", "Account or sign-in", "Quizzes and coins", "Notes and payments", "Report a mistake", "Other"] as const;
+// The Helpline's options (client requirements of 6 Nov 2026), plus data requests.
+export const CONTACT_TOPICS = ["Refund", "Bug or Error", "Other Help", "My data (see, correct or delete)"] as const;
+export type ContactTopic = (typeof CONTACT_TOPICS)[number];
+
+// Short keys for links such as /contact?topic=refund (three-dot menu, policies).
+export const HELPLINE_TOPICS: { key: string; topic: ContactTopic; label: string; hint: string }[] = [
+  { key: "refund", topic: "Refund", label: "Refund", hint: "A payment, a duplicate order or a note you didn't get" },
+  { key: "bug", topic: "Bug or Error", label: "Bug or Error", hint: "Something broken, or a mistake in an answer" },
+  { key: "help", topic: "Other Help", label: "Other Help", hint: "Any other question" },
+  { key: "data", topic: "My data (see, correct or delete)", label: "My data", hint: "See, correct or delete your personal data" },
+];
+export const topicFromKey = (key: string | null | undefined): ContactTopic | undefined => HELPLINE_TOPICS.find((t) => t.key === key)?.topic;
+
+// What the message box suggests for each topic.
+export const TOPIC_PLACEHOLDER: Record<ContactTopic, string> = {
+  Refund: "Your order ID (My profile → My orders), the note's name, the date and what went wrong. Never send card numbers, UPI PINs or passwords.",
+  "Bug or Error": "What happened and where: the class, subject and chapter, or the page you were on.",
+  "Other Help": "Tell us how we can help.",
+  "My data (see, correct or delete)": "Which data you'd like to see, correct or delete. A parent or guardian can write for a student under 18.",
+};
 
 const normalisePhone = (v: string) => v.replace(/[\s()-]/g, "").replace(/^(\+?91|0)(?=\d{10}$)/, "");
 

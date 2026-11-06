@@ -112,6 +112,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ env.API_URL }}
             NEXT_PUBLIC_SITE_URL=${{ env.SITE_URL }}
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
             API_INTERNAL_URL=${{ env.API_URL }}
           secrets: |
             internal_api_key=${{ secrets.INTERNAL_API_KEY }}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangleIcon, ArrowLeftIcon, ExternalLinkIcon, Loader2Icon } from "lucide-react";
+import { AlertTriangleIcon, ArrowLeftIcon, CheckCircle2Icon, ExternalLinkIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,11 @@ import { RichTextEditor, RichView } from "@/components/admin/editor/rich-text-ed
 import { Field } from "@/components/admin/settings/field";
 import { TokenMenu } from "@/components/admin/pages/token-menu";
 import { useConfirm } from "@/components/admin/confirm";
-import { formCard, inputClass, pressable } from "@/components/admin/styles";
+import { actionButton, formCard, inputClass, pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { siteLink } from "@/lib/site";
 import { formatDate } from "@/lib/people";
-import { Page, PAGE_LABELS, PublicSettings, renderTokens, tokenValues, unknownTokens } from "@/lib/pages";
+import { Page, PAGE_LABELS, PublicSettings, renderTokens, StandardPage, tokenValues, unknownTokens } from "@/lib/pages";
 
 export default function PageEditor() {
   const { slug } = useParams<{ slug: string }>();
@@ -32,6 +32,10 @@ export default function PageEditor() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [standard, setStandard] = useState<StandardPage | null>(null);
+  // Bumped to make the editor reload its content (it keeps its own copy).
+  const [editorVersion, setEditorVersion] = useState(0);
+  const [loadingStandard, setLoadingStandard] = useState(false);
   const label = PAGE_LABELS[slug];
 
   useEffect(() => {
@@ -45,7 +49,33 @@ export default function PageEditor() {
     apiJson<{ settings: PublicSettings }>("/api/settings/public")
       .then(({ settings }) => setValues(tokenValues(settings)))
       .catch(() => setValues({}));
+    apiJson<StandardPage>(`/api/admin/pages/${slug}/standard`)
+      .then(setStandard)
+      .catch(() => setStandard(null));
   }, [slug]);
+
+  // Fills the editor with the standard text. Nothing is saved until Save.
+  const loadStandard = async () => {
+    const ok = await confirm({
+      title: label?.legal ? "Load the client's policy text?" : "Load the standard text?",
+      description: "The title and content in the editor are replaced. Nothing changes on the site until you press Save.",
+      confirmLabel: "Load text",
+    });
+    if (!ok) return;
+    setLoadingStandard(true);
+    try {
+      const fresh = await apiJson<StandardPage>(`/api/admin/pages/${slug}/standard`);
+      setTitle(fresh.standard.title);
+      setBody(fresh.standard.bodyHtml);
+      setEditorVersion((v) => v + 1);
+      toast.success("Text loaded. Check it in Preview, then Save.");
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setLoadingStandard(false);
+    }
+  };
+  const matchesStandard = standard !== null && title === standard.standard.title && body === standard.standard.bodyHtml;
 
   const dirty = page !== null && (title !== page.title || body !== page.bodyHtml);
   const typos = useMemo(() => [...new Set(unknownTokens(`${title} ${body}`))], [title, body]);
@@ -83,7 +113,7 @@ export default function PageEditor() {
         ? {
             title: `Publish “${title}”?`,
             description: label?.legal
-              ? "Students and Razorpay will be able to read it. Make sure the owner (and ideally a lawyer) has approved this text."
+              ? "Students will be able to read it, and it's linked from the footer and checkout. Make sure the owner (and ideally a lawyer) has approved this text."
               : "Students will be able to read it.",
             confirmLabel: "Publish",
           }
@@ -143,6 +173,31 @@ export default function PageEditor() {
         </label>
       </div>
 
+      {standard && (
+        <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          {matchesStandard ? (
+            <p className="flex items-start gap-2 text-sm">
+              <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-success" />
+              <span>{label?.legal ? "This page uses the client's own policy text." : "This page uses the standard text."}</span>
+            </p>
+          ) : (
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <FileTextIcon className="mt-0.5 size-4 shrink-0 text-brand-amber-text" />
+              <span>
+                {label?.legal
+                  ? "The client's own policy text (requirements of 6 Nov 2026) is ready to use. Load it, check the preview, then save and publish."
+                  : "A standard text is ready for this page."}
+              </span>
+            </p>
+          )}
+          {!matchesStandard && (
+            <Button type="button" variant="outline" className={`${actionButton} shrink-0`} disabled={loadingStandard || busy} onClick={loadStandard}>
+              {loadingStandard && <Loader2Icon className="animate-spin" />} Load the standard text
+            </Button>
+          )}
+        </div>
+      )}
+
       <Tabs defaultValue="edit">
         <TabsList>
           <TabsTrigger value="edit" className="h-9 px-4">Edit</TabsTrigger>
@@ -158,7 +213,7 @@ export default function PageEditor() {
               <div className="grid gap-2">
                 <span className="text-sm font-semibold">Content</span>
                 <RichTextEditor
-                  key={page.slug}
+                  key={`${page.slug}-${editorVersion}`}
                   value={body}
                   onChange={setBody}
                   ariaLabel={`${page.title} content`}

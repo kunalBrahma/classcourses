@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { FormError, SubmitButton } from "@/components/auth/form-bits";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
+import { whereAfterSignIn } from "@/lib/profile";
 
 // Second step of sign-up (and of signing in to an account that was never
 // verified): enter the 6-digit code emailed by the backend. A correct code
@@ -41,7 +42,7 @@ export function VerifyCodeStep({ email, retryAfter = 60, next, onBack }: { email
         json: { email, code: value },
       });
       setTokens(data.accessToken, data.refreshToken);
-      router.push(next);
+      router.push(await whereAfterSignIn(next));
       router.refresh();
     } catch (err) {
       const e = err as ApiError;

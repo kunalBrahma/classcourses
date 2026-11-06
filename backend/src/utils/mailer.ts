@@ -1,4 +1,4 @@
-import { passwordResetEmail } from "../emails/passwordReset";
+import { authCodeEmail } from "../emails/authCode";
 import { purchaseReceiptEmail } from "../emails/purchaseReceipt";
 import { verifyEmailCode } from "../emails/verifyEmail";
 import { contactMessageEmail } from "../emails/contactMessage";
@@ -10,15 +10,14 @@ import { AppError } from "./AppError";
 // build email content themselves. Delivery goes through the admin-configured
 // SMTP (mail.service.ts); unconfigured SMTP logs to the console in dev.
 
-// Never throws: forgot-password must respond identically whether or not the
-// email exists, so a delivery failure is logged instead of surfacing as a 5xx.
-export const sendPasswordResetEmail = async (email: string, token: string): Promise<void> => {
+// Never throws: "forgot password" and "unlock" answer the same whether or not
+// the email exists, so a delivery failure is logged instead of surfacing.
+export const sendAuthCodeEmail = async (to: string, purpose: "RESET_PASSWORD" | "UNLOCK_ACCOUNT", code: string, expiresInMinutes: number): Promise<void> => {
   try {
     const site = await requireSetting("site");
-    const resetUrl = `${site.frontendUrl.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
-    await sendMail({ to: email, ...passwordResetEmail({ siteName: site.name, resetUrl, expiresInMinutes: 60 }) });
+    await sendMail({ to, ...authCodeEmail({ purpose, siteName: site.name, code, expiresInMinutes }) });
   } catch (err) {
-    console.error("[mail] Failed to send password reset email:", err instanceof Error ? err.message : err);
+    console.error(`[mail] Failed to send ${purpose} code:`, err instanceof Error ? err.message : err);
   }
 };
 

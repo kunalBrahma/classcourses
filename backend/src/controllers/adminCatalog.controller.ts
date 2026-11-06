@@ -20,7 +20,7 @@ const isForce = (req: Request) => req.query.force === "true";
 const sameName = (name: string) => ({ name: { equals: name.trim(), mode: "insensitive" as const } });
 
 // Validates that `ids` is exactly the full sibling set, then writes order = index.
-const assertSameSet = (ids: string[], siblingIds: string[], what: string) => {
+export const assertSameSet = (ids: string[], siblingIds: string[], what: string) => {
   const siblings = new Set(siblingIds);
   if (ids.length !== siblings.size || ids.some((id) => !siblings.has(id))) {
     throw new AppError(400, `Send every ${what} in this group exactly once, in the new order`);

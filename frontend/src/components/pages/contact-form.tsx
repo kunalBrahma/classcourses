@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { Suspense, useCallback, useEffect, useId, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2Icon, Loader2Icon, SendIcon, UserCheckIcon } from "lucide-react";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/auth/form-bits";
 import { useMe } from "@/components/site/account-menu";
 import { ApiError, apiJson } from "@/lib/api";
-import { CONTACT_TOPICS, ContactValues, contactSchema, MESSAGE_MAX, toPayload } from "@/lib/contact";
+import { CONTACT_TOPICS, ContactTopic, ContactValues, contactSchema, MESSAGE_MAX, TOPIC_PLACEHOLDER, toPayload, topicFromKey } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 
 const field = "h-12 rounded-xl text-base";
@@ -24,7 +25,18 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-// Contact form (React Hook Form + Zod; the server validates again). The
+// /contact?topic=refund (three-dot menu, policies) preselects a topic. Its own
+// Suspense boundary: only this reads the URL, so the form itself is prerendered.
+function TopicFromUrl({ onTopic }: { onTopic: (topic: ContactTopic) => void }) {
+  const key = useSearchParams().get("topic");
+  useEffect(() => {
+    const topic = topicFromKey(key);
+    if (topic) onTopic(topic);
+  }, [key, onTopic]);
+  return null;
+}
+
+// Helpline form (React Hook Form + Zod; the server validates again). The
 // message is saved and the student sees "sent" right away; the email to the
 // team goes out in the background on the server.
 export function ContactForm({ email }: { email: string }) {
@@ -42,7 +54,8 @@ export function ContactForm({ email }: { email: string }) {
     formState: { errors, isSubmitting },
   } = useForm<ContactValues>({
     resolver: zodResolver(contactSchema),
-    defaultValues: { name: "", email: "", phone: "", topic: undefined, message: "", website: "" },
+    // "" shows "Choose a topic" (Zod still asks for a real one)
+    defaultValues: { name: "", email: "", phone: "", topic: "" as ContactTopic, message: "", website: "" },
     mode: "onTouched",
   });
 
@@ -55,13 +68,16 @@ export function ContactForm({ email }: { email: string }) {
   }, [me, getValues, setValue]);
 
   const length = useWatch({ control, name: "message" })?.length ?? 0;
+  const topic = useWatch({ control, name: "topic" });
+
+  const selectTopic = useCallback((t: ContactTopic) => setValue("topic", t, { shouldValidate: false }), [setValue]);
 
   const onSubmit = async (values: ContactValues) => {
     setServerError(null);
     try {
       await apiJson("/api/content/contact", { method: "POST", json: toPayload(values) });
       setSent(values.name.split(" ")[0]);
-      reset({ name: values.name, email: values.email, phone: values.phone, topic: undefined, message: "", website: "" });
+      reset({ name: values.name, email: values.email, phone: values.phone, topic: "" as ContactTopic, message: "", website: "" });
     } catch (err) {
       const e = err as ApiError;
       setServerError(e.status === 429 ? e.message : e.status === 0 ? e.message : `Sorry, that didn't go through. ${e.message}`);
@@ -91,6 +107,9 @@ export function ContactForm({ email }: { email: string }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-5">
+      <Suspense fallback={null}>
+        <TopicFromUrl onTopic={selectTopic} />
+      </Suspense>
       <FormError message={serverError} />
       {me && (
         // Only signed-in students get details filled in, and only their own.
@@ -156,7 +175,6 @@ export function ContactForm({ email }: { email: string }) {
           </Label>
           <select
             id={`${id}-topic`}
-            defaultValue=""
             aria-invalid={Boolean(errors.topic)}
             aria-describedby={describe("topic")}
             className={cn(
@@ -191,7 +209,7 @@ export function ContactForm({ email }: { email: string }) {
         <textarea
           id={`${id}-message`}
           rows={6}
-          placeholder="Tell us how we can help. For a payment, add the order ID from My profile."
+          placeholder={TOPIC_PLACEHOLDER[topic as ContactTopic] ?? "Tell us how we can help. For a payment, add the order ID from My profile."}
           aria-invalid={Boolean(errors.message)}
           aria-describedby={describe("message")}
           className={cn(

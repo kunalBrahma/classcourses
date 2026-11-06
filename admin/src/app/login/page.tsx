@@ -118,7 +118,8 @@ const panelBackground = {
 // ---------------------------------------------------------------------------
 
 const friendlyError = (status: number, message?: string) => {
-  if (status === 401) return "That email and password don't match. Check them and try again.";
+  // The server says how many tries are left once only a couple remain.
+  if (status === 401) return message && /\b(try|tries) left\b/.test(message) ? message : "That email and password don't match. Check them and try again.";
   if (status === 429) return message || "Too many sign-in attempts. Please wait 15 minutes and try again.";
   if (status === 400) return "Enter a valid email address and your password.";
   return message || "Sign-in failed. Please try again.";
@@ -134,6 +135,8 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0); // re-triggers the shake on each failure
   const [loading, setLoading] = useState(false);
+  // Sign-in paused after wrong passwords: offer an unlock code by email.
+  const [paused, setPaused] = useState(false);
 
   const ids = { email: useId(), password: useId(), error: useId(), caps: useId() };
   // `?denied=1` is set by the (panel) layout when a non-admin token is rejected.
@@ -159,6 +162,7 @@ function LoginForm() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        setPaused(data.code === "LOGIN_LOCKED");
         fail(friendlyError(res.status, data.error));
         return;
       }
@@ -188,6 +192,7 @@ function LoginForm() {
     "pointer-events-none absolute inset-y-0 left-0 grid w-11 place-items-center text-muted-foreground transition peer-focus:text-brand-amber-text";
 
   return (
+    <>
     <form
       onSubmit={handleSubmit}
       noValidate={false}
@@ -307,6 +312,116 @@ function LoginForm() {
         Admin access only · Students sign in on the main Class Course site
       </p>
     </form>
+    {paused && (
+      <UnlockPanel
+        email={email.trim()}
+        onUnlocked={() => {
+          setPaused(false);
+          setError(null);
+        }}
+      />
+    )}
+    </>
+  );
+}
+
+// After too many wrong passwords sign-in pauses, at most an hour for admins.
+// An unlock code emailed to the account's own address ends it at once, so
+// nobody else's guessing can keep the Founder out.
+function UnlockPanel({ email, onUnlocked }: { email: string; onUnlocked: () => void }) {
+  const codeId = useId();
+  const [step, setStep] = useState<"ask" | "code" | "done">("ask");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const post = async (path: string, body: object) => {
+    const res = await fetch(`${API_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "That didn't work. Please try again.");
+    return data;
+  };
+
+  const ask = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      await post("/api/auth/unlock/request", { email });
+      setStep("code");
+      setNote(`If ${email} is paused, an unlock code is on its way. It works for 5 minutes.`);
+    } catch (err) {
+      setNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unlock = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setNote(null);
+    try {
+      await post("/api/auth/unlock", { email, code: code.trim() });
+      setStep("done");
+      onUnlocked();
+    } catch (err) {
+      setNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const box = "mt-6 rounded-2xl border border-border bg-muted/40 p-4 text-sm";
+  if (step === "done") {
+    return (
+      <p role="status" className={`${box} font-medium text-foreground`}>
+        Unlocked. Enter your password above and sign in.
+      </p>
+    );
+  }
+  return (
+    <div className={box}>
+      <p className="font-semibold text-foreground">Is this your account?</p>
+      <p className="mt-1 text-muted-foreground">We can email an unlock code to {email || "your address"} so you can sign in again straight away.</p>
+      {step === "ask" ? (
+        <button
+          type="button"
+          onClick={ask}
+          disabled={busy || !email}
+          className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-accent disabled:opacity-60"
+        >
+          {busy && <Spinner />} Email me an unlock code
+        </button>
+      ) : (
+        <form onSubmit={unlock} className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <label htmlFor={codeId} className="sr-only">
+            Unlock code
+          </label>
+          <input
+            id={codeId}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="6-digit code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            className="h-11 flex-1 rounded-xl border border-input bg-card px-3 text-base tracking-[0.3em] text-foreground outline-none tabular-nums focus:border-ring focus:ring-4 focus:ring-ring/20"
+          />
+          <button
+            type="submit"
+            disabled={busy || code.length !== 6}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#ffbe4d] to-[#f5a623] px-5 font-bold text-brand-ink disabled:opacity-60"
+          >
+            {busy && <Spinner />} Unlock
+          </button>
+        </form>
+      )}
+      {note && (
+        <p role="status" className="mt-2 text-muted-foreground">
+          {note}
+        </p>
+      )}
+    </div>
   );
 }
 

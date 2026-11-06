@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpenIcon, FileTextIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ScaleIcon, TimerIcon, TrophyIcon, VideoIcon } from "lucide-react";
+import { BookOpenIcon, BugIcon, FileTextIcon, HeadsetIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ReceiptIcon, ScaleIcon, TimerIcon, TrophyIcon, UserIcon, VideoIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AccountPanel } from "@/components/site/account-menu";
 import { ThemeRow } from "@/components/site/theme-toggle";
@@ -20,6 +20,15 @@ const mainLinks = (show: { videos: boolean; news: boolean }) => [
   { href: "/notes", label: "Notes", icon: FileTextIcon },
   ...(show.videos ? [{ href: "/videos", label: "Videos", icon: VideoIcon }] : []),
   ...(show.news ? [{ href: "/news", label: "Latest news", icon: NewspaperIcon }] : []),
+];
+
+// The client's three-dot menu (6 Nov 2026): About, Helpline (Refund, Bug or
+// Error, Other Help), then User Profile. Refer and Earn and Saved Content join
+// it in their own phases (task-client-update.md).
+const HELP_LINKS = [
+  { href: "/contact?topic=refund", label: "Refund", icon: ReceiptIcon },
+  { href: "/contact?topic=bug", label: "Bug or Error", icon: BugIcon },
+  { href: "/contact?topic=help", label: "Other Help", icon: HelpCircleIcon },
 ];
 
 const PAGE_ICONS: Record<string, typeof HomeIcon> = {
@@ -70,8 +79,26 @@ export function MenuSheet({ siteName, pages, mediums, show, open, onOpenChange, 
             </Link>
           ))}
           <MediumRows mediums={mediums} onDone={close} />
-          {pages.length > 0 && <p className="px-3 pb-1 pt-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">About &amp; help</p>}
-          {pages.map((p) => {
+          <p className="px-3 pb-1 pt-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">About &amp; help</p>
+          <Link href="/about" onClick={close} className={item}>
+            <InfoIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> About
+          </Link>
+          <Link href="/contact" onClick={close} className={item}>
+            <HeadsetIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Helpline
+          </Link>
+          <ul aria-label="Helpline topics" className="ml-5 grid gap-0.5 border-l-2 border-border pl-2">
+            {HELP_LINKS.map(({ href, label, icon: Icon }) => (
+              <li key={href}>
+                <Link href={href} onClick={close} className={item}>
+                  <Icon className="size-5 text-brand-amber-text" aria-hidden="true" /> {label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <Link href="/profile" onClick={close} className={item}>
+            <UserIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> User Profile
+          </Link>
+          {pages.filter((p) => p.slug !== "about" && p.slug !== "contact").map((p) => {
             const Icon = PAGE_ICONS[p.slug] ?? FileTextIcon;
             return (
               <Link key={p.slug} href={`/${p.slug}`} onClick={close} className={item}>

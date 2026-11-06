@@ -3,10 +3,10 @@
 
 export const PAGE_LABELS: Record<string, { title: string; hint: string; legal?: boolean }> = {
   about: { title: "About Us", hint: "Mission, vision and what students get." },
-  contact: { title: "Contact", hint: "Email only — no phone or address." },
-  privacy: { title: "Privacy Policy", hint: "Required by Razorpay.", legal: true },
-  terms: { title: "Terms of Service", hint: "Required by Razorpay.", legal: true },
-  "refund-policy": { title: "Cancellation & Refund Policy", hint: "Required by Razorpay.", legal: true },
+  contact: { title: "Helpline", hint: "Shown beside the Helpline form. Email only, never a phone number." },
+  privacy: { title: "Privacy Policy", hint: "The client's own text. Linked in the footer and at checkout.", legal: true },
+  terms: { title: "Terms and Conditions", hint: "The client's own text. Linked in the footer and at checkout.", legal: true },
+  "refund-policy": { title: "Refund Policy", hint: "The client's own text. Linked at checkout.", legal: true },
 };
 
 export const TOKENS: { name: string; label: string }[] = [
@@ -19,6 +19,13 @@ export const TOKENS: { name: string; label: string }[] = [
   { name: "coins.perPass", label: "Coins per pass" },
   { name: "coins.coinValue", label: "Value of 1 coin (₹)" },
   { name: "coins.maxDiscountPercent", label: "Max coin discount %" },
+  { name: "operator.line", label: "Operated by" },
+  { name: "operator.address", label: "Address" },
+  { name: "operator.grievanceName", label: "Grievance Officer" },
+  { name: "operator.grievanceDesignation", label: "Grievance Officer's designation" },
+  { name: "operator.grievanceEmail", label: "Grievance Officer email" },
+  { name: "operator.replyWithinHours", label: "Reply within (hours)" },
+  { name: "operator.resolveWithinDays", label: "Resolve within (days)" },
 ];
 
 export interface PublicSettings {
@@ -26,6 +33,15 @@ export interface PublicSettings {
   coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number };
   contact: { email: string };
   site: { name: string };
+  operator: {
+    operatorLine: string;
+    address: string;
+    grievanceName: string;
+    grievanceDesignation: string;
+    grievanceEmail: string;
+    replyWithinHours: number;
+    resolveWithinDays: number;
+  };
 }
 
 const rupees = (paise: number) => {
@@ -43,7 +59,21 @@ export const tokenValues = (s: PublicSettings): Record<string, string> => ({
   "coins.perPass": String(s.coins.perPass),
   "coins.coinValue": rupees(s.coins.coinValuePaise),
   "coins.maxDiscountPercent": String(s.coins.maxDiscountPercent),
+  "operator.line": s.operator.operatorLine,
+  "operator.address": s.operator.address,
+  "operator.grievanceName": s.operator.grievanceName,
+  "operator.grievanceDesignation": s.operator.grievanceDesignation,
+  "operator.grievanceEmail": s.operator.grievanceEmail,
+  "operator.replyWithinHours": String(s.operator.replyWithinHours),
+  "operator.resolveWithinDays": String(s.operator.resolveWithinDays),
 });
+
+// GET /api/admin/pages/:slug/standard: the standard text (for the legal pages,
+// the client's own) to load into the editor. Nothing is saved until Save.
+export interface StandardPage {
+  standard: { title: string; bodyHtml: string; preview: string };
+  matchesCurrent: boolean;
+}
 
 const escapeHtml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 

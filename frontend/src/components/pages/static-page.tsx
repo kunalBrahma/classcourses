@@ -11,6 +11,7 @@ import {
   InfoIcon,
   ListIcon,
   MailIcon,
+  MapPinIcon,
   MessageCircleQuestionIcon,
   PlayCircleIcon,
   ReceiptIcon,
@@ -25,7 +26,8 @@ import { AboutVisual } from "@/components/pages/about-visual";
 import { ContactForm } from "@/components/pages/contact-form";
 import { Container } from "@/components/site/container";
 import { SocialIcons } from "@/components/site/social-icons";
-import { getCatalogStats, getFaq, getPage, getSiteSettings, type SitePage } from "@/lib/server-api";
+import { getCatalogStats, getFaq, getPage, getSiteSettings, type OperatorDetails, type SitePage } from "@/lib/server-api";
+import { HELPLINE_TOPICS } from "@/lib/contact";
 import { classBounds } from "@/lib/class-range";
 import { cn } from "@/lib/utils";
 import { STATIC_LINKS } from "@/lib/site-links";
@@ -35,7 +37,7 @@ export type StaticSlug = "about" | "contact" | "privacy" | "terms" | "refund-pol
 const LEGAL: StaticSlug[] = ["privacy", "terms", "refund-policy"];
 const DESCRIPTIONS: Record<StaticSlug, string> = {
   about: "What Class Course is and who it's for: chapter-wise study help for students of Assam.",
-  contact: "Questions about chapters, quizzes, coins or a payment? Send us a message and we'll reply by email.",
+  contact: "Refunds, bugs or errors, or any other help: send us a message and we'll reply by email.",
   privacy: "How Class Course collects, uses and protects your information.",
   terms: "The rules for using Class Course, its quizzes, coins and notes.",
   "refund-policy": "Refunds and cancellations for premium notes bought on Class Course.",
@@ -47,7 +49,7 @@ const ICONS: Record<StaticSlug, LucideIcon> = {
   terms: ScaleIcon,
   "refund-policy": ReceiptIcon,
 };
-const KICKERS: Record<StaticSlug, string> = { about: "About us", contact: "Contact us", privacy: "Legal", terms: "Legal", "refund-policy": "Legal" };
+const KICKERS: Record<StaticSlug, string> = { about: "About us", contact: "Helpline", privacy: "Legal", terms: "Legal", "refund-policy": "Legal" };
 
 const titleOf = (slug: StaticSlug, page: SitePage | null) => page?.title ?? STATIC_LINKS.find((l) => l.slug === slug)?.title ?? "Class Course";
 
@@ -99,7 +101,7 @@ function ComingSoon({ email }: { email: string }) {
       <p className="mt-2 text-muted-foreground">It will be here soon. Until then, write to us with any question.</p>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link href="/contact" className="press-3d inline-flex h-12 items-center gap-2 rounded-xl px-5 font-bold">
-          <MailIcon className="size-5" /> Contact us
+          <MailIcon className="size-5" /> Helpline
         </Link>
         <a href={`mailto:${email}`} className="inline-flex min-h-12 items-center rounded-xl border bg-card px-5 font-semibold [overflow-wrap:anywhere] hover:bg-accent">
           {email}
@@ -114,7 +116,7 @@ function ComingSoon({ email }: { email: string }) {
 // ---------------------------------------------------------------------------
 
 async function AboutPage({ page }: { page: SitePage | null }) {
-  const [{ site, quiz, coins }, stats, bounds] = await Promise.all([getSiteSettings(), getCatalogStats(), classBounds()]);
+  const [{ site, quiz, coins, operator }, stats, bounds] = await Promise.all([getSiteSettings(), getCatalogStats(), classBounds()]);
   const classRangeLabel = bounds ? (bounds.first === bounds.last ? bounds.first : `${bounds.first.replace(/^Class\s+/i, "Class ")} – ${bounds.last.replace(/^Class\s+/i, "")}`) : "Every class";
   const features: { icon: LucideIcon; title: string; text: string }[] = [
     { icon: BookOpenIcon, title: "Chapter-wise Q&A", text: "Every textbook question with a clear answer, plus extra questions that go further." },
@@ -243,6 +245,9 @@ async function AboutPage({ page }: { page: SitePage | null }) {
         </section>
       )}
 
+      {/* Who runs the site (operator, address, Grievance Officer) */}
+      <OperatorCard operator={operator} className="rounded-3xl sm:p-8" />
+
       {/* Call to action */}
       <section className="relative overflow-hidden rounded-3xl bg-[image:var(--header-bg)] p-6 text-brand-ink shadow-[var(--header-shadow)] sm:p-10 dark:text-brand-cream">
         <Coin3D className="pointer-events-none absolute -right-4 -top-4 size-28 text-4xl opacity-30 sm:size-36" />
@@ -266,23 +271,74 @@ async function AboutPage({ page }: { page: SitePage | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Contact (email only: never a phone number, WhatsApp or address)
+// Who runs the site + Grievance Officer (client requirements of 6 Nov 2026).
+// Shown on About and the Helpline, and in the footer. Never a phone number.
+// ---------------------------------------------------------------------------
+
+export function OperatorCard({ operator, className }: { operator: OperatorDetails; className?: string }) {
+  return (
+    <section aria-labelledby="operator-title" className={cn("card-3d rounded-2xl p-5", className)}>
+      <h2 id="operator-title" className="flex items-center gap-2 font-heading text-lg font-bold">
+        <ShieldCheckIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Who runs this website
+      </h2>
+      <dl className="mt-3 grid gap-3 text-[15px] leading-relaxed">
+        <div>
+          <dt className="text-sm text-muted-foreground">Operated by</dt>
+          <dd className="font-semibold">{operator.operatorLine}</dd>
+        </div>
+        <div>
+          <dt className="text-sm text-muted-foreground">Address</dt>
+          <dd className="flex items-start gap-1.5 font-semibold">
+            <MapPinIcon className="mt-1 size-4 shrink-0 text-brand-amber-text" aria-hidden="true" />
+            {operator.address}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-sm text-muted-foreground">Grievance Officer</dt>
+          <dd>
+            <span className="font-semibold">{operator.grievanceName}</span>, {operator.grievanceDesignation}
+            <a href={`mailto:${operator.grievanceEmail}`} className="mt-0.5 flex min-h-11 items-center gap-1.5 font-semibold text-brand-amber-text [overflow-wrap:anywhere] hover:underline">
+              <MailIcon className="size-4 shrink-0" aria-hidden="true" /> {operator.grievanceEmail}
+            </a>
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpline (the contact form; email only: never a phone number or WhatsApp)
 // ---------------------------------------------------------------------------
 
 async function ContactPage({ page }: { page: SitePage | null }) {
-  const [{ contact, social }, faq] = await Promise.all([getSiteSettings(), getFaq()]);
+  const [{ contact, social, operator }, faq] = await Promise.all([getSiteSettings(), getFaq()]);
   const [local, domain] = [contact.email.split("@")[0], contact.email.split("@").slice(1).join("@")];
   const hasSocial = Object.values(social).some(Boolean);
   return (
     <>
-      <Hero slug="contact" title="We'd love to hear from you" />
+      <Hero slug="contact" title="How can we help?">
+        <p>{DESCRIPTIONS.contact}</p>
+        <p className="mt-2 text-sm font-semibold opacity-80">
+          We aim to reply within {operator.replyWithinHours} hours and resolve ordinary complaints within {operator.resolveWithinDays} days.
+        </p>
+      </Hero>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section aria-labelledby="form-title" className="card-3d rounded-3xl p-5 sm:p-8">
           <h2 id="form-title" className="font-heading text-2xl font-extrabold tracking-tight">
             Send us a message
           </h2>
-          <p className="mb-6 mt-1 text-muted-foreground">We read every message and reply by email.</p>
+          <p className="mb-4 mt-1 text-muted-foreground">We read every message and reply by email.</p>
+          <ul aria-label="Choose a topic" className="mb-6 flex flex-wrap gap-2">
+            {HELPLINE_TOPICS.map((t) => (
+              <li key={t.key}>
+                <Link href={`/contact?topic=${t.key}`} scroll={false} title={t.hint} className="inline-flex min-h-11 items-center rounded-[12px] border bg-card px-4 text-[15px] font-semibold transition hover:bg-accent">
+                  {t.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
           <ContactForm email={contact.email} />
         </section>
 
@@ -301,14 +357,18 @@ async function ContactPage({ page }: { page: SitePage | null }) {
             </span>
           </a>
 
+          <OperatorCard operator={operator} />
+
           <div className="card-3d rounded-2xl p-5">
             <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
               <MessageCircleQuestionIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Quick help
             </h2>
             <ul className="mt-3 grid gap-3 text-[15px] leading-relaxed">
               <li>
-                <span className="font-semibold">A payment or a note?</span>{" "}
-                <span className="text-muted-foreground">Add the order ID from My profile → My orders, so we can find it quickly.</span>
+                <span className="font-semibold">A refund or a payment?</span>{" "}
+                <span className="text-muted-foreground">Add the order ID from My profile → My orders, so we can find it quickly. Read the </span>
+                <Link href="/refund-policy" className="font-semibold text-brand-amber-text hover:underline">Refund Policy</Link>
+                <span className="text-muted-foreground">.</span>
               </li>
               <li>
                 <span className="font-semibold">A mistake in a chapter?</span>{" "}
@@ -422,7 +482,7 @@ async function LegalPage({ slug, page }: { slug: StaticSlug; page: SitePage | nu
             <MailIcon className="size-5 shrink-0 text-brand-amber-text" aria-hidden="true" />
             <span>
               <span className="block font-heading font-bold">Questions about this?</span>
-              <span className="block text-sm text-muted-foreground">Send us a message</span>
+              <span className="block text-sm text-muted-foreground">Write to the Helpline</span>
             </span>
             <ArrowRightIcon className="ml-auto size-5 text-brand-amber-text" aria-hidden="true" />
           </Link>

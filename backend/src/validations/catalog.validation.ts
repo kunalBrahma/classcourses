@@ -90,3 +90,11 @@ export const updatePreferencesSchema = z.object({
   mediumId: id.nullable().optional(),
   classLevelId: id.nullable().optional(),
 });
+
+// ---- Districts (sign-up list) ----
+const districtName = z.string().trim().min(2, "Enter the district's name").max(80);
+const nativeDistrictName = z.string().trim().max(80).nullable().optional();
+export const createDistrictSchema = z.object({ name: districtName, nativeName: nativeDistrictName });
+export const updateDistrictSchema = z
+  .object({ name: districtName.optional(), nativeName: nativeDistrictName, isActive: z.boolean().optional() })
+  .refine((v) => Object.keys(v).length > 0, "Nothing to change");

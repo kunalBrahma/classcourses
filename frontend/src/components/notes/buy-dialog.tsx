@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
+import Link from "next/link";
 import { CheckCircle2Icon, Loader2Icon, LockIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -38,6 +39,9 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   const [useCoins, setUseCoins] = useState(initialUseCoins);
   const [step, setStep] = useState<Step>({ kind: "quote" });
   const [downloading, setDownloading] = useState(false);
+  // The unticked "a parent or guardian has permitted this purchase" box
+  // (client requirements of 6 Nov 2026). The server refuses an order without it.
+  const [confirmed, setConfirmed] = useState(false);
   // While Razorpay's own window is open, ours is hidden: a modal dialog makes
   // the rest of the page unclickable and traps focus, which would block
   // Razorpay's window (it's added outside our dialog). State is kept.
@@ -50,6 +54,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     if (open) {
       setQuote(null);
       setRazorpayOpen(false);
+      setConfirmed(false);
       setStep({ kind: "quote" });
     }
   }
@@ -102,12 +107,12 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   const canUseCoins = !!quote && quote.withCoins.coinsUsed > 0;
 
   const pay = async () => {
-    if (!chosen) return;
+    if (!chosen || !confirmed) return;
     setStep({ kind: "paying" });
     try {
       const { order, checkout } = await apiJson<{ order: OrderView; checkout: CheckoutOptions | null }>("/api/payments/orders", {
         method: "POST",
-        json: { noteId: note.id, useCoins: useCoins && canUseCoins },
+        json: { noteId: note.id, useCoins: useCoins && canUseCoins, parentConfirmed: true },
       });
       if (!checkout) {
         // Coins covered the whole price: the server already granted it.
@@ -236,16 +241,46 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
               </p>
             )}
 
+            <label htmlFor={`${id}-confirm`} className="flex cursor-pointer items-start gap-3 rounded-xl border bg-card px-3 py-3 text-[15px] leading-snug">
+              <input
+                id={`${id}-confirm`}
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                disabled={busy}
+                aria-describedby={`${id}-policies`}
+                className="mt-0.5 size-5 shrink-0 cursor-pointer accent-brand-amber"
+              />
+              <span>My parent or guardian has permitted this purchase.</span>
+            </label>
+            <p id={`${id}-policies`} className="-mt-1 text-sm text-muted-foreground">
+              By paying you agree to the{" "}
+              <Link href="/terms" target="_blank" className="font-semibold text-brand-amber-text underline">
+                Terms and Conditions
+              </Link>
+              ,{" "}
+              <Link href="/privacy" target="_blank" className="font-semibold text-brand-amber-text underline">
+                Privacy Policy
+              </Link>{" "}
+              and{" "}
+              <Link href="/refund-policy" target="_blank" className="font-semibold text-brand-amber-text underline">
+                Refund Policy
+              </Link>{" "}
+              (open in a new tab).
+            </p>
+
             <button
               type="button"
               onClick={pay}
-              disabled={!chosen || busy}
+              disabled={!chosen || busy || !confirmed}
               className={cn("press-3d inline-flex h-14 items-center justify-center gap-2 rounded-2xl text-lg font-bold disabled:opacity-60")}
             >
               {busy ? <Loader2Icon className="size-5 animate-spin" /> : <LockIcon className="size-5" />}
               {chosen?.amountPaise === 0 ? "Get it with coins" : chosen ? `Pay ${rupees(chosen.amountPaise)}` : "Pay"}
             </button>
-            <p className="text-center text-xs text-muted-foreground">Secure payment by Razorpay: UPI, cards and net banking.</p>
+            <p className="text-center text-xs text-muted-foreground">
+              {confirmed ? "Secure payment: UPI, cards and net banking." : "Tick the box above to continue."}
+            </p>
           </div>
         )}
       </DialogContent>
