@@ -2,12 +2,13 @@
 
 import { FormEvent, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
-import { GlobeIcon, Loader2Icon, MailIcon, RotateCcwIcon, Share2Icon, ShieldCheckIcon, type LucideIcon } from "lucide-react";
+import { GlobeIcon, Loader2Icon, MailIcon, RotateCcwIcon, Share2Icon, ShieldCheckIcon, UsersIcon, type LucideIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/admin/page-header";
 import { Field } from "@/components/admin/settings/field";
 import { SettingSource, SourceBadge } from "@/components/admin/settings/source-badge";
@@ -15,7 +16,7 @@ import { actionButton, formCard, inputClass, pressable } from "@/components/admi
 import { ApiError, apiJson } from "@/lib/api";
 import { useConfirm } from "@/components/admin/confirm";
 
-type Values = Record<string, string | number | null>;
+type Values = Record<string, string | number | boolean | null>;
 
 interface SettingRow {
   key: string;
@@ -26,7 +27,7 @@ interface SettingRow {
 interface FieldDef {
   name: string;
   label: string;
-  type?: "text" | "url" | "email" | "number";
+  type?: "text" | "url" | "email" | "number" | "switch";
   placeholder?: string;
   hint?: string;
   // Takes the whole row in a two-column card
@@ -34,7 +35,7 @@ interface FieldDef {
 }
 
 interface GroupDef {
-  key: "site" | "contact" | "operator" | "social";
+  key: "site" | "contact" | "operator" | "social" | "consent";
   title: string;
   description: string;
   icon: LucideIcon;
@@ -93,6 +94,16 @@ const GROUPS: GroupDef[] = [
       { name: "linkedin", label: "LinkedIn", type: "url" },
     ],
   },
+  {
+    key: "consent",
+    title: "Parent's permission",
+    description: "Students under 18 need a parent or guardian to agree (by an emailed link) before they can take quizzes, earn coins or buy notes. Until then they can still read free chapters.",
+    icon: UsersIcon,
+    fields: [
+      { name: "required", label: "Ask for a parent's permission for students under 18", type: "switch", wide: true, hint: "Keep this on unless your lawyer advises otherwise." },
+      { name: "linkValidDays", label: "The emailed link works for (days)", type: "number", hint: "1 to 30 days. The student can send a new link at any time." },
+    ],
+  },
 ];
 
 function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: SettingRow; onSaved: (row: SettingRow) => void }) {
@@ -108,7 +119,7 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
     setBusy("save");
     setError(null);
     try {
-      const body = Object.fromEntries(group.fields.map((f) => [f.name, values[f.name] ?? ""]));
+      const body = Object.fromEntries(group.fields.map((f) => [f.name, f.type === "switch" ? values[f.name] === true : (values[f.name] ?? "")]));
       const { setting } = await apiJson<{ setting: SettingRow }>(`/api/admin/settings/${group.key}`, { method: "PUT", json: body });
       setValues(setting.value ?? {});
       onSaved(setting);
@@ -149,7 +160,18 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
           <SourceBadge source={initial.source} className="shrink-0" />
         </CardHeader>
         <CardContent className={group.fields.length > 2 ? "grid gap-5 sm:grid-cols-2" : "grid gap-5"}>
-          {group.fields.map((f) => (
+          {group.fields.map((f) =>
+            f.type === "switch" ? (
+              <div key={f.name} className={`flex items-start justify-between gap-4 rounded-xl border px-4 py-3${f.wide ? " sm:col-span-2" : ""}`}>
+                <div className="min-w-0">
+                  <label htmlFor={`${id}-${f.name}`} className="text-sm font-semibold">
+                    {f.label}
+                  </label>
+                  {f.hint && <p className="mt-0.5 text-xs text-muted-foreground">{f.hint}</p>}
+                </div>
+                <Switch id={`${id}-${f.name}`} checked={values[f.name] === true} onCheckedChange={(on) => setValues((v) => ({ ...v, [f.name]: on }))} />
+              </div>
+            ) : (
             <Field key={f.name} id={`${id}-${f.name}`} label={f.label} hint={f.hint} className={f.wide ? "sm:col-span-2" : undefined}>
               <Input
                 id={`${id}-${f.name}`}
@@ -159,12 +181,13 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
                 min={f.type === "number" ? 1 : undefined}
                 autoCapitalize={f.type ? "none" : undefined}
                 spellCheck={f.type ? false : undefined}
-                value={values[f.name] ?? ""}
+                value={typeof values[f.name] === "boolean" ? "" : ((values[f.name] as string | number | null) ?? "")}
                 placeholder={f.placeholder ?? (f.type === "url" ? "https://…" : undefined)}
                 onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
               />
             </Field>
-          ))}
+            )
+          )}
           {error && (
             <Alert variant="destructive" className="sm:col-span-2">
               <AlertTitle>Not saved</AlertTitle>
@@ -201,7 +224,7 @@ export default function GeneralSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="General" description="Site details, support email, operator and Grievance Officer, and social links used across the student site and emails." />
+      <PageHeader title="General" description="Site details, support email, operator and Grievance Officer, social links, and the parent's permission rule for students under 18." />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Couldn&apos;t load settings</AlertTitle>

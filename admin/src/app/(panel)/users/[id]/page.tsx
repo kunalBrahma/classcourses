@@ -20,6 +20,10 @@ import { formCard, inputClass, pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { COIN_REASON, formatDate, formatPhone, initials, MISSING_LABEL, QUIZ_STATUS, Role, UserDetail } from "@/lib/people";
 import { UnverifiedBadge } from "@/components/admin/unverified-badge";
+import { AccountActions } from "@/components/admin/users/account-actions";
+import { ConsentCard } from "@/components/admin/users/consent-card";
+import { ModerationCard } from "@/components/admin/users/moderation-card";
+import { UserRecords } from "@/components/admin/users/user-records";
 import { cn } from "@/lib/utils";
 
 function CoinAdjust({ user, onDone }: { user: UserDetail; onDone: () => void }) {
@@ -158,7 +162,7 @@ function AccountCard({ user, onDone }: { user: UserDetail; onDone: () => void })
       title: role === "ADMIN" ? `Make ${user.name || user.email} an admin?` : `Remove admin access from ${user.name || user.email}?`,
       description:
         role === "ADMIN"
-          ? "They will be able to change everything in this panel, including settings, content, coins and other users. They'll be signed out and must sign in again."
+          ? "They become a helper admin with no sections yet: tick what they may use in Team. They'll be signed out and must sign in again."
           : "They become a student and lose access to this panel. They'll be signed out.",
       confirmLabel: role === "ADMIN" ? "Make admin" : "Remove admin",
       destructive: role === "STUDENT",
@@ -179,7 +183,7 @@ function AccountCard({ user, onDone }: { user: UserDetail; onDone: () => void })
   return (
     <Card className={formCard}>
       <CardHeader>
-        <CardTitle className="font-heading text-lg">Account</CardTitle>
+        <CardTitle className="font-heading text-lg">Name and role</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-5">
         <form onSubmit={saveName} className="grid gap-2">
@@ -294,6 +298,7 @@ function ProfileCard({ user }: { user: UserDetail }) {
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const me = useAdmin();
   const [user, setUser] = useState<UserDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -392,16 +397,32 @@ export default function UserDetailPage() {
 
       <SignInPause userId={user.id} />
       <ProfileCard user={user} />
+      <ConsentCard key={user.id} user={user} />
+      <ModerationCard user={user} />
+      <AccountActions user={user} onDone={() => void load()} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <CoinAdjust user={user} onDone={() => void load()} />
-        <AccountCard key={`${user.role}-${user.name}`} user={user} onDone={() => void load()} />
+        {/* Role changes are for the Super Admin (helpers edit names in Account → Edit details) */}
+        {me.adminLevel !== "HELPER" && <AccountCard key={`${user.role}-${user.name}`} user={user} onDone={() => void load()} />}
       </div>
 
       <Card className={`${formCard} gap-0 py-0`}>
-        <div className="border-b px-4 py-3">
-          <p className="font-heading font-bold">Coin history</p>
-          <p className="text-xs text-muted-foreground">Latest 50 changes</p>
+        <div className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="font-heading font-bold">Coin history</p>
+            <p className="text-xs text-muted-foreground">Latest 50 changes · each credit is valid for its own period from the day it was earned</p>
+          </div>
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {user.nextCoinExpiry && (
+              <span>
+                Next to expire: <span className="font-semibold text-foreground">{user.nextCoinExpiry.amount}</span> on {formatDate(user.nextCoinExpiry.expiresAt)}
+              </span>
+            )}
+            <span>
+              Expired so far: <span className="font-semibold text-foreground">{user.expiredCoins}</span>
+            </span>
+          </p>
         </div>
         {user.coinTxns.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">No coin activity yet.</p>
@@ -423,6 +444,15 @@ export default function UserDetailPage() {
                     {formatDate(t.createdAt, true)}
                     {t.note && ` · ${t.note}`}
                   </span>
+                  {t.lot && (
+                    <span className={cn("block text-xs", t.lot.expiredAmount > 0 ? "text-destructive" : "text-muted-foreground")}>
+                      {t.lot.expiredAmount > 0
+                        ? `${t.lot.expiredAmount} expired on ${formatDate(t.lot.expiresAt)}`
+                        : t.lot.remaining > 0
+                          ? `${t.lot.remaining} left · valid until ${formatDate(t.lot.expiresAt)}`
+                          : `All used · was valid until ${formatDate(t.lot.expiresAt)}`}
+                    </span>
+                  )}
                 </span>
                 <span className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">
                   balance
@@ -433,6 +463,8 @@ export default function UserDetailPage() {
           </ul>
         )}
       </Card>
+
+      <UserRecords user={user} isSuper={me.adminLevel !== "HELPER"} />
 
       <Card className={`${formCard} gap-0 py-0`}>
         <div className="border-b px-4 py-3">

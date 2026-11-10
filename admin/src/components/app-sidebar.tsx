@@ -14,7 +14,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { NAV } from "@/components/admin/nav";
+import { navFor } from "@/components/admin/nav";
+import { useAdmin } from "@/components/admin/session";
 import { LogoFull, LogoMark } from "@/components/admin/logo-mark";
 
 // shadcn sidebar-07 (collapses to an icon rail), restyled with the Class Course
@@ -40,13 +41,15 @@ function BrandHeader() {
 }
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  // Helper admins see only the sections ticked for them in Team.
+  const nav = navFor(useAdmin());
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="pt-3">
         <BrandHeader />
       </SidebarHeader>
       <SidebarContent>
-        {NAV.map((group) => (
+        {nav.map((group) => (
           <NavMain key={group.label} label={group.label} sections={group.sections} />
         ))}
       </SidebarContent>

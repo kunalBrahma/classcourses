@@ -10,6 +10,7 @@ import { ChapterSection } from "@/components/chapter/chapter-section";
 import { JumpBar } from "@/components/chapter/jump-bar";
 import { McqPractice } from "@/components/chapter/mcq-practice";
 import { QaList } from "@/components/chapter/qa-list";
+import { ReactionBar } from "@/components/engagement/reaction-bar";
 import { VideoCard } from "@/components/kit/video-card";
 import { NoteList } from "@/components/notes/note-list";
 import { RememberMedium } from "@/components/catalog/remember-medium";
@@ -95,6 +96,8 @@ async function ChapterPageContent({ params }: { params: Props["params"] }) {
           </p>
         </div>
       </header>
+      {/* Like, Save and Share directly under the heading (client, 6 Nov 2026) */}
+      <ReactionBar target={{ chapterId: c.id }} title={chapterName(c)} className="-mt-2 mb-4 max-w-3xl" />
 
       <div className="max-w-3xl">
         <JumpBar links={jump} />

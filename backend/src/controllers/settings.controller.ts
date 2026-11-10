@@ -20,6 +20,8 @@ import {
 import { testStorageConfig } from "../services/storage.service";
 import { testSmtpConfig } from "../services/mail.service";
 import { razorpayMode, testRazorpayKeys } from "../services/razorpay.service";
+import { testCashfreeKeys } from "../services/cashfree.service";
+import { assertGatewayReady } from "../services/order.service";
 
 // ---------------------------------------------------------------------------
 // Public
@@ -58,6 +60,8 @@ export const updateSettingHandler = asyncHandler(async (req: Request, res: Respo
   const key = genericKeyParam(req);
   const body = z.record(z.unknown()).parse(req.body ?? {});
   const candidate = await buildSettingCandidate(key, body);
+  // Switching the payment gateway: only to one whose keys work right now.
+  if (key === "payments") await assertGatewayReady((candidate as { provider: "cashfree" | "razorpay" }).provider);
   await saveSetting(key, candidate);
   res.json({ message: "Setting saved", setting: await getSettingAdminView(key) });
 });
@@ -207,4 +211,39 @@ export const updateRazorpaySettings = asyncHandler(async (req: Request, res: Res
 export const resetRazorpaySettings = asyncHandler(async (req: Request, res: Response) => {
   await resetSetting("razorpay");
   res.json({ message: "Payment settings reset to environment defaults", razorpay: await razorpayView(req) });
+});
+
+// ---------------------------------------------------------------------------
+// Payments (Cashfree) — saving checks the keys with Cashfree first
+// ---------------------------------------------------------------------------
+
+const cashfreeView = async (req: Request) => {
+  const view = await getSettingAdminView("cashfree");
+  return {
+    ...view,
+    // Paste into Cashfree Dashboard → Developers → Webhooks (Payment and Refund events, version 2023-08-01).
+    webhookUrl: `${req.protocol}://${req.get("host")}/api/payments/webhook/cashfree`,
+  };
+};
+
+export const getCashfreeSettings = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ cashfree: await cashfreeView(req) });
+});
+
+export const testCashfreeSettings = asyncHandler(async (req: Request, res: Response) => {
+  const candidate = await buildSettingCandidate("cashfree", req.body);
+  res.json({ result: await testCashfreeKeys(candidate) });
+});
+
+export const updateCashfreeSettings = asyncHandler(async (req: Request, res: Response) => {
+  const candidate = await buildSettingCandidate("cashfree", req.body);
+  const result = await testCashfreeKeys(candidate);
+  if (!result.ok) throw new AppError(400, `${result.message} Settings not saved.`);
+  await saveSetting("cashfree", candidate);
+  res.json({ message: "Cashfree settings saved", cashfree: await cashfreeView(req), result });
+});
+
+export const resetCashfreeSettings = asyncHandler(async (req: Request, res: Response) => {
+  await resetSetting("cashfree");
+  res.json({ message: "Cashfree settings reset to the server values", cashfree: await cashfreeView(req) });
 });

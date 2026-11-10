@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
 import { LanguageLoader } from "@/components/site/language-loader";
 import { ProfileGate } from "@/components/auth/profile-gate";
+import { ConsentBanner } from "@/components/consent/consent-banner";
 import { getSiteSettings } from "@/lib/server-api";
 import "./globals.css";
 
@@ -53,6 +54,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             Skip to content
           </a>
           <SiteHeader />
+          {/* Under 18 and waiting for a parent: why quizzes and buying are off */}
+          <Suspense fallback={null}>
+            <ConsentBanner />
+          </Suspense>
           <main id="main" className="flex flex-1 flex-col">
             {children}
           </main>

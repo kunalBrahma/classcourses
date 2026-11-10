@@ -5,6 +5,9 @@ import { env } from "../config/env";
 export interface TokenPayload {
   userId: string;
   email: string;
+  // User.tokenVersion when issued; bumped to sign the account out everywhere.
+  // Tokens from before it existed have none (treated as 0).
+  tv?: number;
 }
 
 export const generateAccessToken = (payload: TokenPayload): string => {

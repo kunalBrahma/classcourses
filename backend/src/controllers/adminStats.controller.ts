@@ -93,14 +93,20 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
       prisma.quiz.count({ where: { isPublished: true } }),
     ]),
     prisma.order.findMany({
-      where: { OR: [{ status: "PAID", refundId: null, lastError: { contains: "refund failed" } }, { status: "PAID", lastError: { contains: "spent" } }] },
+      where: {
+        OR: [
+          { status: "PAID", refundId: null, lastError: { contains: "refund failed", mode: "insensitive" } },
+          { status: "PAID", lastError: { contains: "spent" } },
+        ],
+      },
       select: { id: true, lastError: true },
       take: 20,
     }),
     Promise.all([
       hasPrivateBucket(),
       getSetting("smtp"),
-      getSetting("razorpay"),
+      // The gateway new orders use must have its keys
+      getSetting("payments").then(async (p) => (p?.provider === "razorpay" ? getSetting("razorpay") : getSetting("cashfree"))),
       prisma.page.count({ where: { isPublished: true } }),
       prisma.contactMessage.count({ where: { status: "NEW" } }),
     ]),
@@ -150,17 +156,19 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
   });
   const notes = await prisma.note.findMany({ where: { id: { in: noteSales.map((n) => n.noteId) } }, select: { id: true, title: true } });
 
-  const [privateBucket, smtp, razorpay, pagesPublished, newMessages] = config;
+  const [privateBucket, smtp, gatewayKeys, pagesPublished, newMessages] = config;
   const attention: { message: string; href: string }[] = [];
   if (newMessages) attention.push({ message: `${newMessages} new contact message${newMessages === 1 ? "" : "s"} to answer`, href: "/messages" });
   const failedRefunds = flagged.filter((o) => o.lastError?.includes("refund failed")).length;
   const spentCoins = flagged.length - failedRefunds;
+  const heldReferrals = await prisma.referral.count({ where: { status: "HELD" } });
+  if (heldReferrals) attention.push({ message: `${heldReferrals} referral${heldReferrals === 1 ? "" : "s"} waiting for your review`, href: "/referrals?status=HELD" });
   if (failedRefunds) attention.push({ message: `${failedRefunds} duplicate payment${failedRefunds === 1 ? "" : "s"} couldn't be refunded automatically`, href: "/orders?status=PAID" });
   if (spentCoins) attention.push({ message: `${spentCoins} late payment${spentCoins === 1 ? "" : "s"} where the discount coins had already been spent`, href: "/orders?status=PAID" });
-  if (!razorpay) attention.push({ message: "Online payments aren't set up, so premium notes can't be sold", href: "/settings/payments" });
+  if (!gatewayKeys) attention.push({ message: "Online payments aren't set up, so premium notes can't be sold", href: "/settings/payments" });
   if (!privateBucket) attention.push({ message: "No private storage for note PDFs yet", href: "/settings/storage" });
   if (!smtp) attention.push({ message: "Email isn't set up: sign-up codes and receipts can't be sent", href: "/settings/email" });
-  if (pagesPublished < 4) attention.push({ message: "Publish the Contact, Privacy, Terms and Refund pages (Razorpay checks them)", href: "/pages" });
+  if (pagesPublished < 4) attention.push({ message: "Publish the Helpline, Privacy, Terms and Refund pages (the payment gateway checks them)", href: "/pages" });
 
   const revenue = paid.reduce((s, o) => s + o.amountPaise, 0);
   const [subjects, publishedChapters, qa, mcq, videos, publishedNotes, publishedQuizzes] = content;

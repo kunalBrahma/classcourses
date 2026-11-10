@@ -205,7 +205,7 @@ export const FAQ: { question: string; answerHtml: string }[] = [
   {
     question: "What are coins?",
     answerHtml:
-      "<p>You earn {{coins.perPass}} coins when you pass a chapter quiz. Each coin is worth {{coins.coinValue}} off premium notes, up to {{coins.maxDiscountPercent}}% of a note's price. Coins have no cash value and cannot be withdrawn.</p>",
+      "<p>You earn {{coins.perPass}} coins the first time you pass each chapter's quiz. Each coin is worth {{coins.coinValue}} off premium notes, up to {{coins.maxDiscountPercent}}% of a note's price. Coins are valid for {{coins.validityDays}} days from the day you earn them, and have no cash value: they cannot be withdrawn.</p>",
   },
   {
     question: "How do I buy premium notes?",

@@ -25,6 +25,22 @@ export interface Me {
   isMinor: boolean | null;
   profileComplete: boolean;
   missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
+  // Quizzes, coins and purchases need a date of birth, and a parent's consent
+  // under 18 (backend consent.service.ts)
+  access?: Access;
+}
+
+export interface Access {
+  fullAccess: boolean;
+  block: "NO_DATE_OF_BIRTH" | "CONSENT_REQUIRED" | null;
+  consent: {
+    required: boolean;
+    status: "NONE" | "PENDING" | "GRANTED" | "DECLINED" | "WITHDRAWN";
+    parentEmail: string | null;
+    lastSentAt: string | null;
+    expired: boolean;
+    decidedAt: string | null;
+  };
 }
 
 export const initials = (name: string | null, email: string) =>

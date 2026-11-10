@@ -34,5 +34,6 @@ export const isAutoChapterSlug = (slug: string, number: number) => new RegExp(`^
 export const RESERVED_TOP_LEVEL = new Set([
   "about", "contact", "faq", "privacy", "terms", "refund-policy",
   "notes", "profile", "quiz", "login", "register", "forgot-password", "reset-password",
-  "kit", "search", "videos", "news", "api", "admin", "sitemap.xml", "robots.txt", "welcome",
+  "kit", "search", "videos", "news", "api", "admin", "sitemap.xml", "robots.txt", "welcome", "checkout", "consent", "parent-consent",
+  "blog", "saved", "notifications", "announcements", "refer",
 ]);

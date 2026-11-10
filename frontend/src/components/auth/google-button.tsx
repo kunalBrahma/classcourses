@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2Icon } from "lucide-react";
 import { FormError } from "@/components/auth/form-bits";
+import { forgetReferral, referralFields } from "@/lib/referral";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
 import { whereAfterSignIn } from "@/lib/profile";
@@ -83,9 +84,10 @@ export function GoogleButton({ next }: { next: string }) {
       try {
         const data = await publicJson<{ accessToken: string; refreshToken: string }>("/api/auth/google", {
           method: "POST",
-          json: { credential },
+          json: { credential, ...referralFields() },
         });
         setTokens(data.accessToken, data.refreshToken);
+        forgetReferral();
         router.push(await whereAfterSignIn(next));
         router.refresh();
       } catch (err) {

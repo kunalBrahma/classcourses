@@ -7,7 +7,7 @@ import { useMe, useSignedIn } from "@/components/site/account-menu";
 // The mock's reward strip: coin, "120 Coins Earned", "Win quizzes, get
 // discounts", and a white Redeem pill (coins are spent as money off notes).
 // Guests see an invitation instead of a made-up number.
-export function CoinCard() {
+export function CoinCard({ validityDays }: { validityDays: number }) {
   const signedIn = useSignedIn();
   const me = useMe();
   const title = signedIn ? (me ? `${me.coins} Coins Earned` : "Your Coins") : "Earn Coins";
@@ -27,6 +27,8 @@ export function CoinCard() {
           {title}
         </p>
         <p className="text-sm">Win quizzes, get discounts</p>
+        {/* Client rule (6 Nov 2026): say clearly that coins don't last forever. */}
+        <p className="text-xs font-semibold opacity-75">Coins are valid for {validityDays} days</p>
       </div>
       {signedIn ? (
         <Link href="/notes" className={pill}>

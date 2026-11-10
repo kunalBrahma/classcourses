@@ -22,6 +22,7 @@ const MAIN_PAGES = [
   { path: "/notes", label: "Notes" },
   { path: "/videos", label: "Videos" },
   { path: "/news", label: "News" },
+  { path: "/blog", label: "Blog" },
   { path: "/about", label: "About Us" },
   { path: "/contact", label: "Contact Us" },
   { path: "/faq", label: "Questions & Answers" },

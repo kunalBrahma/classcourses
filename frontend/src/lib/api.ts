@@ -2,6 +2,25 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./auth"
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
+// The admin suspended or blocked the account (client requirements of 6 Nov
+// 2026): sign out here and show the server's reason on the sign-in page.
+export const ACCOUNT_NOTICE_KEY = "cc-account-notice";
+const ACCOUNT_CODES = new Set(["ACCOUNT_SUSPENDED", "ACCOUNT_BLOCKED"]);
+const handleAccountRefusal = async (res: Response) => {
+  if (res.status !== 403 || typeof window === "undefined") return;
+  const body = (await res.clone().json().catch(() => null)) as { code?: string; error?: string } | null;
+  if (!body?.code || !ACCOUNT_CODES.has(body.code)) return;
+  clearTokens();
+  try {
+    sessionStorage.setItem(ACCOUNT_NOTICE_KEY, body.error ?? "This account can't be used right now.");
+  } catch {
+    /* private mode: the sign-in page still explains on the next try */
+  }
+  // A full load on purpose: drops everything the signed-out session had in memory.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- plain module, no router here
+  if (!window.location.pathname.startsWith("/login")) window.location.assign("/login");
+};
+
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
@@ -13,6 +32,7 @@ async function refreshAccessToken(): Promise<string | null> {
   });
 
   if (!res.ok) {
+    await handleAccountRefusal(res);
     clearTokens();
     return null;
   }
@@ -43,6 +63,7 @@ export async function api(path: string, options: RequestInit = {}) {
       res = await doFetch(newAccessToken);
     }
   }
+  await handleAccountRefusal(res);
 
   return res;
 }

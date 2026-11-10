@@ -7,15 +7,27 @@ import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { parseDateOfBirth, profileOptions, profileStatus, requireActiveClass, requireActiveDistrict } from "../services/profile.service";
 import { sendAuthCodeEmail } from "../utils/mailer";
+import { refreshCoins } from "../services/coin.service";
+import { assertCanSignIn, assertEmailNotBlocked } from "../services/account.service";
+import { accessState } from "../services/consent.service";
 import { issueAuthCode, useAuthCode } from "../services/authCode.service";
 import { accountKey, activeLock, clearAccount, clearNetwork, ipThrottleKey, LockInfo, recordLoginFailure, waitText } from "../services/loginThrottle.service";
 import { AUTH_CODE_RESEND_SECONDS, AUTH_CODE_TTL_SECONDS } from "../config/limits";
 import { AdminLoginResult } from "@prisma/client";
 import { signInWithGoogle } from "../services/googleAuth.service";
+import { recordReferral, settleReferral } from "../services/referral.service";
 import { RESEND_COOLDOWN_SECONDS, sendVerificationCode, verifyCode } from "../services/emailVerification.service";
 
+const referralSignal = (req: Request) => ({
+  code: req.body.referralCode ?? null,
+  deviceId: req.body.deviceId ?? null,
+  ip: req.ip ?? null,
+  userAgent: req.get("user-agent") ?? null,
+});
+
 const issueTokenPair = async (userId: string, email: string) => {
-  const accessToken = generateAccessToken({ userId, email });
+  const { tokenVersion } = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { tokenVersion: true } });
+  const accessToken = generateAccessToken({ userId, email, tv: tokenVersion });
   const { token: refreshToken, expiresAt } = generateRefreshToken();
 
   await prisma.refreshToken.create({
@@ -38,6 +50,7 @@ const userView = (u: { id: string; email: string; name: string | null; role: str
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const { email, password, name, phone } = req.body;
 
+  await assertEmailNotBlocked(email);
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser?.emailVerified) {
     throw new AppError(400, "This email is already registered. Please log in.");
@@ -58,6 +71,9 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     ? await prisma.user.update({ where: { id: existingUser.id }, data: { password: hashedPassword, name, phone, ...profile } })
     : await prisma.user.create({ data: { email, password: hashedPassword, name, phone, ...profile, emailVerified: false } });
 
+  // Refer and Earn: recorded now, settled once the email is verified
+  if (!existingUser) await recordReferral(user.id, referralSignal(req));
+
   const { retryAfter } = await sendVerificationCode(user);
 
   res.status(201).json({
@@ -70,6 +86,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   const user = await verifyCode(req.body.email, req.body.code);
+  await settleReferral(user.id);
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email);
   res.json({ message: "Email verified", user: userView(user), accessToken, refreshToken });
 });
@@ -132,6 +149,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     );
   }
   await clearAccount(email);
+  // Right password, but the admin suspended or blocked the account: say so.
+  assertCanSignIn(user);
 
   // Right password, email not verified yet: send a code (unless one just
   // went out) and let the client show the code screen.
@@ -153,6 +172,10 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
 export const loginWithGoogle = asyncHandler(async (req: Request, res: Response) => {
   const user = await signInWithGoogle(req.body.credential);
+  assertCanSignIn(user);
+  // A brand-new Google account can come with an invite code; its email is verified already
+  await recordReferral(user.id, referralSignal(req));
+  await settleReferral(user.id);
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email);
   res.json({ message: "Login successful", user: userView(user), accessToken, refreshToken });
 });
@@ -171,6 +194,8 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     }
     throw new AppError(401, "Invalid or expired refresh token");
   }
+  // Suspended / blocked meanwhile: no new tokens (and say why).
+  assertCanSignIn(stored.user);
 
   // Rotate: delete the used token and issue a brand new pair. If a stolen
   // token is ever replayed after the legitimate client already rotated it,
@@ -256,6 +281,7 @@ export const getMe = asyncHandler(async (req: AuthRequest, res: Response) => {
   if (!userId) {
     throw new AppError(401, "Unauthorized");
   }
+  await refreshCoins(userId); // the coin chip never shows expired coins
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -265,6 +291,8 @@ export const getMe = asyncHandler(async (req: AuthRequest, res: Response) => {
       name: true,
       phone: true,
       role: true,
+      adminLevel: true,
+      adminPermissions: true,
       mediumId: true,
       classLevelId: true,
       classLevel: { select: { id: true, name: true, slug: true } },
@@ -282,6 +310,10 @@ export const getMe = asyncHandler(async (req: AuthRequest, res: Response) => {
   }
 
   // profileComplete / missingProfile / dateOfBirth ("YYYY-MM-DD") / age / isMinor
-  const { dateOfBirth: _dob, ...rest } = user;
-  res.json({ user: { ...rest, ...profileStatus(user) } });
+  const { dateOfBirth: _dob, adminLevel, adminPermissions, ...rest } = user;
+  // Admins: SUPER (everything) or HELPER (only adminPermissions); students get neither.
+  const admin = user.role === "ADMIN" ? { adminLevel, adminPermissions } : {};
+  // fullAccess / block / consent: quizzes and purchases need a date of birth,
+  // and a parent's consent under 18 (consent.service.ts).
+  res.json({ user: { ...rest, ...admin, ...profileStatus(user), access: await accessState(userId) } });
 });

@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { formCard } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { formatDate, formatPhone, initials, profileLine, UserRow } from "@/lib/people";
+import { CONSENT_BADGE, formatDate, formatPhone, initials, profileLine, STATUS_BADGE, UserRow } from "@/lib/people";
 import { UnverifiedBadge } from "@/components/admin/unverified-badge";
 
 interface Page {
@@ -30,6 +30,16 @@ const PAGE_SIZE = 25;
 const ALL = "all";
 
 // Class / district / profile filters, kept in the URL like the rest.
+// India calendar days (YYYY-MM-DD) for the "Joined" filter; the API counts them in IST.
+const istDay = (offsetDays = 0) => new Date(Date.now() + 5.5 * 3_600_000 - offsetDays * 86_400_000).toISOString().slice(0, 10);
+const joinedRange = (value: string): { from?: string; to?: string } => {
+  if (value === "today") return { from: istDay() };
+  if (value === "7" || value === "30" || value === "90") return { from: istDay(Number(value) - 1) };
+  if (value === "this-year") return { from: `${istDay().slice(0, 4)}-01-01` };
+  if (value === "before-this-year") return { to: `${Number(istDay().slice(0, 4)) - 1}-12-31` };
+  return {};
+};
+
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
     <Select value={value} onValueChange={onChange}>
@@ -65,6 +75,9 @@ function UsersList() {
   const classFilter = params.get("class") ?? ALL;
   const districtFilter = params.get("district") ?? ALL;
   const profileFilter = params.get("profile") ?? ALL;
+  const statusFilter = params.get("status") ?? ALL;
+  const consentFilter = params.get("consent") ?? ALL;
+  const joinedFilter = params.get("joined") ?? ALL;
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [districts, setDistricts] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
 
@@ -102,6 +115,11 @@ function UsersList() {
     if (classFilter !== ALL) q.set("classLevelId", classFilter);
     if (districtFilter !== ALL) q.set("districtId", districtFilter);
     if (profileFilter !== ALL) q.set("profile", profileFilter);
+    if (statusFilter !== ALL) q.set("status", statusFilter);
+    if (consentFilter !== ALL) q.set("consent", consentFilter);
+    const joined = joinedRange(joinedFilter);
+    if (joined.from) q.set("joinedFrom", joined.from);
+    if (joined.to) q.set("joinedTo", joined.to);
     let cancelled = false;
     apiJson<Page>(`/api/admin/users?${q.toString()}`)
       .then((res) => !cancelled && (setData(res), setError(null)))
@@ -109,8 +127,8 @@ function UsersList() {
     return () => {
       cancelled = true;
     };
-  }, [role, page, query, classFilter, districtFilter, profileFilter]);
-  const filtered = Boolean(query) || classFilter !== ALL || districtFilter !== ALL || profileFilter !== ALL;
+  }, [role, page, query, classFilter, districtFilter, profileFilter, statusFilter, consentFilter, joinedFilter]);
+  const filtered = Boolean(query) || classFilter !== ALL || districtFilter !== ALL || profileFilter !== ALL || statusFilter !== ALL || consentFilter !== ALL || joinedFilter !== ALL;
 
   return (
     <div className="space-y-6">
@@ -160,6 +178,42 @@ function UsersList() {
             { value: "incomplete", label: "Needs details" },
           ]}
         />
+        <FilterSelect
+          label="Parent's permission"
+          value={consentFilter}
+          onChange={(v) => update({ consent: v === ALL ? null : v, page: null })}
+          options={[
+            { value: ALL, label: "Any permission" },
+            { value: "missing", label: "Under 18, still needed" },
+            { value: "granted", label: "Parent agreed" },
+          ]}
+        />
+        <FilterSelect
+          label="Joined"
+          value={joinedFilter}
+          onChange={(v) => update({ joined: v === ALL ? null : v, page: null })}
+          options={[
+            { value: ALL, label: "Joined any time" },
+            { value: "today", label: "Joined today" },
+            { value: "7", label: "Last 7 days" },
+            { value: "30", label: "Last 30 days" },
+            { value: "90", label: "Last 90 days" },
+            { value: "this-year", label: "This year" },
+            { value: "before-this-year", label: "Before this year" },
+          ]}
+        />
+        <FilterSelect
+          label="Account status"
+          value={statusFilter}
+          onChange={(v) => update({ status: v === ALL ? null : v, page: null })}
+          options={[
+            { value: ALL, label: "Any status" },
+            { value: "ACTIVE", label: "Active" },
+            { value: "SUSPENDED", label: "Suspended" },
+            { value: "BLOCKED", label: "Blocked" },
+            { value: "DELETED", label: "Erased" },
+          ]}
+        />
       </div>
 
       {error && (
@@ -197,6 +251,7 @@ function UsersList() {
                           {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
                           {!u.emailVerified && <UnverifiedBadge />}
                           {u.role === "STUDENT" && !u.profileComplete && <IncompleteBadge />}
+                          {u.status !== "ACTIVE" && <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${STATUS_BADGE[u.status].className}`}>{STATUS_BADGE[u.status].label}</Badge>}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
                         {u.phone && <span className="block text-xs text-muted-foreground tabular-nums">{formatPhone(u.phone)}</span>}
@@ -205,7 +260,17 @@ function UsersList() {
                   </td>
                   <td className="px-3 py-3 text-muted-foreground">
                     {profileLine(u) || "—"}
-                    {u.isMinor && <span className="block text-xs">Under 18</span>}
+                    {u.isMinor && (
+                      <span className="block text-xs">
+                        Under 18
+                        {u.role === "STUDENT" && (
+                          <span className={u.parentalConsent?.status === "GRANTED" ? "text-success" : "text-brand-amber-text"}>
+                            {" · "}
+                            {CONSENT_BADGE[u.parentalConsent?.status ?? "NONE"].label.toLowerCase()}
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-right font-medium tabular-nums">{u.coins.toLocaleString("en-IN")}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{u.quizAttempts}</td>
@@ -229,6 +294,7 @@ function UsersList() {
                       {u.role === "ADMIN" && <Badge className="h-5 px-1.5 text-[10px]">Admin</Badge>}
                       {!u.emailVerified && <UnverifiedBadge />}
                       {u.role === "STUDENT" && !u.profileComplete && <IncompleteBadge />}
+                      {u.status !== "ACTIVE" && <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${STATUS_BADGE[u.status].className}`}>{STATUS_BADGE[u.status].label}</Badge>}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {u.email}

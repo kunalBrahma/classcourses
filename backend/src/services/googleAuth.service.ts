@@ -1,5 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
 import prisma from "../config/prisma";
+import { assertEmailNotBlocked } from "./account.service";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 
@@ -61,6 +62,7 @@ export const signInWithGoogle = async (credential: string) => {
   }
 
   try {
+    await assertEmailNotBlocked(profile.email);
     return await prisma.user.create({ data: { ...profile, emailVerified: true } });
   } catch (err) {
     // A double tap: the other request just created this account.

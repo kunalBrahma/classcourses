@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, BookOpenIcon, FileTextIcon, InfoIcon, NewspaperIcon, VideoIcon } from "lucide-react";
 import { BannerSlider } from "@/components/home/banner-slider";
+import { Announcements } from "@/components/home/announcements";
 import { ClassPicker, ClassPickerSkeleton } from "@/components/home/class-picker";
 import { CoinCard } from "@/components/home/coin-card";
 import { NotePlaceholders, VideoPlaceholders } from "@/components/home/placeholders";
@@ -13,17 +14,17 @@ import { VideoCard } from "@/components/kit/video-card";
 import { NoteList } from "@/components/notes/note-list";
 import { placeLine } from "@/components/notes/place-line";
 import { Container } from "@/components/site/container";
-import { getBanners, getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
+import { getAnnouncements, getBanners, getFeaturedVideos, getNews, getPublishedPages, getSiteSettings, getStoreNotes } from "@/lib/server-api";
 import { classRange } from "@/lib/class-range";
 import { DEFAULT_NEWS } from "@/lib/site-links";
 import { chapterName } from "@/lib/catalog";
 
 // The client's home-page mock (docs/design/home-page-mock.html), in its order:
-// (admin banners, when there are any) → coins → quizzes → classes → notes → videos → news → about. Every section is
+// (admin banners, when there are any) → (announcements, when there are any) → coins → quizzes → classes → notes → videos → news → about. Every section is
 // always there: until the admin adds notes, videos or news links, a
 // "coming soon" placeholder (or the mock's news sources) fills the spot.
 export default async function HomePage() {
-  const [{ site, quiz, coins }, banners, videos, news, pages, notes, range] = await Promise.all([
+  const [{ site, quiz, coins }, banners, videos, news, pages, notes, range, announcements] = await Promise.all([
     getSiteSettings(),
     getBanners(),
     getFeaturedVideos(),
@@ -31,6 +32,7 @@ export default async function HomePage() {
     getPublishedPages(),
     getStoreNotes(),
     classRange(),
+    getAnnouncements(),
   ]);
   const newsLinks = news.length ? news : DEFAULT_NEWS;
   const aboutPublished = pages.some((p) => p.slug === "about");
@@ -44,7 +46,9 @@ export default async function HomePage() {
 
       <BannerSlider banners={banners} />
 
-      <CoinCard />
+      <Announcements initial={announcements} />
+
+      <CoinCard validityDays={coins.validityDays ?? 90} />
 
       <QuizCard quiz={quiz} coins={coins} />
 

@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminUser, SessionProvider } from "@/components/admin/session";
 import { ConfirmProvider } from "@/components/admin/confirm";
-import { breadcrumbFor } from "@/components/admin/nav";
+import { accessForPath, breadcrumbFor, canAccess } from "@/components/admin/nav";
 import { api } from "@/lib/api";
 import { clearTokens, getAccessToken } from "@/lib/auth";
 import { LogoMark } from "@/components/admin/logo-mark";
@@ -58,6 +58,8 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   }
 
   const crumb = breadcrumbFor(pathname);
+  // A helper admin opening a section they don't have (an old link, typed URL).
+  const allowed = canAccess(user, accessForPath(pathname));
 
   return (
     <SessionProvider value={user}>
@@ -101,7 +103,19 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
           {/* SidebarInset is already the <main> landmark — don't nest a second one. */}
           {/* One standard page width for every admin page: full width, capped only on ultra-wide screens. */}
           <div className="flex flex-1 flex-col px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8">
-            <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col">{children}</div>
+            <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col">
+              {allowed ? (
+                children
+              ) : (
+                <div className="mx-auto mt-10 grid max-w-md justify-items-center gap-3 rounded-2xl border bg-card p-8 text-center">
+                  <p className="font-heading text-xl font-bold">You don&apos;t have access to this section</p>
+                  <p className="text-sm text-muted-foreground">Your admin account can use only some sections. Ask the Super Admin if you need this one.</p>
+                  <Link href="/dashboard" className="mt-2 inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold hover:bg-accent">
+                    Back to the dashboard
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </SidebarInset>
       </SidebarProvider>

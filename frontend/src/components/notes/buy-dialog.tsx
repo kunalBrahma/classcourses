@@ -9,14 +9,14 @@ import { Coin3D } from "@/components/kit/coin";
 import { rupees } from "@/components/kit/note-card";
 import { announceCoinsChanged } from "@/components/site/account-menu";
 import { ApiError, apiJson } from "@/lib/api";
-import { announceNotesChanged, CheckoutOptions, downloadNote, loadRazorpay, NoteItem, OrderView, PriceQuote } from "@/lib/notes";
+import { announceNotesChanged, CheckoutOptions, downloadNote, loadCashfree, loadRazorpay, NoteItem, OrderView, PriceQuote } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 
 type Step =
   | { kind: "quote" }
-  | { kind: "paying" } // Razorpay window open
+  | { kind: "paying" } // the gateway's window is open
   | { kind: "verifying" }
-  | { kind: "pending"; orderId: string } // paid, waiting for Razorpay to confirm
+  | { kind: "pending"; orderId: string; provider: "cashfree" | "razorpay" } // paid, waiting for the gateway to confirm
   // refunded: they already owned the note, so the server refunded this payment
   | { kind: "paid"; refunded?: boolean }
   | { kind: "closed" } // student closed the payment window
@@ -35,17 +35,17 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   initialUseCoins?: boolean;
 }) {
   const id = useId();
-  const [quote, setQuote] = useState<{ withoutCoins: PriceQuote; withCoins: PriceQuote } | null>(null);
+  const [quote, setQuote] = useState<{ withoutCoins: PriceQuote; withCoins: PriceQuote; coinValidityDays?: number } | null>(null);
   const [useCoins, setUseCoins] = useState(initialUseCoins);
   const [step, setStep] = useState<Step>({ kind: "quote" });
   const [downloading, setDownloading] = useState(false);
   // The unticked "a parent or guardian has permitted this purchase" box
   // (client requirements of 6 Nov 2026). The server refuses an order without it.
   const [confirmed, setConfirmed] = useState(false);
-  // While Razorpay's own window is open, ours is hidden: a modal dialog makes
-  // the rest of the page unclickable and traps focus, which would block
-  // Razorpay's window (it's added outside our dialog). State is kept.
-  const [razorpayOpen, setRazorpayOpen] = useState(false);
+  // While the gateway's own window (Cashfree / Razorpay) is open, ours is
+  // hidden: a modal dialog makes the rest of the page unclickable and traps
+  // focus, which would block the gateway's window. State is kept.
+  const [gatewayOpen, setGatewayOpen] = useState(false);
 
   // Fresh quote each time the window opens ("previous target" reset, no effect setState).
   const [wasOpen, setWasOpen] = useState(false);
@@ -53,7 +53,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     setWasOpen(open);
     if (open) {
       setQuote(null);
-      setRazorpayOpen(false);
+      setGatewayOpen(false);
       setConfirmed(false);
       setStep({ kind: "quote" });
     }
@@ -61,7 +61,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    apiJson<{ withoutCoins: PriceQuote; withCoins: PriceQuote }>(`/api/notes/${note.id}/quote`)
+    apiJson<{ withoutCoins: PriceQuote; withCoins: PriceQuote; coinValidityDays?: number }>(`/api/notes/${note.id}/quote`)
       .then((q) => !cancelled && setQuote(q))
       .catch((err: ApiError) => !cancelled && setStep({ kind: "error", message: err.message }));
     return () => {
@@ -82,7 +82,11 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     const timer = setInterval(async () => {
       tries += 1;
       try {
-        const { order } = await apiJson<{ order: OrderView }>(`/api/payments/orders/${step.orderId}`);
+        // Cashfree: ask the server to ask Cashfree. Razorpay: its webhook updates the order.
+        const order =
+          step.provider === "cashfree"
+            ? { status: (await apiJson<{ status: OrderView["status"] | "PENDING" }>("/api/payments/verify", { method: "POST", json: { orderId: step.orderId } })).status }
+            : (await apiJson<{ order: OrderView }>(`/api/payments/orders/${step.orderId}`)).order;
         if (order.status === "PAID" || order.status === "REFUNDED") {
           clearInterval(timer);
           finishPaid(order.status === "REFUNDED");
@@ -96,8 +100,13 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
                 : "Your payment is still being confirmed. If money was taken, the note unlocks on its own within a few minutes. Check My profile → My notes.",
           });
         }
-      } catch {
-        /* keep trying until the limit */
+      } catch (err) {
+        // The gateway says the payment failed: stop and say so. Network
+        // hiccups: keep trying until the limit.
+        if (err instanceof ApiError && err.status === 400) {
+          clearInterval(timer);
+          setStep({ kind: "error", message: err.message });
+        }
       }
     }, POLL_MS);
     return () => clearInterval(timer);
@@ -105,6 +114,18 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
 
   const chosen = quote ? (useCoins ? quote.withCoins : quote.withoutCoins) : null;
   const canUseCoins = !!quote && quote.withCoins.coinsUsed > 0;
+
+  // Asks our server (which asks the gateway) how the payment went.
+  const confirmWithServer = async (orderId: string, cancelledLooksLike: Step) => {
+    setStep({ kind: "verifying" });
+    try {
+      const result = await apiJson<{ status: "PAID" | "PENDING" | "REFUNDED" }>("/api/payments/verify", { method: "POST", json: { orderId } });
+      if (result.status === "PAID" || result.status === "REFUNDED") finishPaid(result.status === "REFUNDED");
+      else setStep(cancelledLooksLike.kind === "closed" ? cancelledLooksLike : { kind: "pending", orderId, provider: "cashfree" });
+    } catch (err) {
+      setStep({ kind: "error", message: (err as ApiError).message });
+    }
+  };
 
   const pay = async () => {
     if (!chosen || !confirmed) return;
@@ -117,9 +138,21 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
       if (!checkout) {
         // Coins covered the whole price: the server already granted it.
         if (order.status === "PAID") finishPaid();
-        else setStep({ kind: "pending", orderId: order.id });
+        else setStep({ kind: "pending", orderId: order.id, provider: order.provider ?? "cashfree" });
         return;
       }
+
+      if (checkout.provider === "cashfree") {
+        const Cashfree = await loadCashfree();
+        setGatewayOpen(true);
+        const result = await Cashfree({ mode: checkout.mode }).checkout({ paymentSessionId: checkout.paymentSessionId, redirectTarget: "_modal" });
+        setGatewayOpen(false);
+        if (result?.redirect) return; // the bank's page took over; /checkout/return finishes
+        // Closed or finished: never trust the window, ask the server.
+        await confirmWithServer(order.id, result?.paymentDetails ? { kind: "verifying" } : { kind: "closed" });
+        return;
+      }
+
       const Razorpay = await loadRazorpay();
       const rzp = new Razorpay({
         key: checkout.keyId,
@@ -131,7 +164,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
         prefill: checkout.prefill,
         theme: { color: "#f5a623" },
         handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
-          setRazorpayOpen(false);
+          setGatewayOpen(false);
           setStep({ kind: "verifying" });
           try {
             const result = await apiJson<{ status: "PAID" | "PENDING" | "REFUNDED"; order: OrderView }>("/api/payments/verify", {
@@ -139,24 +172,24 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
               json: { orderId: order.id, ...resp },
             });
             if (result.status === "PAID" || result.status === "REFUNDED") finishPaid(result.status === "REFUNDED");
-            else setStep({ kind: "pending", orderId: order.id });
+            else setStep({ kind: "pending", orderId: order.id, provider: "razorpay" });
           } catch (err) {
             // The webhook may still confirm it: keep checking.
-            setStep(err instanceof ApiError && err.status === 400 ? { kind: "error", message: err.message } : { kind: "pending", orderId: order.id });
+            setStep(err instanceof ApiError && err.status === 400 ? { kind: "error", message: err.message } : { kind: "pending", orderId: order.id, provider: "razorpay" });
           }
         },
         modal: {
           ondismiss: () => {
-            setRazorpayOpen(false);
+            setGatewayOpen(false);
             setStep((s) => (s.kind === "paying" ? { kind: "closed" } : s));
           },
         },
       });
       rzp.on("payment.failed", (r) => setStep({ kind: "error", message: r.error?.description || "The payment didn't go through. No money was taken." }));
-      setRazorpayOpen(true);
+      setGatewayOpen(true);
       rzp.open();
     } catch (err) {
-      setRazorpayOpen(false);
+      setGatewayOpen(false);
       setStep({ kind: "error", message: (err as Error).message });
     }
   };
@@ -175,7 +208,7 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
   const busy = step.kind === "paying" || step.kind === "verifying" || step.kind === "pending";
 
   return (
-    <Dialog open={open && !razorpayOpen} onOpenChange={(next) => !busy && onOpenChange(next)}>
+    <Dialog open={open && !gatewayOpen} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent translate="no" className="notranslate sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="pr-8 font-heading text-xl leading-snug" lang="as">
@@ -223,6 +256,11 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
                 )}
                 {!canUseCoins && quote && quote.withoutCoins.coinBalance > 0 && (
                   <p className="mt-2 text-sm text-muted-foreground">Coins can&apos;t be used on this note.</p>
+                )}
+                {quote && quote.withoutCoins.coinBalance > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Coins are valid for {quote.coinValidityDays ?? 90} days from the day you earn them. Your oldest coins are used first.
+                  </p>
                 )}
               </div>
             )}

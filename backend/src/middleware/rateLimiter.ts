@@ -120,6 +120,11 @@ export const otpLimiter = limiter("emailCode", { error: (w) => `Too many attempt
 // "Email me an unlock code" and entering it.
 export const unlockLimiter = limiter("unlockCode", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
 
+// A student asking a parent for consent (each send emails the parent).
+export const parentConsentLimiter = limiter("parentConsent", { keyGenerator: userOrIpKey, error: (w) => `You've sent several emails to your parent. Please wait ${w} and try again.` });
+// The parent's consent page (view + answer), per network.
+export const consentLinkLimiter = limiter("consentLink", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
+
 // ---------------------------------------------------------------------------
 // Other public / student endpoints
 // ---------------------------------------------------------------------------
@@ -134,6 +139,13 @@ export const quizLimiter = limiter("quiz", { keyGenerator: userOrIpKey, error: (
 
 // Checkout: a real purchase is ~3 calls; this stops scripted order spam.
 export const paymentLimiter = limiter("payments", { keyGenerator: userOrIpKey, error: () => "Too many requests, slow down a little" });
+
+// Refer and Earn: checking an invite code (the sign-up page); stops code guessing.
+export const referralLinkLimiter = limiter("referralLink", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
+
+// Like / Save: a student taps a few times; this stops scripted floods.
+export const likeLimiter = limiter("likes", { keyGenerator: userOrIpKey, error: () => "Too many likes, slow down a little" });
+export const saveLimiter = limiter("saves", { keyGenerator: userOrIpKey, error: () => "Too many saves, slow down a little" });
 
 // Public search runs a few LIKE queries per call; this caps scripted scraping
 // while leaving room for search-as-you-type.

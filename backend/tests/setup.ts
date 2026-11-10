@@ -12,12 +12,21 @@ import { startTestServer, stopTestServer } from "./helpers";
 http.globalAgent = new http.Agent({ keepAlive: false });
 
 export const resetDatabase = async () => {
+  await prisma.referral.deleteMany();
+  await prisma.notificationRead.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.like.deleteMany();
+  await prisma.savedItem.deleteMany();
+  await prisma.blogPost.deleteMany();
+  await prisma.blogCategory.deleteMany();
+  await prisma.announcement.deleteMany();
   await prisma.page.deleteMany();
   await prisma.faqItem.deleteMany();
   await prisma.newsLink.deleteMany();
   await prisma.banner.deleteMany();
   await prisma.contactMessage.deleteMany();
   await prisma.noteAccess.deleteMany();
+  await prisma.refund.deleteMany();
   await prisma.order.deleteMany();
   await prisma.note.deleteMany();
   await prisma.coinTransaction.deleteMany();
@@ -35,6 +44,9 @@ export const resetDatabase = async () => {
   await prisma.authCode.deleteMany();
   await prisma.adminLoginAttempt.deleteMany();
   await prisma.loginThrottle.deleteMany();
+  await prisma.adminActivity.deleteMany();
+  await prisma.blockedEmail.deleteMany();
+  await prisma.parentalConsent.deleteMany();
   await prisma.emailVerificationCode.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();

@@ -9,6 +9,7 @@ import { catalogHref, classSlugFrom } from "../services/catalog.service";
 import { requireSetting } from "../services/settings.service";
 import { getSignedDownloadUrl } from "../services/storage.service";
 import { hasNoteAccess, publicNoteWhere, quotePrice, requirePublicNote } from "../services/order.service";
+import { refreshCoins } from "../services/coin.service";
 
 // Premium / free notes for students. Files are only ever handed out as
 // short-lived signed URLs from the PRIVATE bucket.
@@ -104,6 +105,7 @@ export const getNote = asyncHandler(async (req: AuthRequest, res: Response) => {
 export const quoteNote = asyncHandler(async (req: AuthRequest, res: Response) => {
   const note = await requirePublicNote(req.params.id);
   if (note.isFree) throw new AppError(400, "This note is free");
+  await refreshCoins(req.user!.userId); // expired coins never count towards a discount
   const [user, coins] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId }, select: { coins: true } }),
     requireSetting("coins"),
@@ -111,6 +113,8 @@ export const quoteNote = asyncHandler(async (req: AuthRequest, res: Response) =>
   res.json({
     withoutCoins: quotePrice(note.pricePaise, user.coins, coins, false),
     withCoins: quotePrice(note.pricePaise, user.coins, coins, true),
+    // Shown at checkout: coins are valid this many days from when they're earned
+    coinValidityDays: coins.validityDays,
   });
 });
 

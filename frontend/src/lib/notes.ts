@@ -40,17 +40,23 @@ export interface OrderView {
   status: "CREATED" | "PAID" | "CANCELLED" | "REFUNDED";
   amountPaise: number;
   coinsUsed: number;
+  provider?: "cashfree" | "razorpay";
 }
 
-export interface CheckoutOptions {
-  keyId: string;
-  razorpayOrderId: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  prefill: { email?: string; name?: string };
-}
+// What the server sends to open the gateway's payment window (Cashfree at
+// launch; Razorpay kept). The server confirms every payment itself.
+export type CheckoutOptions =
+  | { provider: "cashfree"; orderId: string; paymentSessionId: string; mode: "sandbox" | "production" }
+  | {
+      provider: "razorpay";
+      keyId: string;
+      razorpayOrderId: string;
+      amount: number;
+      currency: string;
+      name: string;
+      description: string;
+      prefill: { email?: string; name?: string };
+    };
 
 // ---- Which notes the student owns (one shared request, refreshed on purchase)
 
@@ -124,4 +130,38 @@ export const loadRazorpay = () => {
     document.body.appendChild(s);
   });
   return scriptPromise;
+};
+
+// ---- Cashfree's payment window (JS SDK v3), loaded only when paying
+
+export interface CashfreeCheckoutResult {
+  error?: { message?: string; code?: string };
+  redirect?: boolean;
+  paymentDetails?: { paymentMessage?: string };
+}
+interface CashfreeInstance {
+  checkout: (opts: { paymentSessionId: string; redirectTarget: "_modal" | "_self" }) => Promise<CashfreeCheckoutResult>;
+}
+type CashfreeFactory = (opts: { mode: "sandbox" | "production" }) => CashfreeInstance;
+declare global {
+  interface Window {
+    Cashfree?: CashfreeFactory;
+  }
+}
+
+let cashfreeScript: Promise<CashfreeFactory> | null = null;
+export const loadCashfree = () => {
+  if (window.Cashfree) return Promise.resolve(window.Cashfree);
+  cashfreeScript ??= new Promise<CashfreeFactory>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    s.async = true;
+    s.onload = () => (window.Cashfree ? resolve(window.Cashfree) : reject(new Error("Cashfree didn't load")));
+    s.onerror = () => {
+      cashfreeScript = null;
+      reject(new Error("Couldn't open the payment window. Check your internet connection and try again."));
+    };
+    document.body.appendChild(s);
+  });
+  return cashfreeScript;
 };

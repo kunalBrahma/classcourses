@@ -35,7 +35,7 @@ export default function PagesList() {
           <AlertTitle>Drafts are waiting for approval</AlertTitle>
           <AlertDescription>
             These texts were drafted by the developer from how the site actually works. Have the owner read each one — and ideally a lawyer the
-            Privacy, Terms and Refund pages — then publish. Razorpay checks the legal pages before approving payments.
+            Privacy, Terms and Refund pages — then publish. The payment gateway checks the legal pages before approving payments.
           </AlertDescription>
         </Alert>
       )}

@@ -253,6 +253,16 @@ function CoinsCard() {
               </div>
             </Field>
             <NumberField id={`${id}-md`} label="Max discount" value={f.maxDiscountPercent} onChange={(v) => s.setForm({ ...f, maxDiscountPercent: v })} min={0} max={100} suffix="% of price" />
+            <NumberField
+              id={`${id}-vd`}
+              label="Coins are valid for"
+              value={f.validityDays}
+              onChange={(v) => s.setForm({ ...f, validityDays: v })}
+              min={1}
+              max={3650}
+              suffix="days"
+              hint="Counted from the day each coin is earned (client rule: 90). A change applies to coins earned afterwards."
+            />
           </div>
 
           <fieldset className="grid gap-2">

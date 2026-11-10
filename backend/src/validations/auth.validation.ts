@@ -20,12 +20,20 @@ const profileFields = {
   dateOfBirth: z.string({ required_error: "Please enter your date of birth" }).regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a real date of birth"),
 };
 
+// Refer and Earn: the invite code from /register?ref=, and a random id the
+// browser keeps (spots many accounts from one device). Both optional.
+const referralFields = {
+  referralCode: z.string().trim().max(20).optional(),
+  deviceId: z.string().trim().regex(/^[A-Za-z0-9-]{8,64}$/).optional(),
+};
+
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().trim().min(1, "Name is required").max(80),
   phone: optionalPhoneSchema,
   ...profileFields,
+  ...referralFields,
 });
 
 // "Complete your profile" and later edits. Every field is optional so the
@@ -55,6 +63,7 @@ export const loginSchema = z.object({
 
 export const googleLoginSchema = z.object({
   credential: z.string().min(1, "Google sign-in failed").max(5000),
+  ...referralFields,
 });
 
 export const refreshSchema = z.object({

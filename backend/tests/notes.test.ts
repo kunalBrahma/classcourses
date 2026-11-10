@@ -86,11 +86,15 @@ afterAll(() => rzp.stop());
 
 beforeEach(async () => {
   await prisma.noteAccess.deleteMany();
+  await prisma.refund.deleteMany();
   await prisma.order.deleteMany();
   await prisma.note.deleteMany();
   await prisma.coinTransaction.deleteMany();
   await prisma.user.updateMany({ data: { coins: 0 } });
   await prisma.setting.deleteMany({ where: { key: { in: ["coins", "razorpay", "storage"] } } });
+  // This file tests the Razorpay path (kept, switched off by default);
+  // tests/cashfree.test.ts tests Cashfree, the gateway at launch.
+  await prisma.setting.upsert({ where: { key: "payments" }, create: { key: "payments", value: { provider: "razorpay" } }, update: { value: { provider: "razorpay" } } });
   clearSettingsCache();
 });
 
@@ -597,6 +601,23 @@ describe("admin: orders", () => {
     expect(await prisma.noteAccess.count({ where: { userId: studentId, noteId: note.id } })).toBe(1);
   });
 
+  it("a Razorpay refund that is still pending is confirmed by asking Razorpay (Reconcile / sweep)", async () => {
+    const note = await makeNote();
+    const created = await order(note.id);
+    await verify(created.body.order.id, rzp.pay(created.body.checkout.razorpayOrderId));
+    rzp.refundStartStatus = "pending";
+    const started = await as(admin).post(`/api/admin/orders/${created.body.order.id}/refund`, { reason: "Wrong file was delivered" });
+    rzp.refundStartStatus = "processed";
+    expect(started.body.refund).toMatchObject({ status: "PENDING", providerRefundId: expect.stringMatching(/^rfnd_/) });
+
+    // Still pending at Razorpay: nothing changes
+    expect((await as(admin).post(`/api/admin/orders/${created.body.order.id}/reconcile`)).body).toMatchObject({ refundStatus: "PENDING", status: "PAID" });
+    // Razorpay finishes it; no webhook arrives; Reconcile finds out
+    rzp.refunds.get(started.body.refund.providerRefundId)!.status = "processed";
+    expect((await as(admin).post(`/api/admin/orders/${created.body.order.id}/reconcile`)).body).toMatchObject({ changed: true, status: "REFUNDED", refundStatus: "SUCCESS" });
+    expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(403);
+  });
+
   it("if the automatic refund fails, Reconcile retries it", async () => {
     const note = await makeNote();
     const first = await order(note.id);
@@ -622,7 +643,7 @@ describe("admin: orders", () => {
     expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(200); // first purchase untouched
   });
 
-  it("a full refund made in the Razorpay dashboard removes access and returns held coins", async () => {
+  it("a full refund made in the Razorpay dashboard removes access; coins stay spent (client: coins back only for a duplicate)", async () => {
     const note = await makeNote();
     await giveCoins(300);
     const created = await order(note.id, true);
@@ -637,7 +658,8 @@ describe("admin: orders", () => {
     const stored = await prisma.order.findUniqueOrThrow({ where: { id: created.body.order.id } });
     expect(stored).toMatchObject({ status: "REFUNDED", refundId: "rfnd_dashboard1" });
     expect((await as(student).get(`/api/notes/${note.id}/download`)).status).toBe(403);
-    expect(await balance()).toBe(300);
+    expect(await balance()).toBe(55);
+    expect(await prisma.refund.findFirst({ where: { orderId: created.body.order.id } })).toMatchObject({ reason: "GATEWAY", status: "SUCCESS", providerRefundId: "rfnd_dashboard1" });
 
     // A partial refund is only noted
     const note2 = await makeNote({ title: "Second" });

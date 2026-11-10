@@ -15,6 +15,8 @@ import { dobString, draftProblem, EMPTY_DRAFT, normalisePhone, ProfileDraft, use
 import { ApiError, publicJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { safeNext } from "../login/login-form";
+import { InviteNote } from "@/components/auth/invite-note";
+import { referralFields } from "@/lib/referral";
 
 export function RegisterForm({ termsPublished, privacyPublished }: { termsPublished: boolean; privacyPublished: boolean }) {
   const id = useId();
@@ -61,6 +63,7 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
           districtId: profile.districtId,
           dateOfBirth: dobString(profile),
           phone: profile.phone.trim() ? normalisePhone(profile.phone) : "",
+          ...referralFields(),
         },
       });
       setSent({ email: data.email, retryAfter: data.retryAfter });
@@ -87,6 +90,7 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
 
   return (
     <div className="grid gap-5">
+    <InviteNote />
     <GoogleButton next={next} />
     <form onSubmit={submit} className="grid gap-5">
       <FormError message={error} />

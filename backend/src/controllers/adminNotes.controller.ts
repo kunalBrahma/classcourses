@@ -7,7 +7,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { deleteObject, getSignedUploadUrl, hasPrivateBucket, headObject } from "../services/storage.service";
-import { cancelStaleOrders, RAZORPAY_MIN_PAISE, reconcileOrder } from "../services/order.service";
+import { cancelStaleOrders, RAZORPAY_MIN_PAISE, reconcileOrder, startRefund } from "../services/order.service";
 
 // Admin: premium notes (PDFs in the PRIVATE bucket), orders, manual grants.
 
@@ -190,7 +190,12 @@ export const listOrdersAdmin = asyncHandler(async (req: Request, res: Response) 
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { user: { select: { id: true, email: true, name: true } }, note: { select: { id: true, title: true } } },
+      include: {
+        user: { select: { id: true, email: true, name: true } },
+        note: { select: { id: true, title: true } },
+        // The latest refund: pending / done / failed shows in the list
+        refunds: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, amountPaise: true, reason: true, createdAt: true } },
+      },
     }),
     prisma.order.count({ where }),
     prisma.order.aggregate({ where: { ...where, status: "PAID" }, _sum: { amountPaise: true }, _count: true }),
@@ -212,10 +217,30 @@ export const getOrderAdmin = asyncHandler(async (req: Request, res: Response) =>
       user: { select: { id: true, email: true, name: true } },
       note: { select: { id: true, title: true } },
       access: true,
+      refunds: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!order) throw new AppError(404, "Order not found");
   res.json({ order });
+});
+
+// Admin → Orders → Refund (client requirements of 6 Nov 2026). The money goes
+// back through the order's gateway; the order becomes REFUNDED (and loses its
+// access) only when the gateway confirms. Coins aren't returned: only a
+// duplicate purchase gets its coins back, automatically.
+export const refundOrderAdmin = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const refund = await startRefund(req.params.id, { reason: "ADMIN", note: req.body.reason, createdById: req.user!.userId });
+  const order = await prisma.order.findUniqueOrThrow({ where: { id: req.params.id }, select: { status: true } });
+  res.status(refund.status === "FAILED" ? 502 : 201).json({
+    refund,
+    orderStatus: order.status,
+    message:
+      refund.status === "SUCCESS"
+        ? "Refunded"
+        : refund.status === "PENDING"
+          ? "Refund started. The gateway usually confirms it within minutes; the money reaches the student in a few working days."
+          : `The refund didn't go through: ${refund.failureReason}`,
+  });
 });
 
 export const reconcileOrderAdmin = asyncHandler(async (req: Request, res: Response) => {

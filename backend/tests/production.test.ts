@@ -39,6 +39,9 @@ describe("environment rules", () => {
     const weakJwt = envSchema.safeParse({ ...prod, JWT_ACCESS_SECRET: "short-but-16-chars" });
     expect(weakJwt.success).toBe(false);
     expect(envSchema.safeParse({ ...prod, RAZORPAY_API_BASE: "http://127.0.0.1:1/v1" }).success).toBe(false);
+    // The fake-Cashfree address is for tests only: production refuses it
+    expect(envSchema.safeParse({ ...prod, CASHFREE_API_BASE: "http://127.0.0.1:4598/pg" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, CASHFREE_API_BASE: "http://127.0.0.1:4598/pg" }).success).toBe(true);
   });
 
   it("keeps development permissive", () => {

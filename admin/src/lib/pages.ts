@@ -19,6 +19,7 @@ export const TOKENS: { name: string; label: string }[] = [
   { name: "coins.perPass", label: "Coins per pass" },
   { name: "coins.coinValue", label: "Value of 1 coin (₹)" },
   { name: "coins.maxDiscountPercent", label: "Max coin discount %" },
+  { name: "coins.validityDays", label: "Days coins stay valid" },
   { name: "operator.line", label: "Operated by" },
   { name: "operator.address", label: "Address" },
   { name: "operator.grievanceName", label: "Grievance Officer" },
@@ -30,7 +31,7 @@ export const TOKENS: { name: string; label: string }[] = [
 
 export interface PublicSettings {
   quiz: { questionsPerQuiz: number; secondsPerQuestion: number; passMark: number; dailyLimit: number };
-  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number };
+  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number; validityDays: number };
   contact: { email: string };
   site: { name: string };
   operator: {
@@ -59,6 +60,7 @@ export const tokenValues = (s: PublicSettings): Record<string, string> => ({
   "coins.perPass": String(s.coins.perPass),
   "coins.coinValue": rupees(s.coins.coinValuePaise),
   "coins.maxDiscountPercent": String(s.coins.maxDiscountPercent),
+  "coins.validityDays": String(s.coins.validityDays ?? 90),
   "operator.line": s.operator.operatorLine,
   "operator.address": s.operator.address,
   "operator.grievanceName": s.operator.grievanceName,

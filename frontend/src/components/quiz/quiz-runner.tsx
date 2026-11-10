@@ -23,7 +23,7 @@ const liveOf = (a: Attempt): Live | null => (a.question ? { question: a.question
 
 // The quiz itself. Every rule is enforced by the server; this screen follows
 // the attempt's state: rules → question (timed) → feedback → … → result.
-export function QuizRunner({ coinRule }: { coinRule: CoinRule }) {
+export function QuizRunner({ coinRule, coinValidityDays }: { coinRule: CoinRule; coinValidityDays: number }) {
   const { attemptId } = useParams<{ attemptId: string }>();
   const router = useRouter();
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -178,7 +178,7 @@ export function QuizRunner({ coinRule }: { coinRule: CoinRule }) {
 
   // 2) Finished (or ended at midnight): the result.
   if (isFinished(attempt)) {
-    return <ResultView attempt={attempt} coinRule={coinRule} chapterHref={chapterHref} onTryAgain={tryAgain} busy={busy} error={errorLine} />;
+    return <ResultView attempt={attempt} coinRule={coinRule} coinValidityDays={coinValidityDays} chapterHref={chapterHref} onTryAgain={tryAgain} busy={busy} error={errorLine} />;
   }
 
   // 3) A question is open: the timed question.
@@ -455,9 +455,10 @@ const ZERO_COIN_REASON: Record<CoinRule, string> = {
   everyPass: "This quiz doesn't give coins.",
 };
 
-function ResultView({ attempt, coinRule, chapterHref, onTryAgain, busy, error }: {
+function ResultView({ attempt, coinRule, coinValidityDays, chapterHref, onTryAgain, busy, error }: {
   attempt: Attempt;
   coinRule: CoinRule;
+  coinValidityDays: number;
   chapterHref: string | null;
   onTryAgain: () => void;
   busy: boolean;
@@ -495,9 +496,12 @@ function ResultView({ attempt, coinRule, chapterHref, onTryAgain, busy, error }:
         </p>
         {passed &&
           (attempt.coinsAwarded > 0 ? (
-            <p className="mx-auto mt-5 inline-flex items-center gap-3 rounded-2xl bg-[image:var(--header-bg)] px-5 py-3 font-heading text-xl font-extrabold text-brand-ink dark:text-brand-cream">
-              <Coin3D className="size-10" /> +{attempt.coinsAwarded} coins
-            </p>
+            <div className="mt-5 grid justify-items-center gap-2">
+              <p className="inline-flex items-center gap-3 rounded-2xl bg-[image:var(--header-bg)] px-5 py-3 font-heading text-xl font-extrabold text-brand-ink dark:text-brand-cream">
+                <Coin3D className="size-10" /> +{attempt.coinsAwarded} coins
+              </p>
+              <p className="text-sm text-muted-foreground">Valid for {coinValidityDays} days. Use them for money off notes.</p>
+            </div>
           ) : (
             <p className="mt-4 rounded-xl bg-accent px-4 py-3 text-[15px]">{ZERO_COIN_REASON[coinRule]}</p>
           ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpenIcon, BugIcon, FileTextIcon, HeadsetIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ReceiptIcon, ScaleIcon, TimerIcon, TrophyIcon, UserIcon, VideoIcon } from "lucide-react";
+import { GiftIcon, BellIcon, BookmarkIcon, PenLineIcon, BookOpenIcon, BugIcon, FileTextIcon, HeadsetIcon, HelpCircleIcon, HomeIcon, InfoIcon, MailIcon, NewspaperIcon, ReceiptIcon, ScaleIcon, TimerIcon, TrophyIcon, UserIcon, VideoIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AccountPanel } from "@/components/site/account-menu";
 import { ThemeRow } from "@/components/site/theme-toggle";
@@ -12,19 +12,20 @@ import type { Medium, PageLink } from "@/lib/server-api";
 
 // Only pages and home sections that exist are linked (videos/news only when
 // the admin has added some).
-const mainLinks = (show: { videos: boolean; news: boolean }) => [
+const mainLinks = (show: MenuProps["show"]) => [
   { href: "/", label: "Home", icon: HomeIcon },
   { href: "/#rewards", label: "Rewards & coins", icon: TrophyIcon },
   { href: "/#classes", label: "Choose your class", icon: BookOpenIcon },
   { href: "/#quiz", label: "Quizzes", icon: TimerIcon },
   { href: "/notes", label: "Notes", icon: FileTextIcon },
+  { href: "/blog", label: "Blog", icon: PenLineIcon },
   ...(show.videos ? [{ href: "/videos", label: "Videos", icon: VideoIcon }] : []),
   ...(show.news ? [{ href: "/news", label: "Latest news", icon: NewspaperIcon }] : []),
 ];
 
 // The client's three-dot menu (6 Nov 2026): About, Helpline (Refund, Bug or
-// Error, Other Help), then User Profile. Refer and Earn and Saved Content join
-// it in their own phases (task-client-update.md).
+// Error, Other Help), Refer and Earn (when the Founder has switched it on), then
+// User Profile, Saved Content and Notifications.
 const HELP_LINKS = [
   { href: "/contact?topic=refund", label: "Refund", icon: ReceiptIcon },
   { href: "/contact?topic=bug", label: "Bug or Error", icon: BugIcon },
@@ -44,7 +45,7 @@ export interface MenuProps {
   siteName: string;
   pages: PageLink[];
   mediums: Medium[];
-  show: { videos: boolean; news: boolean };
+  show: { videos: boolean; news: boolean; refer?: boolean };
 }
 
 // Loaded on the first tap of the menu button (lazy-header.tsx).
@@ -95,8 +96,19 @@ export function MenuSheet({ siteName, pages, mediums, show, open, onOpenChange, 
               </li>
             ))}
           </ul>
+          {show.refer && (
+            <Link href="/refer" onClick={close} className={item}>
+              <GiftIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Refer and Earn
+            </Link>
+          )}
           <Link href="/profile" onClick={close} className={item}>
             <UserIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> User Profile
+          </Link>
+          <Link href="/saved" onClick={close} className={item}>
+            <BookmarkIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Saved Content
+          </Link>
+          <Link href="/notifications" onClick={close} className={item}>
+            <BellIcon className="size-5 text-brand-amber-text" aria-hidden="true" /> Notifications
           </Link>
           {pages.filter((p) => p.slug !== "about" && p.slug !== "contact").map((p) => {
             const Icon = PAGE_ICONS[p.slug] ?? FileTextIcon;

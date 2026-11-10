@@ -85,8 +85,10 @@ export function useProfileOptions() {
 // straight to "complete your profile" (so `next` doesn't flash first).
 export const whereAfterSignIn = async (next: string) => {
   try {
-    const { user } = await apiJson<{ user: { role: string; profileComplete: boolean } }>("/api/auth/me");
+    const { user } = await apiJson<{ user: { role: string; profileComplete: boolean; access?: { block: string | null; consent: { status: string } } } }>("/api/auth/me");
     if (user.role === "STUDENT" && !user.profileComplete) return `/welcome?next=${encodeURIComponent(next)}`;
+    // Under 18 and no parent asked yet: that step comes first
+    if (user.role === "STUDENT" && user.access?.block === "CONSENT_REQUIRED" && user.access.consent.status === "NONE") return `/parent-consent?next=${encodeURIComponent(next)}`;
   } catch {
     /* the gate checks again on the next page */
   }

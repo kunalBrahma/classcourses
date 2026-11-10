@@ -41,7 +41,7 @@ const bareHost = (host: string) => host.toLowerCase().replace(/^www\./, "");
 export const linkFromForm = (form: LinkForm): string | null => {
   if (form.kind === "none") return null;
   if (form.kind === "site") {
-    if (!form.site) throw new Error("Choose the page this banner opens, or pick “No link”.");
+    if (!form.site) throw new Error("Choose the page it opens, or pick “No link”.");
     return form.site;
   }
   const typed = form.web.trim();

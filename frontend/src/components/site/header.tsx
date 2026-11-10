@@ -3,11 +3,12 @@ import { AccountChip } from "@/components/site/account-menu";
 import { LanguageButton, MenuButton, SearchButton } from "@/components/site/lazy-header";
 import { getFaq, getMediums, getPublishedPages, getSiteSettings } from "@/lib/server-api";
 import { siteLinks } from "@/lib/site-links";
+import { NotificationBell } from "@/components/engagement/notification-bell";
 
 // The mock's sticky amber band: logo, coins (or Sign in), search, language, menu.
 // Text is ink on amber (the mock's white on amber fails contrast, 2:1).
 export async function SiteHeader() {
-  const [{ site }, mediums, pages, faq] = await Promise.all([getSiteSettings(), getMediums(), getPublishedPages(), getFaq()]);
+  const [{ site, referral }, mediums, pages, faq] = await Promise.all([getSiteSettings(), getMediums(), getPublishedPages(), getFaq()]);
   const menuPages = siteLinks(pages, faq.length > 0).map((l) => ({ ...l, updatedAt: "" }));
   return (
     <header className="group/header sticky top-0 z-40 bg-[image:var(--header-bg)] text-brand-ink shadow-[var(--header-shadow)] dark:text-brand-cream">
@@ -21,9 +22,10 @@ export async function SiteHeader() {
         {/* As in the mock: the coin chip sits next to the name. */}
         <AccountChip />
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <NotificationBell />
           <SearchButton />
           <LanguageButton />
-          <MenuButton siteName={site.name} pages={menuPages} mediums={mediums} show={{ videos: true, news: true }} />
+          <MenuButton siteName={site.name} pages={menuPages} mediums={mediums} show={{ videos: true, news: true, refer: referral?.enabled ?? false }} />
         </div>
       </div>
     </header>

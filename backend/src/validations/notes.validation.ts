@@ -45,10 +45,16 @@ export const createOrderSchema = z.object({
   }),
 });
 
-// Field names exactly as Razorpay Checkout's success handler returns them.
+// Cashfree: just { orderId } (the server asks Cashfree). Razorpay: field
+// names exactly as Razorpay Checkout's success handler returns them.
 export const verifyPaymentSchema = z.object({
   orderId: id,
-  razorpay_order_id: z.string().min(1).max(100),
-  razorpay_payment_id: z.string().min(1).max(100),
-  razorpay_signature: z.string().min(1).max(200),
+  razorpay_order_id: z.string().min(1).max(100).optional(),
+  razorpay_payment_id: z.string().min(1).max(100).optional(),
+  razorpay_signature: z.string().min(1).max(200).optional(),
+});
+
+// Admin → Orders → Refund: the reason is required and kept with the refund.
+export const startRefundSchema = z.object({
+  reason: z.string().trim().min(5, "Write the reason for the refund (at least a few words)").max(300),
 });

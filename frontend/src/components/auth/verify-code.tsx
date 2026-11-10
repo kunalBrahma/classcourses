@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormError, SubmitButton } from "@/components/auth/form-bits";
+import { forgetReferral } from "@/lib/referral";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
 import { whereAfterSignIn } from "@/lib/profile";
@@ -42,6 +43,7 @@ export function VerifyCodeStep({ email, retryAfter = 60, next, onBack }: { email
         json: { email, code: value },
       });
       setTokens(data.accessToken, data.refreshToken);
+      forgetReferral(); // counted now
       router.push(await whereAfterSignIn(next));
       router.refresh();
     } catch (err) {

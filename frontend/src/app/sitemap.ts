@@ -1,18 +1,19 @@
 import type { MetadataRoute } from "next";
 import { classParams, subjectParams } from "@/lib/catalog-params";
 import { catalogHref } from "@/lib/catalog";
-import { getFaq, getMediums, getPublishedPages, getSiteSettings, getSubject } from "@/lib/server-api";
+import { getBlogSlugs, getFaq, getMediums, getPublishedPages, getSiteSettings, getSubject } from "@/lib/server-api";
 
 // Every public catalog page plus the published static pages. All reads are
 // cached (tag "catalog"/"pages"), so the sitemap refreshes with the catalog.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [{ site }, mediums, pages, classes, subjects, faq] = await Promise.all([
+  const [{ site }, mediums, pages, classes, subjects, faq, blog] = await Promise.all([
     getSiteSettings(),
     getMediums(),
     getPublishedPages(),
     classParams(),
     subjectParams(),
     getFaq(),
+    getBlogSlugs(),
   ]);
   const base = site.frontendUrl.replace(/\/$/, "");
   const url = (path: string) => `${base}${path}`;
@@ -31,6 +32,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: url("/notes"), changeFrequency: "daily", priority: 0.8 },
     { url: url("/videos"), changeFrequency: "daily", priority: 0.7 },
     { url: url("/news"), changeFrequency: "daily", priority: 0.5 },
+    { url: url("/blog"), changeFrequency: "daily", priority: 0.6 },
+    ...blog.map((p) => ({ url: url(`/blog/${p.slug}`), lastModified: p.updatedAt, changeFrequency: "monthly" as const, priority: 0.5 })),
     ...(faq.length ? [{ url: url("/faq"), changeFrequency: "monthly" as const, priority: 0.4 }] : []),
     ...mediums.map((m) => ({ url: url(catalogHref(m.slug)), changeFrequency: "weekly" as const, priority: 0.8 })),
     ...classes.map((c) => ({ url: url(catalogHref(c.medium, c.classSlug)), changeFrequency: "weekly" as const, priority: 0.8 })),

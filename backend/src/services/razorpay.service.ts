@@ -110,6 +110,9 @@ export const captureRazorpayPayment = async (payment: RazorpayPayment): Promise<
 export const refundRazorpayPayment = async (paymentId: string, amountPaise: number, notes: Record<string, string>) =>
   call<RazorpayRefund>(await requireRazorpay(), "POST", `/payments/${encodeURIComponent(paymentId)}/refund`, { amount: amountPaise, notes });
 
+// A refund's current status (processed | pending | failed).
+export const fetchRazorpayRefund = async (refundId: string) => call<RazorpayRefund>(await requireRazorpay(), "GET", `/refunds/${encodeURIComponent(refundId)}`);
+
 // Checks keys with a harmless read. Used by the admin "Test" button before saving.
 export const testRazorpayKeys = async (config: RazorpaySettings) => {
   const started = Date.now();

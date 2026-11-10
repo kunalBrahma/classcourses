@@ -13,7 +13,7 @@ export default async function QuizPage() {
   return (
     <Container className="py-6 sm:py-10">
       <Suspense fallback={<Loader2Icon className="mx-auto mt-10 size-8 animate-spin text-brand-amber-text" aria-label="Loading the quiz" />}>
-        <QuizRunner coinRule={coins.awardRule ?? "firstPassPerChapter"} />
+        <QuizRunner coinRule={coins.awardRule ?? "firstPassPerChapter"} coinValidityDays={coins.validityDays ?? 90} />
       </Suspense>
     </Container>
   );

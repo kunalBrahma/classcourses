@@ -5,12 +5,15 @@ import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { getSetting } from "../services/settings.service";
 import { RazorpayPayment, RazorpayRefund, verifyWebhookSignature } from "../services/razorpay.service";
+import { verifyCashfreeWebhook } from "../services/cashfree.service";
 import {
   cancelStaleOrders,
   createOrder,
   confirmPayment,
   getOrderView,
-  markRefunded,
+  recordGatewayRefund,
+  setRefundStatus,
+  settleFromCashfree,
   orderSelect,
   verifyCheckout,
 } from "../services/order.service";
@@ -20,6 +23,8 @@ export const createOrderHandler = asyncHandler(async (req: AuthRequest, res: Res
   res.status(201).json(result);
 });
 
+// After the gateway's window closes. Cashfree sends just { orderId } (the
+// server asks Cashfree); Razorpay sends its signed checkout response.
 export const verifyPaymentHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
   const result = await verifyCheckout(req.user!.userId, {
@@ -95,8 +100,8 @@ export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) 
   if (event.event === "refund.processed" || event.event === "payment.refunded") {
     const refundedPaise = payment?.amount_refunded ?? refund?.amount ?? 0;
     if (refundedPaise >= order.amountPaise) {
-      const changed = await markRefunded(order.id, refund?.id ?? null, "Refunded in Razorpay");
-      res.json({ ok: true, refunded: changed });
+      const recorded = await recordGatewayRefund(order.id, refund?.id ?? null, refund ? (refund as { notes?: { refundId?: string } }).notes?.refundId : null);
+      res.json({ ok: true, refunded: recorded.changed });
     } else {
       await prisma.order.update({ where: { id: order.id }, data: { lastError: `Partly refunded in Razorpay (${refundedPaise} paise)` } });
       res.json({ ok: true, refunded: false });
@@ -131,4 +136,79 @@ export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) 
     await prisma.order.update({ where: { id: order.id }, data: { lastError: payment?.error_description ?? "Payment failed" } });
   }
   res.json({ ok: true, ignored: event.event });
+});
+
+interface CashfreeWebhookEvent {
+  type?: string;
+  data?: {
+    order?: { order_id?: string };
+    payment?: { payment_status?: string; payment_message?: string | null };
+    refund?: { refund_id?: string; cf_refund_id?: string | number; order_id?: string; refund_status?: string; status_description?: string | null };
+  };
+}
+
+// POST /api/payments/webhook/cashfree — mounted with express.raw() before
+// express.json(): the signature (x-webhook-signature) is an HMAC of
+// x-webhook-timestamp + the exact body, keyed with the Cashfree secret key.
+// A payment event never unlocks a note by itself: the server asks Cashfree's
+// API for the order's payments (settleFromCashfree), which checks the amount.
+// Every branch is idempotent; 5xx makes Cashfree retry later.
+export const cashfreeWebhook = asyncHandler(async (req: Request, res: Response) => {
+  const config = await getSetting("cashfree");
+  if (!config) throw new AppError(503, "Cashfree is not configured");
+  const signature = req.header("x-webhook-signature");
+  const timestamp = req.header("x-webhook-timestamp");
+  const raw = req.body as Buffer;
+  if (!signature || !timestamp || !Buffer.isBuffer(raw) || !verifyCashfreeWebhook(config.secretKey, timestamp, raw, signature)) {
+    throw new AppError(400, "Invalid signature");
+  }
+  let event: CashfreeWebhookEvent;
+  try {
+    event = JSON.parse(raw.toString("utf8"));
+  } catch {
+    throw new AppError(400, "Invalid JSON");
+  }
+
+  const orderId = event.data?.order?.order_id ?? event.data?.refund?.order_id;
+  const order = orderId ? await prisma.order.findUnique({ where: { id: orderId } }) : null;
+  if (!order || order.provider !== "cashfree") {
+    // Not one of ours (a test webhook, or another site on the same account).
+    res.json({ ok: true, ignored: orderId ? "unknown order" : (event.type ?? "no type") });
+    return;
+  }
+
+  if (event.type === "REFUND_STATUS_WEBHOOK" && event.data?.refund) {
+    const r = event.data.refund;
+    const providerRefundId = r.cf_refund_id !== undefined ? String(r.cf_refund_id) : null;
+    if (r.refund_status === "SUCCESS") {
+      const recorded = await recordGatewayRefund(order.id, providerRefundId, r.refund_id);
+      res.json({ ok: true, refunded: recorded.changed, refund: recorded.refund?.status ?? null });
+      return;
+    }
+    const ours = r.refund_id ? await prisma.refund.findFirst({ where: { id: r.refund_id, orderId: order.id } }) : null;
+    if (ours && r.refund_status === "CANCELLED") {
+      const updated = await setRefundStatus(ours.id, "FAILED", { providerRefundId, failureReason: r.status_description ?? "Cancelled by Cashfree" });
+      res.json({ ok: true, refund: updated.status });
+      return;
+    }
+    res.json({ ok: true, refund: ours?.status ?? null });
+    return;
+  }
+
+  if (event.type === "PAYMENT_SUCCESS_WEBHOOK" || event.type === "PAYMENT_FAILED_WEBHOOK" || event.type === "PAYMENT_USER_DROPPED_WEBHOOK") {
+    try {
+      const settled = await settleFromCashfree(order, "webhook");
+      res.json({ ok: true, granted: settled.status === "PAID" });
+    } catch (err) {
+      // An amount mismatch will never succeed on retry — recorded; acknowledge.
+      if (err instanceof AppError && err.statusCode === 400) {
+        console.error(`[cashfree] webhook not granted for order ${order.id}: ${err.message}`);
+        res.json({ ok: true, granted: false });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+  res.json({ ok: true, ignored: event.type ?? "no type" });
 });

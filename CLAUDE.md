@@ -111,6 +111,13 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - **Coins:**
   - Only `applyCoinChange(tx, …)` in `src/services/coin.service.ts` may
     change a balance, and always inside `prisma.$transaction`.
+  - **Coins expire** (`coins.validityDays`, 90): each credit is a `CoinLot`;
+    spends take the soonest-expiring lot; held coins coming back pass
+    `restoreRefId` (the order id) so they return to their own lots and dates;
+    expiry is a `COIN_EXPIRED` ledger row. Call `refreshCoins(userId)` before
+    showing or pricing with a balance (expired coins never count). Invariant:
+    `User.coins` = sum of the lots' `remaining`. Lots for older accounts are
+    rebuilt from the ledger on first use.
   - It writes the `CoinTransaction` ledger row (`balanceAfter`) and refuses
     overdrafts atomically.
   - `(reason, refId)` is unique, so pass the attempt or order id as `refId`.
@@ -140,7 +147,31 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   `question: null` rather than breaking the report. Pass rate counts finished
   (PASSED/FAILED) attempts only.
 
-### Notes & payments backend (Phase 4, built)
+### Notes & payments backend (Phase 4, built; Cashfree added 10 Nov 2026)
+- **Gateways:** Cashfree (default, the client's gateway at launch) and Razorpay
+  (kept, switched off). The `payments` setting picks the gateway for NEW orders;
+  each order keeps its own (`Order.provider`). Cashfree code:
+  `src/services/cashfree.service.ts` (REST, API version 2023-08-01; our
+  `Order.id` is Cashfree's `order_id`, a `Refund.id` its `refund_id`); keys in
+  the encrypted `cashfree` setting (`appId`, `secretKey`, `environment`
+  sandbox|production), saved only after a live key check. The browser opens
+  Cashfree's v3 SDK with `paymentSessionId` (`_modal`); `POST /api/payments/verify`
+  `{ orderId }` makes the server ask Cashfree (`settleFromCashfree`: a SUCCESS
+  payment with the exact amount). Webhook `POST /api/payments/webhook/cashfree`
+  (raw body, before `express.json()`; signature = base64 HMAC-SHA256 of
+  `x-webhook-timestamp` + body with the secret key); a payment event never unlocks
+  by itself, the server asks the API. Redirect-style payments land on the site's
+  `/checkout/return?order_id=`. Cashfree needs a customer phone: the student's,
+  else `CASHFREE_PLACEHOLDER_PHONE` (open question for the client).
+  Tests: `tests/fakeCashfree.ts` (port 4598, `CASHFREE_API_BASE`, refused in production).
+- **Refunds** (`Refund` table: PENDING / SUCCESS / FAILED; reason DUPLICATE /
+  ADMIN / GATEWAY): only `startRefund()` asks a gateway for one (admin
+  `POST /api/admin/orders/:id/refund` with a written reason, or a duplicate);
+  `setRefundStatus()` (guarded on PENDING) completes it. An order becomes
+  REFUNDED and loses its access **only when the gateway confirms SUCCESS**
+  (webhook, `syncRefund` from Reconcile, or the maintenance sweep). **Coins come
+  back only for a DUPLICATE** (client rule); admin and dashboard refunds don't
+  return them (`markRefunded(…, { returnCoins })`).
 - **Code:**
   - `src/services/order.service.ts`: pricing, orders, grant, cancel, reconcile
   - `src/services/razorpay.service.ts`: REST client and HMAC checks
@@ -307,7 +338,7 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   secret, but changing the field it is bound to (e.g. the access key ID or
   SMTP user) requires re-entering it.
 - `GET /api/settings/public` returns only `isPublic` groups that have no
-  secrets (quiz, coins, social, contact, operator, site).
+  secrets (quiz, coins, social, contact, operator, site, referral).
 - The value cache is per process and cleared on save. Services that hold
   clients (the S3 client, the SMTP transport) rebuild them when the config
   fingerprint changes, so no restart is needed.
@@ -711,13 +742,66 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   only; the "no phone number" rule is about the site's own contact details. Tests that sign
   up use `signupProfile()` from `tests/helpers.ts`.
 
+### Parental consent (Phase 13, 10 Nov 2026)
+- Every rule is in `backend/src/services/consent.service.ts` (`accessState`, `assertFullAccess`). A student
+  under 18 without a GRANTED `ParentalConsent` is limited: free content only. Quizzes and new orders use
+  `requireFullAccess` (403 `CONSENT_REQUIRED` / `NO_DATE_OF_BIRTH`); any new coin-earning or paid feature
+  must use it too. `/api/auth/me` returns `access`.
+- The parent answers at `/consent/<token>` (one use, `consent.linkValidDays`); only the Super Admin records or
+  withdraws consent (written reason). The `consent.required` setting switches the rule off (lawyer, Q9).
+- Site: `/parent-consent` (student), `ConsentBanner` (root layout), `ProfileGate` sends never-asked minors
+  there. Tests: `createUserAndLogin` makes adults unless given `{ dateOfBirth }`.
+
+### Like/Save, blog, announcements, notifications (Phase 14, 10 Nov 2026)
+- Likes and saves (`reaction.service.ts`) target a chapter page or a blog post: exactly one of `chapterId` /
+  `blogPostId`. Write them with `createMany({ skipDuplicates: true })`; only public items. The site's bar is
+  `components/engagement/reaction-bar.tsx`, placed directly under the page heading. A new likeable type needs
+  a column on both tables, `toSaved()` and `assertVisible()`.
+- Blog rules: `blog.service.ts` (`publicBlogPostWhere()`: PUBLISHED and `publishedAt <= now`). Site `/blog`,
+  `/blog/[slug]`; readers `getBlogList` / `getBlogPost` / `getBlogSlugs` (tag `blog`).
+- Announcements: `visibleAnnouncements(userId?)`; home renders the "everyone" ones on the server, a student's
+  own are fetched in the browser (`components/home/announcements.tsx`).
+- Notifications: `notifyUser()` for the site's own messages (never throws; call it after the change it
+  reports); `sendNotice()` for admins. A notice to everyone is one row with `userId` null; reads in
+  `NotificationRead`. Warnings are for one student only. The bell is `components/engagement/notification-bell.tsx`.
+
+### Refer and Earn (Phase 15, 10 Nov 2026)
+- Every rule is in `backend/src/services/referral.service.ts`: `recordReferral()` at sign-up / new Google
+  account (never throws, never blocks sign-up), `settleReferral()` after the email is verified (pays, holds or
+  rejects), admin approve / reject / reverse. Coins only via `applyCoinChange` (reasons `REFERRAL_*`, refId =
+  referral id; the friend's reversal uses `<id>:friend`). Off with 0 coins until the Founder sets the
+  `referral` setting (public group).
+- Site: `src/lib/referral.ts` (code from `?ref=` kept 30 days, device id), `/refer`, `InviteNote` on /register.
+  The API's CORS `allowedHeaders` includes `X-Device-Id`; add any new custom header there too.
+
 ### Roles
-- `User.role` is `STUDENT | ADMIN` (default STUDENT).
-- Protect admin routes with `authenticate` + `requireRole("ADMIN")`
-  (`backend/src/middleware/role.middleware.ts`). Every route under
-  `/api/admin` (`backend/src/routes/admin.routes.ts`) already has this applied
-  at router level. The role is read from the DB on each request, not from the
-  JWT.
+- `User.role` is `STUDENT | ADMIN` (default STUDENT). Admins have `adminLevel`
+  SUPER (the Founder; full access; the column default, so every admin from
+  before helpers is SUPER) or HELPER (only `adminPermissions`: content,
+  quiz_reports, notes_orders, users, support). Super Admins are made only from
+  the server (`create-admin`); Team adds helpers.
+- Every route under `/api/admin` (`backend/src/routes/admin.routes.ts`) runs
+  `authenticate` + `requireAdmin` + `recordAdminActivity`. `requireAdmin` reads
+  role, level and permissions from the DB on each request and checks the route's
+  section in **`src/config/adminAccess.ts`** (first path segment → section;
+  anything not listed is Super Admin only; block / erase / role change are
+  Super Admin only). **A new admin route needs its segment there**, and its page
+  an `access` in the admin's `nav.ts` (sidebar filter + "no access" page).
+- **Activity log** (`AdminActivity`, `middleware/adminActivity.ts`): every
+  POST/PUT/PATCH/DELETE under `/api/admin` is written after the response (actor,
+  route, target, reason from the body, statusCode; secret-looking fields shown
+  as "[hidden]"). Handlers add a plain-words action and before/after with
+  `noteActivity(res, …)`; a GET is logged only if it calls it (exports). Never
+  log a secret.
+- **Account state** (`src/services/account.service.ts`): `User.status`
+  ACTIVE / SUSPENDED (until `suspendedUntil`, the midnight after the last day;
+  null = until lifted) / BLOCKED (+ `BlockedEmail`, so the email can't sign up)
+  / DELETED (personal data erased; orders and refunds kept anonymously).
+  `authenticate` reads the account on every request: refused accounts get 403
+  `ACCOUNT_SUSPENDED|ACCOUNT_BLOCKED` with the reason (the site signs out and
+  shows it on /login); access tokens carry `tv` (= `tokenVersion`), bumped by
+  "sign out everywhere", role/Team changes and erasure. Sign-in, Google and
+  refresh call `assertCanSignIn`; sign-up and Google sign-up `assertEmailNotBlocked`.
 - Create or promote an admin with `cd backend && npm run create-admin -- <email> <password> [name]`.
 - Dev admin: `npm run seed` creates the account in `SEED_ADMIN_EMAIL` /
   `SEED_ADMIN_PASSWORD` (`backend/.env`, git-ignored) if that email isn't

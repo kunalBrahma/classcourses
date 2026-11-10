@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MailIcon } from "lucide-react";
@@ -12,6 +12,7 @@ import { GoogleButton } from "@/components/auth/google-button";
 import { VerifyCodeStep } from "@/components/auth/verify-code";
 import { ApiError, publicJson } from "@/lib/api";
 import { setTokens } from "@/lib/auth";
+import { ACCOUNT_NOTICE_KEY } from "@/lib/api";
 import { PausedHelp } from "@/components/auth/unlock-code";
 import { whereAfterSignIn } from "@/lib/profile";
 
@@ -31,6 +32,18 @@ export function LoginForm() {
   const [needsCode, setNeedsCode] = useState<string | null>(null);
   // Sign-in paused after wrong passwords: offer a reset or an unlock code.
   const [paused, setPaused] = useState(false);
+  // Suspended / blocked while signed in: the reason the server gave (lib/api.ts)
+  const accountNotice = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return sessionStorage.getItem(ACCOUNT_NOTICE_KEY);
+      } catch {
+        return null;
+      }
+    },
+    () => null
+  );
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,6 +56,11 @@ export function LoginForm() {
         json: { email: email.trim(), password },
       });
       setTokens(data.accessToken, data.refreshToken);
+      try {
+        sessionStorage.removeItem(ACCOUNT_NOTICE_KEY);
+      } catch {
+        /* nothing stored */
+      }
       router.push(await whereAfterSignIn(next));
       router.refresh();
     } catch (err) {
@@ -65,7 +83,7 @@ export function LoginForm() {
     <div className="grid gap-5">
     <GoogleButton next={next} />
     <form onSubmit={submit} className="grid gap-5" aria-describedby={error ? `${id}-err` : undefined}>
-      <FormError id={`${id}-err`} message={error} />
+      <FormError id={`${id}-err`} message={error ?? accountNotice} />
       <div className="grid gap-2">
         <Label htmlFor={`${id}-email`} className="text-sm font-semibold">Email</Label>
         <div className="relative">

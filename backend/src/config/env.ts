@@ -76,6 +76,14 @@ export const envSchema = z
     // Only changed by the test suite (points at a local fake Razorpay server)
     RAZORPAY_API_BASE: z.string().url().default("https://api.razorpay.com/v1"),
 
+    // Cashfree — fallback only; the admin-managed `cashfree` setting wins when present
+    CASHFREE_APP_ID: optionalString,
+    CASHFREE_SECRET_KEY: optionalString,
+    CASHFREE_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
+    // Only set by the test suite (points at a local fake Cashfree server).
+    // Unset = Cashfree's own sandbox or production address, by environment.
+    CASHFREE_API_BASE: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+
     // Optional: `npm run seed` creates this admin if no user has this email yet.
     // Development convenience — in production use a long password (or create-admin).
     SEED_ADMIN_EMAIL: z.preprocess((v) => (v === "" ? undefined : v), z.string().trim().toLowerCase().email().optional()),
@@ -107,6 +115,9 @@ export const envSchema = z
     }
     if (e.RAZORPAY_API_BASE !== "https://api.razorpay.com/v1") {
       ctx.addIssue({ code: "custom", path: ["RAZORPAY_API_BASE"], message: "Must not be overridden in production" });
+    }
+    if (e.CASHFREE_API_BASE) {
+      ctx.addIssue({ code: "custom", path: ["CASHFREE_API_BASE"], message: "Must not be set in production" });
     }
   });
 

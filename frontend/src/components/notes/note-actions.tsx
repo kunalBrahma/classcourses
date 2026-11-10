@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 import { ApiError } from "@/lib/api";
 import { downloadNote, NoteItem, useOwnedNotes } from "@/lib/notes";
 
-// The buy window (Radix dialog + Razorpay code) loads only when Buy is tapped.
+// The buy window (Radix dialog + payment gateway code) loads only when Buy is tapped.
 const BuyDialog = dynamic(() => import("@/components/notes/buy-dialog").then((m) => m.BuyDialog), { ssr: false });
 
 // Download (free or already bought) / Buy (premium) / Sign in (guests).

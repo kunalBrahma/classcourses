@@ -100,3 +100,20 @@ export const mainPictureWarning = (width: number, height: number) => {
 
 export const phonePictureWarning = (width: number) =>
   width < 600 ? `This picture is only ${width} px wide, so it may look blurry on phones.` : null;
+
+export interface Picture {
+  url: string;
+  width: number;
+  height: number;
+}
+
+// Blog featured images and announcement pictures: one copy, resized like banners.
+export async function uploadPicture(file: File, maxWidth = 1600): Promise<Picture> {
+  const source = await open(file);
+  try {
+    const picture = await resize(source, maxWidth);
+    return { url: await uploadImage(picture.file), width: picture.width, height: picture.height };
+  } finally {
+    source.close();
+  }
+}

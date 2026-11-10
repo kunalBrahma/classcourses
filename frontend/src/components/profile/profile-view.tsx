@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRightIcon, CheckIcon, CoinsIcon, FileTextIcon, HistoryIcon, Loader2Icon, LogOutIcon, PlayIcon, ReceiptIcon, TimerIcon, XIcon } from "lucide-react";
+import { ArrowRightIcon, BookmarkIcon, GiftIcon, CheckIcon, CoinsIcon, FileTextIcon, HistoryIcon, HourglassIcon, Loader2Icon, LogOutIcon, PlayIcon, ReceiptIcon, TimerIcon, XIcon } from "lucide-react";
 import { Coin3D } from "@/components/kit/coin";
 import { SectionTitle } from "@/components/kit/section-title";
 import { useMe, useRequireSignIn } from "@/components/site/account-menu";
@@ -14,15 +14,30 @@ import { NoteList } from "@/components/notes/note-list";
 import { placeLine } from "@/components/notes/place-line";
 import { rupees } from "@/components/kit/note-card";
 import { cn } from "@/lib/utils";
+import { SavedList } from "@/components/engagement/saved-list";
 
 interface CoinTx {
   id: string;
   delta: number;
   balanceAfter: number;
-  reason: "QUIZ_PASS" | "NOTE_DISCOUNT" | "NOTE_DISCOUNT_REFUND" | "NOTE_DISCOUNT_REAPPLIED" | "ADMIN_ADJUST";
+  reason: "QUIZ_PASS" | "NOTE_DISCOUNT" | "NOTE_DISCOUNT_REFUND" | "NOTE_DISCOUNT_REAPPLIED" | "ADMIN_ADJUST" | "COIN_EXPIRED" | "REFERRAL_REWARD" | "REFERRAL_BONUS" | "REFERRAL_REVERSED";
   note: string | null;
   createdAt: string;
+  // Credits: valid until expiresAt (each credit has its own date)
+  lot?: { expiresAt: string; remaining: number; expiredAmount: number } | null;
 }
+
+// GET /api/users/me/coins
+interface MyCoins {
+  balance: number;
+  validityDays: number;
+  nextExpiry: { amount: number; expiresAt: string } | null;
+  expiredTotal: number;
+  transactions: CoinTx[];
+}
+
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+const daysUntil = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 
 interface MyOrder {
   id: string;
@@ -31,6 +46,8 @@ interface MyOrder {
   coinsUsed: number;
   createdAt: string;
   note: { id: string; title: string } | null;
+  // The latest refund, if any (pending until the gateway confirms it)
+  refunds?: { status: "PENDING" | "SUCCESS" | "FAILED"; amountPaise: number; providerRefundId: string | null; createdAt: string; processedAt: string | null }[];
 }
 
 const ORDER_STATUS: Record<MyOrder["status"], { label: string; className: string }> = {
@@ -46,7 +63,19 @@ const REASON: Record<CoinTx["reason"], string> = {
   NOTE_DISCOUNT_REFUND: "Returned (order not completed or refunded)",
   NOTE_DISCOUNT_REAPPLIED: "Used on a note (paid after the order expired)",
   ADMIN_ADJUST: "From Class Course",
+  COIN_EXPIRED: "Expired",
+  REFERRAL_REWARD: "A friend joined with your link",
+  REFERRAL_BONUS: "Welcome coins (joined with a friend's link)",
+  REFERRAL_REVERSED: "Referral reward taken back",
 };
+
+// Under a credit: when its coins expire, or that they did.
+const lotLine = (lot: NonNullable<CoinTx["lot"]>) =>
+  lot.expiredAmount > 0 && lot.remaining === 0
+    ? `Expired on ${day(lot.expiresAt)}`
+    : lot.remaining > 0
+      ? `${lot.remaining} left · valid until ${day(lot.expiresAt)}`
+      : `All used · was valid until ${day(lot.expiresAt)}`;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
@@ -57,7 +86,7 @@ export function ProfileView() {
   // Signed out (here, in the header menu or another tab) → straight to sign in.
   const signedIn = useRequireSignIn();
   const me = useMe();
-  const [coins, setCoins] = useState<{ balance: number; transactions: CoinTx[] } | null>(null);
+  const [coins, setCoins] = useState<MyCoins | null>(null);
   const [today, setToday] = useState<{ attempts: Attempt[]; usage: { remaining: number; limit: number } } | null>(null);
   const [history, setHistory] = useState<Attempt[] | null>(null);
   const [notes, setNotes] = useState<NoteItem[] | null>(null);
@@ -67,7 +96,7 @@ export function ProfileView() {
   useEffect(() => {
     if (!getAccessToken()) return; // useRequireSignIn() redirects
     Promise.all([
-      apiJson<{ balance: number; transactions: CoinTx[] }>("/api/users/me/coins"),
+      apiJson<MyCoins>("/api/users/me/coins"),
       apiJson<{ attempts: Attempt[]; usage: { remaining: number; limit: number } }>("/api/quiz/today"),
       apiJson<{ attempts: Attempt[] }>("/api/quiz/history?limit=30"),
       apiJson<{ notes: NoteItem[] }>("/api/users/me/notes"),
@@ -87,6 +116,9 @@ export function ProfileView() {
   if (!coins || !today || !history || !notes || !orders) return <Loader2Icon className="mx-auto mt-10 size-8 animate-spin text-brand-amber-text" aria-label="Loading your profile" />;
 
   const unfinished = today.attempts.filter((a) => !isFinished(a));
+  // Expired coins are listed on their own, below the history.
+  const activity = coins.transactions.filter((t) => t.reason !== "COIN_EXPIRED");
+  const expiredRows = coins.transactions.filter((t) => t.reason === "COIN_EXPIRED");
   const finished = history.filter(isFinished);
 
   return (
@@ -120,7 +152,15 @@ export function ProfileView() {
         <div className="flex-1">
           <p className="font-heading text-3xl font-extrabold tabular-nums">{coins.balance} coins</p>
           <p>Pass quizzes to earn more. Use them for money off notes.</p>
+          <p className="mt-1 text-sm font-semibold opacity-80">Coins are valid for {coins.validityDays} days from the day you earn them.</p>
         </div>
+        {coins.nextExpiry && (
+          <p className="flex w-full items-center gap-2 rounded-xl bg-white/45 px-3 py-2 text-sm font-semibold dark:bg-white/10 sm:w-auto">
+            <HourglassIcon className="size-4 shrink-0" aria-hidden="true" />
+            {coins.nextExpiry.amount} coin{coins.nextExpiry.amount === 1 ? "" : "s"} expire{coins.nextExpiry.amount === 1 ? "s" : ""}{" "}
+            {daysUntil(coins.nextExpiry.expiresAt) <= 1 ? "soon" : `on ${day(coins.nextExpiry.expiresAt)}`}
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="notes-title">
@@ -132,6 +172,22 @@ export function ProfileView() {
         ) : (
           <NoteList notes={notes} subtitle={placeLine} />
         )}
+      </section>
+
+      <Link href="/refer" className="card-3d lift flex min-h-14 items-center gap-3 rounded-2xl px-4 py-3">
+        <GiftIcon className="size-6 shrink-0 text-brand-amber-text" aria-hidden="true" />
+        <span className="flex-1">
+          <span className="block font-semibold">Refer and Earn</span>
+          <span className="block text-sm text-muted-foreground">Your invite link, friends who joined and coins earned</span>
+        </span>
+        <ArrowRightIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <section aria-labelledby="saved-title">
+        <SectionTitle icon={BookmarkIcon} action={{ href: "/saved", label: "See all" }}>
+          <span id="saved-title">Saved</span>
+        </SectionTitle>
+        <SavedList limit={5} />
       </section>
 
       <section aria-labelledby="today-title">
@@ -231,6 +287,20 @@ export function ProfileView() {
                   {when(o.createdAt)} · {o.amountPaise > 0 ? rupees(o.amountPaise) : "Free with coins"}
                   {o.coinsUsed > 0 && ` · ${o.coinsUsed} coins`}
                 </p>
+                {o.refunds?.[0] && (
+                  <p className={cn("text-sm font-semibold", o.refunds[0].status === "FAILED" ? "text-destructive" : o.refunds[0].status === "SUCCESS" ? "text-success" : "text-brand-amber-text")}>
+                    {o.refunds[0].status === "PENDING"
+                      ? `Refund of ${rupees(o.refunds[0].amountPaise)} in progress: it reaches your account in a few working days.`
+                      : o.refunds[0].status === "SUCCESS"
+                        ? `${rupees(o.refunds[0].amountPaise)} refunded on ${when(o.refunds[0].processedAt ?? o.refunds[0].createdAt)}.`
+                        : "There was a problem with the refund. Our team is on it; you don't need to do anything."}
+                    {o.refunds[0].providerRefundId && o.refunds[0].status !== "FAILED" && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        Refund reference: <span className="select-all font-mono">{o.refunds[0].providerRefundId}</span>
+                      </span>
+                    )}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Order ID: <span className="select-all font-mono">{o.id}</span>
                 </p>
@@ -244,11 +314,11 @@ export function ProfileView() {
         <SectionTitle icon={CoinsIcon}>
           <span id="coins-title">Coin history</span>
         </SectionTitle>
-        {coins.transactions.length === 0 ? (
+        {activity.length === 0 ? (
           <p className="card-3d rounded-2xl p-4 text-muted-foreground">No coins yet. Pass a quiz to earn your first coins!</p>
         ) : (
           <ul className="card-3d divide-y rounded-2xl">
-            {coins.transactions.map((t) => (
+            {activity.map((t) => (
               <li key={t.id} className="flex items-center gap-3 px-4 py-3">
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{REASON[t.reason]}</span>
@@ -256,6 +326,7 @@ export function ProfileView() {
                     {t.note ? `${t.note} · ` : ""}
                     {when(t.createdAt)}
                   </span>
+                  {t.lot && <span className={cn("block text-sm", t.lot.expiredAmount > 0 && t.lot.remaining === 0 ? "text-destructive" : "text-muted-foreground")}>{lotLine(t.lot)}</span>}
                 </span>
                 <span className={cn("font-heading text-lg font-extrabold tabular-nums", t.delta > 0 ? "text-success" : "text-destructive")}>
                   {t.delta > 0 ? `+${t.delta}` : t.delta}
@@ -265,6 +336,28 @@ export function ProfileView() {
           </ul>
         )}
       </section>
+
+      {expiredRows.length > 0 && (
+        <section aria-labelledby="expired-title">
+          <SectionTitle icon={HourglassIcon}>
+            <span id="expired-title">Expired coins</span>
+          </SectionTitle>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {coins.expiredTotal} coin{coins.expiredTotal === 1 ? "" : "s"} expired so far. Coins can&apos;t be used after {coins.validityDays} days.
+          </p>
+          <ul className="card-3d divide-y rounded-2xl">
+            {expiredRows.map((t) => (
+              <li key={t.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">Expired on {day(t.createdAt)}</span>
+                  {t.note && <span className="block text-sm text-muted-foreground">{t.note}</span>}
+                </span>
+                <span className="font-heading text-lg font-extrabold tabular-nums text-muted-foreground">{t.delta}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

@@ -39,6 +39,9 @@ export const coinSettingsSchema = z.object({
   // Which passes earn coins (client decision PENDING — task.md). Guards
   // against farming coins by re-passing the same easy chapter.
   awardRule: z.enum(["firstPassPerChapter", "firstPassPerChapterPerDay", "everyPass"]).default("firstPassPerChapter"),
+  // Coins expire this many days after they are credited (client: 90). A change
+  // applies to coins credited afterwards; earlier coins keep their date.
+  validityDays: z.coerce.number().int().min(1).max(3650).default(90),
 });
 
 export const socialSettingsSchema = z.object({
@@ -101,6 +104,29 @@ export const securityDefaults = (): SecuritySettings =>
     ...LOGIN_DEFAULTS,
   }) as SecuritySettings;
 
+// Parent / guardian consent for students under 18 (client requirements of
+// 6 Nov 2026; the client's lawyer confirms the rules, so it's a setting).
+// Refer and Earn (client requirements of 6 Nov 2026): off, with no coins, until
+// the Founder sets it up. Coins follow the same 90-day expiry as all coins.
+export const referralSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  // To the student who shared the link, once the friend verifies their email
+  coinsPerReferral: z.coerce.number().int().min(0).max(1000).default(0),
+  // Welcome coins for the new friend (0 = none)
+  friendCoins: z.coerce.number().int().min(0).max(1000).default(0),
+  // Rewards per inviter per day; more wait for the Founder ("never unlimited")
+  dailyLimit: z.coerce.number().int().min(1).max(100).default(5),
+  // Sign-ups through one inviter from the same network or device in 30 days before they wait for review
+  sameNetworkLimit: z.coerce.number().int().min(1).max(50).default(3),
+});
+
+export const consentSettingsSchema = z.object({
+  // Under-18 students need a parent's consent before quizzes, coins and purchases
+  required: z.boolean().default(true),
+  // How long the emailed link works
+  linkValidDays: z.coerce.number().int().min(1).max(30).default(7),
+});
+
 export const siteSettingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   frontendUrl: z.string().trim().url(),
@@ -150,6 +176,23 @@ export const razorpaySettingsSchema = z.object({
   webhookSecret: z.string().nullable().default(null),
 });
 
+// Cashfree Payments (client requirements of 6 Nov 2026: the payment gateway at
+// launch). App ID + Secret key from the Cashfree dashboard (Developers → API
+// keys). The secret also signs webhooks. Kept encrypted, never sent to a browser.
+export const cashfreeSettingsSchema = z.object({
+  appId: z.string().trim().min(3, "App ID is required").max(200),
+  secretKey: z
+    .string({ invalid_type_error: "Secret key is required", required_error: "Secret key is required" })
+    .min(1, "Secret key is required"),
+  // Test with "sandbox" keys first; switch to "production" with live keys.
+  environment: z.enum(["sandbox", "production"]).default("sandbox"),
+});
+
+// Which gateway new orders use. Orders already made keep their own.
+export const paymentsSettingsSchema = z.object({
+  provider: z.enum(["cashfree", "razorpay"]).default("cashfree"),
+});
+
 export type QuizSettings = z.infer<typeof quizSettingsSchema>;
 export type CoinSettings = z.infer<typeof coinSettingsSchema>;
 export type SocialSettings = z.infer<typeof socialSettingsSchema>;
@@ -159,6 +202,10 @@ export type OperatorSettings = z.infer<typeof operatorSettingsSchema>;
 export type StorageSettings = z.infer<typeof storageSettingsSchema>;
 export type SmtpSettings = z.infer<typeof smtpSettingsSchema>;
 export type RazorpaySettings = z.infer<typeof razorpaySettingsSchema>;
+export type CashfreeSettings = z.infer<typeof cashfreeSettingsSchema>;
+export type ConsentSettings = z.infer<typeof consentSettingsSchema>;
+export type ReferralSettings = z.infer<typeof referralSettingsSchema>;
+export type PaymentsSettings = z.infer<typeof paymentsSettingsSchema>;
 
 interface SettingDefinition<T extends Record<string, unknown>> {
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
@@ -192,6 +239,7 @@ const SETTINGS = {
       coinValuePaise: 10,
       maxDiscountPercent: 50,
       awardRule: "firstPassPerChapter" as const,
+      validityDays: 90,
     }),
     secretFields: [],
     genericAdminEdit: true,
@@ -309,6 +357,45 @@ const SETTINGS = {
     genericAdminEdit: false,
     isPublic: false,
   } satisfies SettingDefinition<RazorpaySettings>,
+
+  cashfree: {
+    schema: cashfreeSettingsSchema,
+    defaults: () => null,
+    fromEnv: () =>
+      env.CASHFREE_APP_ID && env.CASHFREE_SECRET_KEY
+        ? cashfreeSettingsSchema.parse({ appId: env.CASHFREE_APP_ID, secretKey: env.CASHFREE_SECRET_KEY, environment: env.CASHFREE_ENV })
+        : null,
+    secretFields: ["secretKey"],
+    secretBoundTo: { secretKey: "appId" },
+    // Saved through /settings/cashfree, which checks the keys with Cashfree first
+    genericAdminEdit: false,
+    isPublic: false,
+  } satisfies SettingDefinition<CashfreeSettings>,
+
+  referral: {
+    schema: referralSettingsSchema,
+    defaults: () => ({ enabled: false, coinsPerReferral: 0, friendCoins: 0, dailyLimit: 5, sameNetworkLimit: 3 }),
+    secretFields: [],
+    genericAdminEdit: true,
+    // The site shows the menu item and the coins on offer
+    isPublic: true,
+  } satisfies SettingDefinition<ReferralSettings>,
+
+  consent: {
+    schema: consentSettingsSchema,
+    defaults: () => ({ required: true, linkValidDays: 7 }),
+    secretFields: [],
+    genericAdminEdit: true,
+    isPublic: false,
+  } satisfies SettingDefinition<ConsentSettings>,
+
+  payments: {
+    schema: paymentsSettingsSchema,
+    defaults: () => ({ provider: "cashfree" as const }),
+    secretFields: [],
+    genericAdminEdit: true,
+    isPublic: false,
+  } satisfies SettingDefinition<PaymentsSettings>,
 };
 
 type Settings = typeof SETTINGS;

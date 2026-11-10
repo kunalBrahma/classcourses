@@ -43,9 +43,12 @@ export interface PublicSettings {
   contact: { email: string };
   social: SocialLinks;
   quiz: { questionsPerQuiz: number; secondsPerQuestion: number; passMark: number; dailyLimit: number };
-  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number; awardRule?: "firstPassPerChapter" | "firstPassPerChapterPerDay" | "everyPass" };
+  // validityDays: coins expire this many days after they're earned (client: 90)
+  coins: { perPass: number; coinValuePaise: number; maxDiscountPercent: number; awardRule?: "firstPassPerChapter" | "firstPassPerChapterPerDay" | "everyPass"; validityDays?: number };
   // Who runs the site and the Grievance Officer (footer, About, Helpline)
   operator: OperatorDetails;
+  // Refer and Earn (Phase 15); missing on an older API = off
+  referral?: { enabled: boolean; coinsPerReferral: number; friendCoins: number };
 }
 
 export interface OperatorDetails {
@@ -63,7 +66,7 @@ const FALLBACK_SETTINGS: PublicSettings = {
   contact: { email: "about.classcourse@gmail.com" },
   social: { youtube: null, facebook: null, instagram: null, twitter: null, linkedin: null },
   quiz: { questionsPerQuiz: 10, secondsPerQuestion: 10, passMark: 7, dailyLimit: 10 },
-  coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50, awardRule: "firstPassPerChapter" },
+  coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50, awardRule: "firstPassPerChapter", validityDays: 90 },
   operator: {
     operatorLine: "Class Course, managed by Mr. Ajaharul Ahmed, Founder",
     address: "Rangaloo, Nagaon, Assam, 782427",
@@ -459,6 +462,97 @@ export async function getBanners(): Promise<Banner[]> {
   cacheTag("pages");
   try {
     const { items } = await getJson<{ items: Banner[] }>("/api/content/banners");
+    cacheLife("minutes");
+    return items;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Blog (Phase 14) ----
+export interface BlogCard {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  coverImageUrl: string | null;
+  coverWidth: number | null;
+  coverHeight: number | null;
+  coverAlt: string;
+  publishedAt: string;
+  readMinutes: number;
+  category: { name: string; slug: string } | null;
+}
+export interface BlogList {
+  posts: BlogCard[];
+  total: number;
+  page: number;
+  totalPages: number;
+  categories: { name: string; slug: string }[];
+}
+export interface BlogPost extends BlogCard {
+  bodyHtml: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  updatedAt: string;
+}
+
+export const EMPTY_BLOG: BlogList = { posts: [], total: 0, page: 1, totalPages: 1, categories: [] };
+
+export async function getBlogList(category: string | null, page: number): Promise<BlogList> {
+  "use cache";
+  cacheTag("blog");
+  const q = new URLSearchParams({ page: String(page) });
+  if (category) q.set("category", category);
+  try {
+    const data = await getJson<BlogList>(`/api/content/blog?${q}`);
+    cacheLife("minutes");
+    return data;
+  } catch {
+    cacheLife("seconds");
+    return EMPTY_BLOG;
+  }
+}
+
+export async function getBlogPost(slug: string): Promise<{ post: BlogPost; related: BlogCard[] } | null> {
+  "use cache";
+  cacheTag("blog");
+  cacheLife("minutes");
+  return getJsonOrNull<{ post: BlogPost; related: BlogCard[] }>(`/api/content/blog/${seg(slug)}`);
+}
+
+export async function getBlogSlugs(): Promise<{ slug: string; updatedAt: string }[]> {
+  "use cache";
+  cacheTag("blog");
+  try {
+    const { posts } = await getJson<{ posts: { slug: string; updatedAt: string }[] }>("/api/content/blog-slugs");
+    cacheLife("minutes");
+    return posts;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
+// ---- Announcements (Phase 14): the "everyone" ones; students' own load in the browser ----
+export interface Announcement {
+  id: string;
+  title: string;
+  bodyHtml: string;
+  imageUrl: string | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  link: string | null;
+  linkLabel: string | null;
+  createdAt: string;
+}
+
+export async function getAnnouncements(): Promise<Announcement[]> {
+  "use cache";
+  cacheTag("pages");
+  try {
+    const { items } = await getJson<{ items: Announcement[] }>("/api/content/announcements");
     cacheLife("minutes");
     return items;
   } catch {

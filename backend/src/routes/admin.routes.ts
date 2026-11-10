@@ -1,7 +1,23 @@
 import { Router } from "express";
+import * as eng from "../controllers/adminEngagement.controller";
+import * as referrals from "../controllers/referral.controller";
+import {
+  createAnnouncementSchema,
+  createBlogCategorySchema,
+  createPostSchema,
+  reorderIdsSchema,
+  referralNoteSchema,
+  sendNoticeSchema,
+  updateAnnouncementSchema,
+  updateBlogCategorySchema,
+  updatePostSchema,
+} from "../validations/engagement.validation";
 import { z } from "zod";
 import { authenticate } from "../middleware/auth.middleware";
-import { requireRole } from "../middleware/role.middleware";
+import { requireAdmin } from "../middleware/role.middleware";
+import { recordAdminActivity } from "../middleware/adminActivity";
+import { addHelper, listActivity, listTeam, removeHelper, updateHelper } from "../controllers/adminTeam.controller";
+import { addHelperSchema, adminEditDetailsSchema, eraseSchema, optionalReasonSchema, reasonSchema, recordConsentSchema, suspendSchema, updateHelperSchema, withdrawConsentSchema } from "../validations/users.validation";
 import { validateBody } from "../middleware/validate.middleware";
 import {
   getSettingHandler,
@@ -19,6 +35,10 @@ import {
   updateSmtpSettings,
   updateStorageSettings,
   getRazorpaySettings,
+  getCashfreeSettings,
+  resetCashfreeSettings,
+  testCashfreeSettings,
+  updateCashfreeSettings,
   resetRazorpaySettings,
   testRazorpaySettings,
   updateRazorpaySettings,
@@ -28,6 +48,7 @@ import {
   smtpTestInputSchema,
   storageSettingsInputSchema,
   razorpaySettingsInputSchema,
+  cashfreeSettingsInputSchema,
 } from "../validations/settings.validation";
 import {
   attachNoteFile,
@@ -39,6 +60,7 @@ import {
   listNotesAdmin,
   listOrdersAdmin,
   reconcileOrderAdmin,
+  refundOrderAdmin,
   updateNote,
 } from "../controllers/adminNotes.controller";
 import {
@@ -46,6 +68,7 @@ import {
   grantNoteSchema,
   noteFileSchema,
   noteUploadUrlSchema,
+  startRefundSchema,
   updateNoteSchema,
 } from "../validations/notes.validation";
 import {
@@ -85,7 +108,25 @@ import adminCatalogRoutes from "./adminCatalog.routes";
 import { clearUserSignInLock, getUserSignInStatus, listAdminLogins, securityLimitsMeta } from "../controllers/adminSecurity.controller";
 import adminContentRoutes from "./adminContent.routes";
 import { getQuizAttempt, getQuizStatsHandler, listQuizAttempts } from "../controllers/adminQuiz.controller";
-import { adjustUserCoins, getUserAdmin, listUsersAdmin, updateUserAdmin } from "../controllers/adminUsers.controller";
+import {
+  adjustUserCoins,
+  blockUserAdmin,
+  editUserDetailsAdmin,
+  eraseUserAdmin,
+  exportUserAdmin,
+  getUserAdmin,
+  listUsersAdmin,
+  signOutUserAdmin,
+  suspendUserAdmin,
+  unblockUserAdmin,
+  unsuspendUserAdmin,
+  updateUserAdmin,
+  userAccountAdmin,
+  getUserConsentAdmin,
+  recordConsentAdmin,
+  withdrawConsentAdmin,
+  resendConsentAdmin,
+} from "../controllers/adminUsers.controller";
 import { getDashboardStats } from "../controllers/adminStats.controller";
 import { deleteContactMessage, listContactMessages, updateContactMessage } from "../controllers/contact.controller";
 import { contactStatusSchema } from "../validations/pages.validation";
@@ -108,7 +149,9 @@ import {
 const router = Router();
 
 // Every /api/admin route requires a logged-in ADMIN.
-router.use(authenticate, requireRole("ADMIN"));
+// Admins only; helper admins only in their sections (config/adminAccess.ts).
+// Every change is written to the activity log (middleware/adminActivity.ts).
+router.use(authenticate, requireAdmin, recordAdminActivity);
 
 router.get("/settings", listSettings);
 
@@ -135,6 +178,12 @@ router.get("/settings/razorpay", getRazorpaySettings);
 router.put("/settings/razorpay", validateBody(razorpaySettingsInputSchema), updateRazorpaySettings);
 router.post("/settings/razorpay/test", validateBody(razorpaySettingsInputSchema), testRazorpaySettings);
 router.delete("/settings/razorpay", resetRazorpaySettings);
+
+// Payments (Cashfree) — the gateway at launch; saving checks the keys first
+router.get("/settings/cashfree", getCashfreeSettings);
+router.put("/settings/cashfree", validateBody(cashfreeSettingsInputSchema), updateCashfreeSettings);
+router.post("/settings/cashfree/test", validateBody(cashfreeSettingsInputSchema), testCashfreeSettings);
+router.delete("/settings/cashfree", resetCashfreeSettings);
 
 // Generic groups: quiz, coins, social, contact, site (body validated per group
 // against its schema inside buildSettingCandidate)
@@ -174,6 +223,28 @@ router.get("/users", listUsersAdmin);
 router.get("/users/:id", getUserAdmin);
 router.patch("/users/:id", validateBody(updateUserAdminSchema), updateUserAdmin);
 router.post("/users/:id/coins", validateBody(adjustCoinsSchema), adjustUserCoins);
+// Account actions (reasons required; all in the activity log)
+router.get("/users/:id/account", userAccountAdmin);
+router.post("/users/:id/suspend", validateBody(suspendSchema), suspendUserAdmin);
+router.post("/users/:id/unsuspend", validateBody(optionalReasonSchema), unsuspendUserAdmin);
+router.post("/users/:id/block", validateBody(reasonSchema), blockUserAdmin); // Super Admin
+router.post("/users/:id/unblock", validateBody(optionalReasonSchema), unblockUserAdmin); // Super Admin
+router.post("/users/:id/sign-out", validateBody(optionalReasonSchema), signOutUserAdmin);
+router.patch("/users/:id/details", validateBody(adminEditDetailsSchema), editUserDetailsAdmin);
+router.get("/users/:id/export", exportUserAdmin);
+// Parental consent (record / withdraw: Super Admin)
+router.get("/users/:id/consent", getUserConsentAdmin);
+router.post("/users/:id/consent/record", validateBody(recordConsentSchema), recordConsentAdmin);
+router.post("/users/:id/consent/withdraw", validateBody(withdrawConsentSchema), withdrawConsentAdmin);
+router.post("/users/:id/consent/resend", resendConsentAdmin);
+router.delete("/users/:id", validateBody(eraseSchema), eraseUserAdmin); // Super Admin
+
+// Team and activity log: Super Admin only (not in config/adminAccess.ts sections)
+router.get("/team", listTeam);
+router.post("/team", validateBody(addHelperSchema), addHelper);
+router.patch("/team/:id", validateBody(updateHelperSchema), updateHelper);
+router.delete("/team/:id", removeHelper);
+router.get("/activity", listActivity);
 router.get("/users/:id/sign-in", getUserSignInStatus);
 router.post("/users/:id/sign-in/clear", clearUserSignInLock);
 
@@ -194,6 +265,8 @@ router.post("/notes/:id/grant", validateBody(grantNoteSchema), grantNoteAccess);
 router.get("/orders", listOrdersAdmin);
 router.get("/orders/:id", getOrderAdmin);
 router.post("/orders/:id/reconcile", reconcileOrderAdmin);
+// Full refund through the order's gateway, with a written reason
+router.post("/orders/:id/refund", validateBody(startRefundSchema), refundOrderAdmin);
 
 // Static pages & FAQ
 router.get("/pages", listPagesAdmin);
@@ -224,5 +297,43 @@ router.post("/banners", validateBody(createBannerSchema), createBanner);
 router.put("/banners/reorder", validateBody(reorderBannersSchema), reorderBanners);
 router.patch("/banners/:id", validateBody(updateBannerSchema), updateBanner);
 router.delete("/banners/:id", deleteBanner);
+
+// Blog (posts + categories)
+router.get("/blog/posts", eng.listPosts);
+router.post("/blog/posts", validateBody(createPostSchema), eng.createPost);
+router.get("/blog/posts/:id", eng.getPost);
+router.patch("/blog/posts/:id", validateBody(updatePostSchema), eng.updatePost);
+router.delete("/blog/posts/:id", eng.deletePost);
+router.get("/blog/categories", eng.listCategories);
+router.post("/blog/categories", validateBody(createBlogCategorySchema), eng.createCategory);
+router.put("/blog/categories/reorder", validateBody(reorderIdsSchema), eng.reorderCategories);
+router.patch("/blog/categories/:id", validateBody(updateBlogCategorySchema), eng.updateCategory);
+router.delete("/blog/categories/:id", eng.deleteCategory);
+
+// Announcements
+router.get("/announcements", eng.listAnnouncements);
+router.post("/announcements", validateBody(createAnnouncementSchema), eng.createAnnouncement);
+router.put("/announcements/reorder", validateBody(reorderIdsSchema), eng.reorderAnnouncements);
+router.patch("/announcements/:id", validateBody(updateAnnouncementSchema), eng.updateAnnouncement);
+router.delete("/announcements/:id", eng.deleteAnnouncement);
+
+// Notices and warnings (the student's bell inbox)
+router.get("/notices", eng.listNotices);
+router.post("/notices", validateBody(sendNoticeSchema), eng.postNotice);
+router.delete("/notices/:id", eng.removeNotice);
+
+// Refer and Earn (Super Admin): records, review, reverse
+router.get("/referrals", referrals.listReferrals);
+router.get("/referrals/summary", referrals.getReferralSummary);
+router.post("/referrals/:id/approve", validateBody(referralNoteSchema), referrals.approve);
+router.post("/referrals/:id/reject", validateBody(referralNoteSchema), referrals.reject);
+router.post("/referrals/:id/reverse", validateBody(referralNoteSchema), referrals.reverse);
+
+// Likes and saves (moderation)
+router.get("/reactions", eng.listReactions);
+router.get("/reactions/summary", eng.getReactionSummary);
+router.delete("/reactions/likes/:id", eng.removeLike);
+router.delete("/reactions/saves/:id", eng.removeSaved);
+router.post("/reactions/users/:userId/clear-likes", eng.clearLikes);
 
 export default router;

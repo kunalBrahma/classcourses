@@ -38,12 +38,15 @@ export const signupProfile = async () => {
 };
 
 // Creates a user directly in the DB and logs in through the real API.
-export const createUserAndLogin = async (role: Role = "STUDENT") => {
+// Students are adults (born 2000) by default, so quizzes and purchases work
+// without parental consent; pass { dateOfBirth } to test younger or unknown ages.
+export const createUserAndLogin = async (role: Role = "STUDENT", opts: { dateOfBirth?: Date | null } = {}) => {
   counter += 1;
   const email = `${role.toLowerCase()}${counter}-${Date.now()}@test.local`;
   const password = "Password123!";
+  const dateOfBirth = opts.dateOfBirth === undefined ? new Date("2000-01-01") : opts.dateOfBirth;
   await prisma.user.create({
-    data: { email, password: await hashPassword(password), name: `${role} ${counter}`, role },
+    data: { email, password: await hashPassword(password), name: `${role} ${counter}`, role, dateOfBirth },
   });
   const res = await api().post("/api/auth/login").send({ email, password });
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);

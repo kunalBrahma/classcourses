@@ -17,7 +17,7 @@ export const updateFaqSchema = createFaqSchema.partial();
 export const reorderFaqSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(500) });
 
 // Home page "Latest news" links. Only http(s) links: they're rendered as <a href>.
-const httpUrl = z
+export const httpUrl = z
   .string()
   .trim()
   .max(500)
@@ -38,7 +38,7 @@ export const reorderNewsSchema = z.object({ ids: z.array(z.string().uuid()).min(
 
 // Home page banners. The link is a page on this site ("/notes") or a full http(s)
 // URL. "//host" and "/\\host" are refused: browsers treat those as other websites.
-const bannerLink = z
+export const siteOrHttpLink = z
   .string()
   .trim()
   .max(500)
@@ -60,7 +60,7 @@ const bannerFields = z.object({
   mobileImageUrl: httpUrl.nullable().optional(),
   mobileWidth: imageSize.nullable().optional(),
   mobileHeight: imageSize.nullable().optional(),
-  link: bannerLink.nullable().optional(),
+  link: siteOrHttpLink.nullable().optional(),
   isActive: z.boolean().optional(),
 });
 type BannerFields = Partial<z.infer<typeof bannerFields>>;

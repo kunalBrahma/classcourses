@@ -19,6 +19,8 @@ export class FakeRazorpay {
   refunds = new Map<string, FakeRefund>();
   failNextOrderCreate = false;
   failNextRefund = false;
+  /** Status new refunds start in ("processed" is Razorpay's usual instant answer). */
+  refundStartStatus = "processed";
   private server = http.createServer((req, res) => this.handle(req, res));
 
   start() {
@@ -102,11 +104,16 @@ export class FakeRazorpay {
         }
         const body = JSON.parse(raw);
         if ((p.amount_refunded ?? 0) + body.amount > p.amount) return send(400, { error: { description: "The total refund amount is greater than the refund payment amount" } });
-        const r = { id: `rfnd_${crypto.randomBytes(7).toString("hex")}`, payment_id: p.id, amount: body.amount, status: "processed" };
+        const r = { id: `rfnd_${crypto.randomBytes(7).toString("hex")}`, payment_id: p.id, amount: body.amount, status: this.refundStartStatus };
         p.amount_refunded = (p.amount_refunded ?? 0) + body.amount;
         if (p.amount_refunded === p.amount) p.status = "refunded";
         this.refunds.set(r.id, r);
         return send(200, r);
+      }
+      const refundGet = /^\/refunds\/([^/]+)$/.exec(path);
+      if (req.method === "GET" && refundGet) {
+        const r = this.refunds.get(refundGet[1]);
+        return r ? send(200, r) : send(404, { error: { description: "The id provided does not exist" } });
       }
       const payment = /^\/payments\/([^/]+)$/.exec(path);
       if (req.method === "GET" && payment) {

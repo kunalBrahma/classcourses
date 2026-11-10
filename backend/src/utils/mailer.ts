@@ -1,4 +1,6 @@
 import { authCodeEmail } from "../emails/authCode";
+import { noticeEmail } from "../emails/notice";
+import { parentConsentEmail } from "../emails/parentConsent";
 import { purchaseReceiptEmail } from "../emails/purchaseReceipt";
 import { verifyEmailCode } from "../emails/verifyEmail";
 import { contactMessageEmail } from "../emails/contactMessage";
@@ -52,4 +54,33 @@ export const sendVerificationCodeEmail = async (to: string, name: string | null,
 export const sendContactNotificationEmail = async (msg: { name: string; email: string; phone: string | null; topic: string; message: string }) => {
   const [site, contact] = await Promise.all([requireSetting("site"), requireSetting("contact")]);
   await sendMail({ to: contact.email, replyTo: msg.email, ...contactMessageEmail({ siteName: site.name, ...msg }) });
+};
+
+// Throws (503): the student is waiting for this email to reach their parent,
+// so a failed send must be shown, not hidden.
+export const sendParentConsentEmail = async (to: string, studentName: string, token: string, validDays: number) => {
+  const site = await requireSetting("site");
+  const base = site.frontendUrl.replace(/\/$/, "");
+  try {
+    await sendMail({ to, ...parentConsentEmail({ siteName: site.name, studentName, link: `${base}/consent/${token}`, validDays, privacyUrl: `${base}/privacy` }) });
+  } catch (err) {
+    console.error("[mail] Failed to send parent consent email:", err instanceof Error ? err.message : err);
+    throw new AppError(503, "We couldn't send the email to your parent right now. Please try again in a minute.");
+  }
+};
+
+// Returns what happened ("sent" / the error) instead of throwing: the notice
+// is already in the student's inbox, and the admin sees the email result.
+export const sendNoticeEmail = async (to: string, notice: { title: string; body: string; kind: "NOTICE" | "WARNING" | "ACCOUNT"; link: string | null }) => {
+  const site = await requireSetting("site");
+  const base = site.frontendUrl.replace(/\/$/, "");
+  const absolute = notice.link?.startsWith("/") ? `${base}${notice.link}` : notice.link;
+  try {
+    await sendMail({ to, ...noticeEmail({ siteName: site.name, ...notice, link: absolute, inboxUrl: `${base}/notifications`, helplineUrl: `${base}/contact` }) });
+    return "sent";
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[mail] Failed to send notice email:", message);
+    return `Email not sent: ${message}`.slice(0, 300);
+  }
 };

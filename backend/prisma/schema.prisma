@@ -11,46 +11,165 @@ enum Role {
   ADMIN
 }
 
+// For ADMIN accounts (client requirements of 6 Nov 2026): SUPER = full access
+// (the Founder; every admin from before helpers existed), HELPER = only the
+// sections in User.adminPermissions. Ignored for students.
+enum AdminLevel {
+  SUPER
+  HELPER
+}
+
+// Account state set by the admin (Users → actions). SUSPENDED until
+// suspendedUntil (or until lifted when null); BLOCKED also stops the email
+// registering again (BlockedEmail); DELETED = personal data erased, the row
+// kept only for payment records.
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DELETED
+}
+
 model User {
-  id              String                  @id @default(uuid())
-  email           String                  @unique
-  name            String?
+  id                 String                  @id @default(uuid())
+  email              String                  @unique
+  name               String?
   // 10-digit Indian mobile number, asked for at sign-up (null for older accounts)
-  phone           String?
+  phone              String?
   // Null for accounts made with Google, until they set one through "Forgot password"
-  password        String?
+  password           String?
   // Google's permanent ID for this person; set once they sign in with Google
-  googleId        String?                 @unique
+  googleId           String?                 @unique
   // /register creates students with false until they enter the emailed code.
   // Defaults to true so older accounts, admins and seeded users count as verified.
-  emailVerified   Boolean                 @default(true)
-  role            Role                    @default(STUDENT)
+  emailVerified      Boolean                 @default(true)
+  role               Role                    @default(STUDENT)
+  adminLevel         AdminLevel              @default(SUPER)
+  // HELPER admins: the sections they may use ("content", "quiz_reports",
+  // "notes_orders", "users", "support"); see src/config/adminAccess.ts
+  adminPermissions   String[]                @default([])
+  status             UserStatus              @default(ACTIVE)
+  suspendedUntil     DateTime?
+  // Why the admin suspended / blocked / deleted it (the student sees it for suspend/block)
+  statusReason       String?
+  statusChangedAt    DateTime?
+  deletedAt          DateTime?
+  // Bumped to sign the account out everywhere: access tokens carry it ("tv")
+  tokenVersion       Int                     @default(0)
   // Student's preferred medium/class, used to open the site where they left off
-  mediumId        String?
-  medium          Medium?                 @relation(fields: [mediumId], references: [id], onDelete: SetNull)
+  mediumId           String?
+  medium             Medium?                 @relation(fields: [mediumId], references: [id], onDelete: SetNull)
   // The student's class (asked at sign-up / "complete your profile")
-  classLevelId    String?
-  classLevel      ClassLevel?             @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
+  classLevelId       String?
+  classLevel         ClassLevel?             @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   // Asked at sign-up (client requirements of 6 Nov 2026). Null for accounts made
   // before that and for Google sign-ups, until "complete your profile".
-  districtId      String?
-  district        District?               @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  districtId         String?
+  district           District?               @relation(fields: [districtId], references: [id], onDelete: Restrict)
   // Date only. Used only to know whether the student is under 18.
-  dateOfBirth     DateTime?               @db.Date
+  dateOfBirth        DateTime?               @db.Date
   // Cached balance; the source of truth is the CoinTransaction ledger
-  coins           Int                     @default(0)
-  quizAttempts    QuizAttempt[]
-  coinTxns        CoinTransaction[]
-  orders          Order[]
-  noteAccess      NoteAccess[]
-  refreshTokens   RefreshToken[]
-  resetTokens     PasswordResetToken[]
-  emailCodes      EmailVerificationCode[]
-  authCodes       AuthCode[]
-  adminLogins     AdminLoginAttempt[]
-  contactMessages ContactMessage[]
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  coins              Int                     @default(0)
+  quizAttempts       QuizAttempt[]
+  coinTxns           CoinTransaction[]
+  orders             Order[]
+  noteAccess         NoteAccess[]
+  refreshTokens      RefreshToken[]
+  resetTokens        PasswordResetToken[]
+  emailCodes         EmailVerificationCode[]
+  authCodes          AuthCode[]
+  coinLots           CoinLot[]
+  adminLogins        AdminLoginAttempt[]
+  contactMessages    ContactMessage[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  parentalConsent    ParentalConsent?
+  likes              Like[]
+  savedItems         SavedItem[]
+  notifications      Notification[]          @relation("NotificationTo")
+  sentNotices        Notification[]          @relation("NotificationFrom")
+  notificationReads  NotificationRead[]
+  // Refer and Earn: the student's own code (made on first use), and where they
+  // last opened the Refer page from (to spot self-referrals)
+  referralCode       String?                 @unique
+  referralSeenIp     String?
+  referralSeenDevice String?
+  referralsMade      Referral[]              @relation("ReferralsMade")
+  referredBy         Referral?               @relation("ReferredBy")
+}
+
+enum ConsentStatus {
+  // Link emailed to the parent; no answer yet
+  PENDING
+  GRANTED
+  DECLINED
+  // Given, then taken back (the parent asked; recorded by the admin)
+  WITHDRAWN
+}
+
+// Parent or guardian consent for a student under 18 (client requirements of
+// 6 Nov 2026; DPDP Act). One per student: asking a different parent replaces
+// the request. Until GRANTED the account isn't fully active (no quizzes,
+// coins or purchases). The decision is kept with when, how and from where.
+model ParentalConsent {
+  id               String        @id @default(uuid())
+  userId           String        @unique
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentEmail      String
+  status           ConsentStatus @default(PENDING)
+  // sha256 of the emailed link's secret; null once decided
+  tokenHash        String?       @unique
+  expiresAt        DateTime
+  lastSentAt       DateTime
+  sendCount        Int           @default(1)
+  // The parent's own answer (or the admin's record of it)
+  parentName       String?
+  relationship     String?
+  decidedAt        DateTime?
+  decidedVia       String?
+  decidedIp        String?
+  decidedUserAgent String?
+  // Admin's note when recording or withdrawing consent
+  adminNote        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([status])
+}
+
+// Emails that may not create an account again (a blocked account's email).
+// Removed when the admin unblocks.
+model BlockedEmail {
+  email       String   @id
+  reason      String
+  blockedById String?
+  createdAt   DateTime @default(now())
+}
+
+// Everything an admin changes (and data exports), written by middleware on
+// /api/admin (middleware/adminActivity.ts): who, what, when, why, before/after.
+// Kept if the admin account is later removed. Secrets are never stored.
+model AdminActivity {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actorEmail String
+  // e.g. "user.suspend", or "PATCH /chapters/:chapterId" when no name was given
+  action     String
+  method     String
+  path       String
+  targetType String?
+  targetId   String?
+  summary    String?
+  reason     String?
+  // Request (secrets removed, trimmed) and, where given, before/after values
+  details    Json?
+  statusCode Int
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
 }
 
 model RefreshToken {
@@ -186,17 +305,18 @@ model Medium {
 // "LKG", "BA 1st Year" … The link part (slug) is used in student URLs
 // (/assamese-medium/class-5/...). Order = position on the student site.
 model ClassLevel {
-  id         String    @id @default(uuid())
-  name       String
-  nativeName String?
-  slug       String    @unique
-  order      Int       @default(0)
-  isActive   Boolean   @default(true)
-  subjects   Subject[]
-  quizzes    Quiz[]
-  users      User[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id            String         @id @default(uuid())
+  name          String
+  nativeName    String?
+  slug          String         @unique
+  order         Int            @default(0)
+  isActive      Boolean        @default(true)
+  subjects      Subject[]
+  quizzes       Quiz[]
+  users         User[]
+  announcements Announcement[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([order])
 }
@@ -261,6 +381,8 @@ model Chapter {
   notes        Note[]
   quizChapters QuizChapter[]
   homeQuizzes  Quiz[]        @relation("QuizHomeChapter")
+  likes        Like[]
+  savedBy      SavedItem[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -494,6 +616,13 @@ enum CoinReason {
   // discount was used after all, so the coins are taken again (refId = Order id)
   NOTE_DISCOUNT_REAPPLIED
   ADMIN_ADJUST
+  // Refer and Earn (refId = Referral id): the inviter's reward, the new friend's
+  // welcome bonus, and taking a reward back when fraud is found
+  REFERRAL_REWARD
+  REFERRAL_BONUS
+  REFERRAL_REVERSED
+  // Coins are valid for 90 days from the day they are credited (refId = "<lotId>:<n>")
+  COIN_EXPIRED
 }
 
 // Append-only coin ledger. User.coins is a cache of the running total.
@@ -511,8 +640,50 @@ model CoinTransaction {
   createdById  String?
   createdAt    DateTime   @default(now())
 
+  lot   CoinLot?
+  moves CoinLotMove[]
+
   @@unique([reason, refId])
   @@index([userId, createdAt])
+}
+
+// One credit of coins (a quiz pass, an admin top-up), valid until expiresAt
+// (client requirements of 6 Nov 2026: 90 days from the day credited, each
+// credit separately; new coins never extend older ones). Spending takes from
+// the lot that expires first. User.coins always equals the sum of `remaining`.
+model CoinLot {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The ledger row that credited it
+  creditTxId    String          @unique
+  creditTx      CoinTransaction @relation(fields: [creditTxId], references: [id], onDelete: Cascade)
+  amount        Int
+  remaining     Int
+  creditedAt    DateTime
+  expiresAt     DateTime
+  // Coins of this lot that have expired so far, and how many expiry rows were written
+  expiredAmount Int             @default(0)
+  expiryCount   Int             @default(0)
+  moves         CoinLotMove[]
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, remaining])
+}
+
+// Which lots a ledger row took coins from (negative) or gave them back to
+// (positive). Held coins that come back (a cancelled order, a duplicate
+// payment) return to the same lots, with their original expiry dates.
+model CoinLotMove {
+  id     String          @id @default(uuid())
+  txId   String
+  tx     CoinTransaction @relation(fields: [txId], references: [id], onDelete: Cascade)
+  lotId  String
+  lot    CoinLot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  amount Int
+
+  @@index([txId])
+  @@index([lotId])
 }
 
 // ---------------------------------------------------------------------------
@@ -569,10 +740,17 @@ model Order {
   amountPaise         Int
   currency            String      @default("INR")
   status              OrderStatus @default(CREATED)
+  // Which gateway took (or will take) the payment: "cashfree" | "razorpay".
+  // Orders from before Cashfree were all Razorpay.
+  provider            String      @default("razorpay")
+  // Cashfree: its order id is our Order.id; the browser needs the session id
+  cashfreeSessionId   String?
+  // Cashfree's cf_payment_id of the successful payment
+  cashfreePaymentId   String?     @unique
   razorpayOrderId     String?     @unique
   razorpayPaymentId   String?     @unique
   paidAt              DateTime?
-  // Razorpay refund id once the payment was refunded
+  // The gateway's refund id once the money went back (details in Refund)
   refundId            String?     @unique
   refundedAt          DateTime?
   // How the payment was confirmed: "verify" | "webhook" | "reconcile" | "coins"
@@ -584,8 +762,52 @@ model Order {
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
   access              NoteAccess?
+  refunds             Refund[]
 
   @@index([userId, noteId, status])
+  @@index([status, createdAt])
+}
+
+enum RefundStatus {
+  // Asked for; the gateway hasn't confirmed it yet
+  PENDING
+  // The gateway confirmed the money went back
+  SUCCESS
+  // The gateway refused it or it couldn't be started (see failureReason)
+  FAILED
+}
+
+enum RefundReason {
+  // The same note was paid for twice (refunded automatically, coins back too)
+  DUPLICATE
+  // Started by the admin (Orders → Refund), with a written reason
+  ADMIN
+  // Made in the gateway's own dashboard and reported by webhook
+  GATEWAY
+}
+
+// A refund of an order's money (client requirements of 6 Nov 2026). An order
+// becomes REFUNDED, and loses the access it gave, only when the gateway
+// confirms SUCCESS — never because a refund was merely asked for.
+model Refund {
+  id               String       @id @default(uuid())
+  orderId          String
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  provider         String
+  // The gateway's own reference (Cashfree cf_refund_id / Razorpay refund id)
+  providerRefundId String?      @unique
+  amountPaise      Int
+  status           RefundStatus @default(PENDING)
+  reason           RefundReason
+  // The admin's written reason, or what happened
+  note             String?
+  failureReason    String?
+  createdById      String?
+  processedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([orderId])
   @@index([status, createdAt])
 }
 
@@ -713,4 +935,217 @@ model ContactMessage {
   updatedAt DateTime      @updatedAt
 
   @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Like, Save, Share; blog; announcements; notifications (Phase 14, client
+// requirements of 6 Nov 2026)
+// ---------------------------------------------------------------------------
+
+// One like per student and item. The item is a chapter page or a blog post:
+// exactly one of chapterId / blogPostId is set (checked in reaction.service.ts).
+model Like {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapterId  String?
+  chapter    Chapter?  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  blogPostId String?
+  blogPost   BlogPost? @relation(fields: [blogPostId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, chapterId])
+  @@unique([userId, blogPostId])
+  @@index([chapterId])
+  @@index([blogPostId])
+  @@index([createdAt])
+}
+
+// Profile → Saved. Same shape as Like.
+model SavedItem {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapterId  String?
+  chapter    Chapter?  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  blogPostId String?
+  blogPost   BlogPost? @relation(fields: [blogPostId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, chapterId])
+  @@unique([userId, blogPostId])
+  @@index([userId, createdAt])
+  @@index([chapterId])
+  @@index([blogPostId])
+}
+
+model BlogCategory {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  slug      String     @unique
+  order     Int        @default(0)
+  isActive  Boolean    @default(true)
+  posts     BlogPost[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([order])
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model BlogPost {
+  id             String        @id @default(uuid())
+  title          String
+  slug           String        @unique
+  // Short summary for cards and search results ("" = taken from the text)
+  excerpt        String        @default("")
+  // Sanitised HTML (src/utils/sanitizeHtml.ts)
+  bodyHtml       String
+  // Featured image (public bucket); its size is kept so it's never cropped on the post page
+  coverImageUrl  String?
+  coverWidth     Int?
+  coverHeight    Int?
+  coverAlt       String        @default("")
+  categoryId     String?
+  category       BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status         BlogStatus    @default(DRAFT)
+  // Set the first time it's published; the admin can change it
+  publishedAt    DateTime?
+  seoTitle       String?
+  seoDescription String?
+  likes          Like[]
+  savedBy        SavedItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+}
+
+enum AnnouncementAudience {
+  // Everyone, signed in or not (home page)
+  EVERYONE
+  // Signed-in students only (optionally one class)
+  STUDENTS
+}
+
+model Announcement {
+  id           String               @id @default(uuid())
+  title        String
+  // Sanitised HTML
+  bodyHtml     String               @default("")
+  imageUrl     String?
+  imageWidth   Int?
+  imageHeight  Int?
+  // A page on this site ("/notes") or a full http(s) link
+  link         String?
+  linkLabel    String?
+  audience     AnnouncementAudience @default(EVERYONE)
+  // STUDENTS only: just this class (null = every class)
+  classLevelId String?
+  classLevel   ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
+  isPublished  Boolean              @default(false)
+  // Optional window; null = from now / no end
+  startsAt     DateTime?
+  endsAt       DateTime?
+  order        Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([isPublished, order])
+}
+
+enum NotificationKind {
+  // A message from the team (one student or everyone)
+  NOTICE
+  // "Warn the user" (moderation): one student only
+  WARNING
+  // Sent by the site itself: refunds, parent's permission, coin changes
+  ACCOUNT
+}
+
+// The bell inbox. userId null = every student (sent to all).
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String?
+  user      User?              @relation("NotificationTo", fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  title     String
+  // Plain text
+  body      String
+  link      String?
+  // The admin who sent it (null = the site)
+  sentById  String?
+  sentBy    User?              @relation("NotificationFrom", fields: [sentById], references: [id], onDelete: SetNull)
+  // One student: "also email it" result ("sent" / the error), null = not emailed
+  emailNote String?
+  reads     NotificationRead[]
+  createdAt DateTime           @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model NotificationRead {
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@id([notificationId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Refer and Earn (Phase 15, client requirements of 6 Nov 2026)
+// ---------------------------------------------------------------------------
+
+enum ReferralStatus {
+  // Signed up through the link; email not verified yet
+  PENDING
+  // Coins given
+  REWARDED
+  // Looks suspicious (same device, many sign-ups, daily cap…): waits for the Founder
+  HELD
+  // No coins (email already rewarded, the inviter's account refused, or the Founder said no)
+  REJECTED
+  // Coins taken back after fraud was found
+  REVERSED
+}
+
+model Referral {
+  id            String         @id @default(uuid())
+  referrerId    String
+  referrer      User           @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  // One referral per new account
+  referredId    String         @unique
+  referred      User           @relation("ReferredBy", fields: [referredId], references: [id], onDelete: Cascade)
+  // SHA-256 of the normalised email: an email earns a reward once, even after the account is erased
+  emailHash     String
+  status        ReferralStatus @default(PENDING)
+  // Why it was held or rejected, in plain words
+  reason        String?
+  coinsReferrer Int            @default(0)
+  coinsFriend   Int            @default(0)
+  // Signals for the fraud review
+  signupIp      String?
+  deviceId      String?
+  userAgent     String?
+  verifiedAt    DateTime?
+  decidedAt     DateTime?
+  decidedById   String?
+  note          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([referrerId, createdAt])
+  @@index([status, createdAt])
+  @@index([emailHash])
+  @@index([signupIp])
+  @@index([deviceId])
 }

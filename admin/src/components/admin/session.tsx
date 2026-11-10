@@ -7,6 +7,9 @@ export interface AdminUser {
   email: string;
   name: string | null;
   role: "STUDENT" | "ADMIN";
+  // SUPER = full access (the Founder); HELPER = only adminPermissions
+  adminLevel?: "SUPER" | "HELPER";
+  adminPermissions?: string[];
 }
 
 const SessionContext = createContext<AdminUser | null>(null);

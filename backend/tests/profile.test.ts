@@ -113,7 +113,7 @@ describe("sign-up", () => {
 
 describe("complete your profile (Google sign-ups, older accounts)", () => {
   it("lists what's missing, then fills it in", async () => {
-    const student = await createUserAndLogin("STUDENT");
+    const student = await createUserAndLogin("STUDENT", { dateOfBirth: null });
     const me = async () => (await api().get("/api/auth/me").set("Authorization", student.auth)).body.user;
     expect(await me()).toMatchObject({ profileComplete: false, missingProfile: ["classLevel", "district", "dateOfBirth"], dateOfBirth: null, isMinor: null });
 

@@ -23,6 +23,10 @@ export default defineConfig({
       RAZORPAY_KEY_ID: "",
       RAZORPAY_KEY_SECRET: "",
       RAZORPAY_WEBHOOK_SECRET: "",
+      // Cashfree goes to the local fake in tests/fakeCashfree.ts; ignore real keys.
+      CASHFREE_API_BASE: "http://127.0.0.1:4598/pg",
+      CASHFREE_APP_ID: "",
+      CASHFREE_SECRET_KEY: "",
       // tests/googleAuth.test.ts sets its own; ignore any real one in .env.
       GOOGLE_CLIENT_ID: "",
       // tests/rateLimit.test.ts checks the student site's backstop bypass.
