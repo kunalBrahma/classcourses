@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2Icon, Loader2Icon, MailIcon, MailCheckIcon } from "lucide-react";
@@ -25,6 +25,18 @@ export function AskParent() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [wait, setWait] = useCountdown(0);
+  const waitingForParent = me?.access?.consent.status === "PENDING" && !me.access.consent.expired;
+
+  // While the parent hasn't answered, check now and then (only while the tab
+  // is open on screen), so the page and the site's banner turn to "agreed"
+  // without a reload.
+  useEffect(() => {
+    if (!waitingForParent) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") announceProfileChanged();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [waitingForParent]);
 
   if (!me) return <Loader2Icon className="mx-auto my-8 size-8 animate-spin text-brand-amber-text" aria-label="Loading" />;
   const consent = me.access?.consent;
@@ -78,8 +90,10 @@ export function AskParent() {
         <div className="grid justify-items-center gap-3 text-center">
           <MailCheckIcon className="size-12 text-brand-amber-text" aria-hidden="true" />
           <p className="text-[15px] leading-relaxed">
-            We&apos;ve emailed <strong>{consent.parentEmail}</strong>. Ask them to open the email from Class Course (check spam too) and answer. The link works
-            for 7 days.
+            We&apos;ve emailed <strong>{consent.parentEmail}</strong>. Ask them to open the email from Class Course (check spam too) and answer.
+            {consent.expiresAt && (
+              <> The link works until {new Date(consent.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" })}.</>
+            )}
           </p>
         </div>
         <FormError message={error} />

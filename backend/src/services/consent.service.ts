@@ -60,6 +60,8 @@ export const accessState = async (userId: string) => {
       parentEmail: consent ? maskEmail(consent.parentEmail) : null,
       lastSentAt: consent?.lastSentAt ?? null,
       expired: consent?.status === "PENDING" ? consent.expiresAt <= new Date() : false,
+      // When the emailed link stops working (only while PENDING)
+      expiresAt: consent?.status === "PENDING" ? consent.expiresAt : null,
       decidedAt: consent?.decidedAt ?? null,
     },
   };

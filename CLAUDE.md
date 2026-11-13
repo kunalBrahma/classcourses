@@ -595,7 +595,9 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - **Client data:** `apiJson()` (with auth and token refresh), `publicJson()`
   (no auth), `logout()` in `src/lib/api.ts`. Login state:
   `useSignedIn()` / `useMe()` in `components/site/account-menu.tsx`. Tokens
-  fire the `cc-auth` event so every component updates.
+  fire the `cc-auth` event so every component updates. Every fresh `/me` answer is
+  shared with every `useMe()` (`cc-me` event), and `/me` is re-read when the tab comes
+  back into view, so a component mounted earlier never keeps an older copy.
 - **Look (client mock, `docs/design/home-page-mock.html`, review in `plan.md §9b`):**
   - amber/cream palette + warm dark mode, all tokens in `src/app/globals.css`.
     Text on amber is **ink** (`text-brand-ink`), never white (2:1). Amber

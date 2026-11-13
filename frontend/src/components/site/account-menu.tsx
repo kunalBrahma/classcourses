@@ -39,6 +39,7 @@ export interface Access {
     parentEmail: string | null;
     lastSentAt: string | null;
     expired: boolean;
+    expiresAt?: string | null;
     decidedAt: string | null;
   };
 }
@@ -73,6 +74,10 @@ export function useRequireSignIn() {
 // Fire after anything that changes the balance (a passed quiz, a purchase)
 // so every coin display reloads.
 const COINS_EVENT = "cc-coins";
+// Every fresh /me answer is handed to every useMe() on the page, so a
+// component mounted earlier (the root layout's consent banner, the header)
+// never keeps an older copy than one mounted later.
+const ME_EVENT = "cc-me";
 
 // Several components read /me on one page (header, menu, profile gate…):
 // calls within a few seconds share one request, unless something changed.
@@ -81,7 +86,10 @@ const SHARE_MS = 3000;
 const fetchMe = () => {
   const token = getAccessToken() ?? "";
   if (shared && shared.token === token && Date.now() - shared.at < SHARE_MS) return shared.promise;
-  const promise = apiJson<{ user: Me }>("/api/auth/me").then(({ user }) => user);
+  const promise: Promise<Me> = apiJson<{ user: Me }>("/api/auth/me").then(({ user }) => {
+    if (shared?.promise === promise) window.dispatchEvent(new CustomEvent<Me>(ME_EVENT, { detail: user }));
+    return user;
+  });
   shared = { token, at: Date.now(), promise };
   promise.catch(() => {
     if (shared?.promise === promise) shared = null;
@@ -106,11 +114,20 @@ export function useMe() {
       fetchMe()
         .then((user) => !cancelled && setMe(user))
         .catch(() => !cancelled && setMe(null));
+    const onMe = (e: Event) => !cancelled && setMe((e as CustomEvent<Me>).detail);
+    // Coming back to the tab re-reads /me: things change elsewhere (a parent
+    // agrees from their own phone, an admin edits the account). Calls within
+    // SHARE_MS share one request.
+    const onVisible = () => document.visibilityState === "visible" && load();
     load();
     window.addEventListener(COINS_EVENT, load);
+    window.addEventListener(ME_EVENT, onMe);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       window.removeEventListener(COINS_EVENT, load);
+      window.removeEventListener(ME_EVENT, onMe);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [signedIn]);
   return signedIn ? me : null;
