@@ -237,7 +237,7 @@ export type CheckoutOptions =
       prefill: { email: string; name?: string };
     };
 
-export const createOrder = async (userId: string, noteId: string, useCoins: boolean) => {
+export const createOrder = async (userId: string, noteId: string, useCoins: boolean, expectedAmountPaise?: number) => {
   await cancelStaleOrders(userId);
   const note = await requirePublicNote(noteId);
   if (note.isFree) throw new AppError(400, "This note is free — download it directly");
@@ -260,6 +260,13 @@ export const createOrder = async (userId: string, noteId: string, useCoins: bool
     // Coins held by an open order would come back if it's replaced.
     const available = user.coins + open.reduce((sum, o) => sum + o.coinsUsed, 0);
     const quote = quotePrice(note.pricePaise, available, coins, useCoins);
+    // The student must have seen this exact amount (nothing has changed yet,
+    // so refusing here rolls back cleanly and no gateway is called).
+    if (expectedAmountPaise !== undefined && expectedAmountPaise !== quote.amountPaise) {
+      throw new AppError(409, "The price of this note has just changed. Please check the new price.", "PRICE_CHANGED", {
+        amountPaise: quote.amountPaise,
+      });
+    }
     // Same price, same coins and the gateway in use now: the same checkout.
     const samePrice = (o: OrderRow) =>
       o.provider === provider && o.listPricePaise === quote.listPricePaise && o.coinsUsed === quote.coinsUsed && o.amountPaise === quote.amountPaise;

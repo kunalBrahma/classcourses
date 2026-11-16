@@ -2,6 +2,7 @@ import { NextFunction, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AdminRequest } from "./role.middleware";
+import { refreshSite, siteTagsFor } from "../services/siteRevalidate.service";
 
 // The activity log (client requirements of 6 Nov 2026: "record every admin
 // action — who, what, when and the reason — so nothing can be changed without
@@ -55,6 +56,8 @@ export const recordAdminActivity = (req: AdminRequest, res: Response, next: Next
     const note = res.locals.activity as ActivityNote | undefined;
     if (!req.admin || (!MUTATING.has(req.method) && !note)) return;
     const routePath = `${req.baseUrl.replace(/^\/api\/admin/, "")}${req.route?.path ?? req.path}`;
+    // A successful change → the student site drops its cached copy now.
+    if (MUTATING.has(req.method) && res.statusCode < 400) refreshSite(siteTagsFor(routePath));
     const params = (req.params ?? {}) as Record<string, string>;
     const body = req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body) ? redact(req.body) : undefined;
     const reason = note?.reason ?? (typeof req.body?.reason === "string" ? req.body.reason : null);

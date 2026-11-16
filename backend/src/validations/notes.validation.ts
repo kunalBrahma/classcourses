@@ -40,6 +40,10 @@ export const grantNoteSchema = z.object({ userId: id });
 export const createOrderSchema = z.object({
   noteId: id,
   useCoins: z.boolean().default(false),
+  // The amount the buy window showed. If the price (or the coin discount)
+  // changed since, the order is refused with PRICE_CHANGED and the window
+  // shows the new price, so a student never pays an amount they weren't shown.
+  expectedAmountPaise: z.number().int().min(0).optional(),
   parentConfirmed: z.literal(true, {
     errorMap: () => ({ message: "Please tick the box to confirm a parent or guardian has permitted this purchase" }),
   }),

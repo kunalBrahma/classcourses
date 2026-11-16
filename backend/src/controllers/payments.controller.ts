@@ -19,7 +19,7 @@ import {
 } from "../services/order.service";
 
 export const createOrderHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const result = await createOrder(req.user!.userId, req.body.noteId, req.body.useCoins);
+  const result = await createOrder(req.user!.userId, req.body.noteId, req.body.useCoins, req.body.expectedAmountPaise);
   res.status(201).json(result);
 });
 

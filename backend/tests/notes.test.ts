@@ -318,6 +318,26 @@ describe("buying a note", () => {
     expect(library.body.notes[0]).toMatchObject({ id: note.id, owned: true });
   });
 
+  it("a price changed after the buy window opened is refused, never charged unseen", async () => {
+    const note = await makeNote({ pricePaise: 4900 });
+    const buy = (expectedAmountPaise: number) =>
+      as(student).post("/api/payments/orders", { noteId: note.id, useCoins: false, parentConfirmed: true, expectedAmountPaise });
+
+    // The admin raises the price while the student's window still says ₹49
+    await prisma.note.update({ where: { id: note.id }, data: { pricePaise: 9900 } });
+    const gatewayOrders = rzp.orders.size;
+    const stale = await buy(4900);
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ code: "PRICE_CHANGED", amountPaise: 9900 });
+    expect(await prisma.order.count({ where: { noteId: note.id } })).toBe(0);
+    expect(rzp.orders.size).toBe(gatewayOrders);
+
+    // With the new price on screen, it goes through at that price
+    const fresh = await buy(9900);
+    expect(fresh.status).toBe(201);
+    expect(fresh.body.order.amountPaise).toBe(9900);
+  });
+
   it("a forged or mismatched signature never unlocks the note", async () => {
     const note = await makeNote();
     const created = await order(note.id);

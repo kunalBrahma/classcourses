@@ -592,6 +592,11 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - never read the clock or randomness during prerender without caching it
     (see `getCurrentYear`)
   - wrap request-time things (searchParams, auth) in `<Suspense>`
+  - **instant refresh:** every successful admin POST/PUT/PATCH/DELETE makes the API call the site's
+    `POST /api/revalidate` (`X-Internal-Key`, tags), mapped in `backend/src/services/siteRevalidate.service.ts`
+    (`TAGS_BY_SECTION`). A new tag or admin section that feeds the site goes there and in the route's `TAGS`.
+- **Prices:** checkout sends `expectedAmountPaise` (the amount on screen); `createOrder` refuses a
+  different amount with 409 `PRICE_CHANGED` and the buy window shows the new price. Never drop that check.
 - **Client data:** `apiJson()` (with auth and token refresh), `publicJson()`
   (no auth), `logout()` in `src/lib/api.ts`. Login state:
   `useSignedIn()` / `useMe()` in `components/site/account-menu.tsx`. Tokens

@@ -70,6 +70,8 @@ services:
       NODE_OPTIONS: --max-old-space-size=256
       # Shared with the frontend: its server-side reads skip the per-IP backstop.
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # After an admin change the API tells the site to refresh its cached pages.
+      SITE_INTERNAL_URL: http://frontend:3000
     ports:
       - "127.0.0.1:${BACKEND_PORT:-4150}:3000"
     depends_on:

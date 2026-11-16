@@ -20,6 +20,7 @@ type Step =
   // refunded: they already owned the note, so the server refunded this payment
   | { kind: "paid"; refunded?: boolean }
   | { kind: "closed" } // student closed the payment window
+  | { kind: "priceChanged" } // the price changed while the window was open; the new quote is shown
   | { kind: "error"; message: string };
 
 const POLL_MS = 2500;
@@ -58,16 +59,20 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
       setStep({ kind: "quote" });
     }
   }
+  const loadQuote = useCallback(
+    () => apiJson<{ withoutCoins: PriceQuote; withCoins: PriceQuote; coinValidityDays?: number }>(`/api/notes/${note.id}/quote`),
+    [note.id]
+  );
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    apiJson<{ withoutCoins: PriceQuote; withCoins: PriceQuote; coinValidityDays?: number }>(`/api/notes/${note.id}/quote`)
+    loadQuote()
       .then((q) => !cancelled && setQuote(q))
       .catch((err: ApiError) => !cancelled && setStep({ kind: "error", message: err.message }));
     return () => {
       cancelled = true;
     };
-  }, [open, note.id]);
+  }, [open, loadQuote]);
 
   const finishPaid = useCallback((refunded = false) => {
     setStep({ kind: "paid", refunded });
@@ -133,7 +138,8 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
     try {
       const { order, checkout } = await apiJson<{ order: OrderView; checkout: CheckoutOptions | null }>("/api/payments/orders", {
         method: "POST",
-        json: { noteId: note.id, useCoins: useCoins && canUseCoins, parentConfirmed: true },
+        // The server refuses (PRICE_CHANGED) if this is no longer the price.
+        json: { noteId: note.id, useCoins: useCoins && canUseCoins, expectedAmountPaise: chosen.amountPaise, parentConfirmed: true },
       });
       if (!checkout) {
         // Coins covered the whole price: the server already granted it.
@@ -190,6 +196,16 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
       rzp.open();
     } catch (err) {
       setGatewayOpen(false);
+      if (err instanceof ApiError && err.code === "PRICE_CHANGED") {
+        // Show the new price; the student decides again with it on screen.
+        try {
+          setQuote(await loadQuote());
+          setStep({ kind: "priceChanged" });
+        } catch (quoteErr) {
+          setStep({ kind: "error", message: (quoteErr as Error).message });
+        }
+        return;
+      }
       setStep({ kind: "error", message: (err as Error).message });
     }
   };
@@ -267,6 +283,11 @@ export function BuyDialog({ note, open, onOpenChange, initialUseCoins = true }: 
 
             {step.kind === "closed" && (
               <p className="rounded-xl bg-accent px-4 py-3 text-[15px]">Payment not finished. No money was taken. Coins you chose come back on their own.</p>
+            )}
+            {step.kind === "priceChanged" && (
+              <p role="alert" className="rounded-xl bg-accent px-4 py-3 text-[15px]">
+                <strong>The price has changed.</strong> No money was taken. Please check the new price above, then pay again.
+              </p>
             )}
             {step.kind === "error" && (
               <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-[15px] text-destructive">

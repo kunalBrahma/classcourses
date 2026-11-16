@@ -100,6 +100,10 @@ export const envSchema = z
 
     // Public student site — used for links in emails (password reset, receipts)
     FRONTEND_URL: z.string().url().default("http://localhost:3100"),
+    // Where the API reaches the student site's server to tell it to refresh
+    // after an admin change (production: http://frontend:3000 on the compose
+    // network). Unset = FRONTEND_URL. Needs INTERNAL_API_KEY on both sides.
+    SITE_INTERNAL_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   })
   // Production must not run with development-grade defaults.
   .superRefine((e, ctx) => {
