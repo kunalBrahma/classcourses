@@ -28,6 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
       "Free chapter-wise question-answers, MCQs, quizzes and notes for students of Assam, Class 1 to 12, in Assamese and English medium.",
     applicationName: site.name,
     openGraph: { type: "website", siteName: site.name, locale: "en_IN", images: ["/logo.webp"] },
+    // Google Search Console ownership (client's note of 14 Nov 2026). Keep it
+    // permanently, even after verification; copy the value exactly.
+    verification: { google: "JWY8GbTyE0zcdljflkKPcuzdwRHmFcwfDvj5gmb-WyI" },
   };
 }
 
