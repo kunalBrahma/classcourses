@@ -202,6 +202,7 @@ model LoginThrottle {
 enum AuthCodePurpose {
   RESET_PASSWORD
   UNLOCK_ACCOUNT
+  CHANGE_EMAIL
 }
 
 // 6-digit codes emailed for "forgot password" and "unlock my account". Only a
@@ -212,6 +213,8 @@ model AuthCode {
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   purpose   AuthCodePurpose
   codeHash  String
+  // CHANGE_EMAIL: the new address, set only once the code sent to it is entered
+  newEmail  String?
   expiresAt DateTime
   attempts  Int             @default(0)
   createdAt DateTime        @default(now())

@@ -306,6 +306,16 @@ No auth, payment or coin logic changes. Only settings, text and UI.
 
 ---
 
+## Handover — 25 Nov 2026
+- [x] Admin → Settings → **My account** (every admin, helpers too): change own password (current password
+      needed; other devices signed out; this browser gets new tokens) and sign-in email (password + 6-digit code
+      to the NEW address, `AuthCode` purpose `CHANGE_EMAIL` + `newEmail`; notice to the old address). Rules in
+      `backend/src/services/myAccount.service.ts`, routes `/api/admin/account*`, limit `myAccount`, tests
+      `tests/adminAccount.test.ts`. Wrong current password counts as a failed sign-in.
+- [x] Client handover PDF: `docs/handover/Class-Course-Handover.pdf` (source `handover.html`). Git-ignored:
+      it contains the starting admin password. Support contact lines are left blank to fill in by hand.
+- [ ] Deploy My account before sending the PDF (the PDF's step 4 needs it live)
+
 ## Requirements gap check — 10 Nov 2026
 Checked the PDF line by line after Phase 15. Two user-management gaps fixed:
 - [x] Users list: "Joined" filter (today, 7/30/90 days, this year, before this year); API `joinedFrom` / `joinedTo` (IST days)

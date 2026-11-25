@@ -1,6 +1,6 @@
 import { emailLayout, escapeHtml } from "./layout";
 
-// "Forgot password" and "unlock my account" codes (valid exactly 5 minutes).
+// "Forgot password", "unlock my account" and "confirm my new sign-in email" codes (valid exactly 5 minutes).
 const COPY = {
   RESET_PASSWORD: {
     heading: "Reset your password",
@@ -14,7 +14,31 @@ const COPY = {
     lead: (site: string) => `Your ${site} account was paused after several wrong passwords. Enter this code to sign in again now:`,
     ignore: "If this wasn't you, someone may be guessing your password: keep it secret, and change it if you're unsure.",
   },
+  CHANGE_EMAIL: {
+    heading: "Confirm your new sign-in email",
+    subject: (code: string, site: string) => `${code} is your ${site} email change code`,
+    lead: (site: string) => `Someone asked to use this address to sign in to ${site}. Enter this code on the “My account” page to confirm it:`,
+    ignore: "If you didn't ask for this, you can ignore this email. Nothing changes until the code is entered.",
+  },
 } as const;
+
+// Sent to the OLD address once the sign-in email has changed.
+export const emailChangedEmail = (opts: { siteName: string; newEmail: string }) => {
+  const lead = `The sign-in email of your ${opts.siteName} account was changed to ${opts.newEmail}.`;
+  const tail = "If you didn't do this, contact your website support straight away.";
+  return {
+    subject: `Your ${opts.siteName} sign-in email was changed`,
+    text: [lead, "", tail].join("\n"),
+    html: emailLayout({
+      siteName: opts.siteName,
+      heading: "Your sign-in email was changed",
+      bodyHtml: `
+        <p style="margin:0 0 12px;line-height:1.5;">${escapeHtml(lead)}</p>
+        <p style="margin:0;line-height:1.5;font-size:14px;color:#555;">${escapeHtml(tail)}</p>
+      `,
+    }),
+  };
+};
 
 export const authCodeEmail = (opts: { purpose: keyof typeof COPY; siteName: string; code: string; expiresInMinutes: number }) => {
   const copy = COPY[opts.purpose];

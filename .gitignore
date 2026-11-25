@@ -32,3 +32,6 @@ Thumbs.db
 *.swo
 *~
 .env.production
+
+# Client handover document: contains the admin sign-in, never commit it
+docs/handover/

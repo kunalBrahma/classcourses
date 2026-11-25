@@ -19,7 +19,7 @@ const hashFor = (userId: string, purpose: AuthCodePurpose, code: string) => hash
  * it to `send`. Returns null without sending if one went out less than
  * AUTH_CODE_RESEND_SECONDS ago: the earlier code still works.
  */
-export const issueAuthCode = async (userId: string, purpose: AuthCodePurpose, send: (code: string) => Promise<void>) => {
+export const issueAuthCode = async (userId: string, purpose: AuthCodePurpose, send: (code: string) => Promise<void>, extra: { newEmail?: string } = {}) => {
   const latest = await prisma.authCode.findFirst({ where: { userId, purpose }, orderBy: { createdAt: "desc" } });
   if (latest && Date.now() - latest.createdAt.getTime() < AUTH_CODE_RESEND_SECONDS * 1000) return null;
 
@@ -27,7 +27,7 @@ export const issueAuthCode = async (userId: string, purpose: AuthCodePurpose, se
   const [, created] = await prisma.$transaction([
     prisma.authCode.deleteMany({ where: { userId, purpose } }),
     prisma.authCode.create({
-      data: { userId, purpose, codeHash: hashFor(userId, purpose, code), expiresAt: new Date(Date.now() + AUTH_CODE_TTL_SECONDS * 1000) },
+      data: { userId, purpose, codeHash: hashFor(userId, purpose, code), expiresAt: new Date(Date.now() + AUTH_CODE_TTL_SECONDS * 1000), newEmail: extra.newEmail ?? null },
     }),
   ]);
   try {
@@ -41,7 +41,7 @@ export const issueAuthCode = async (userId: string, purpose: AuthCodePurpose, se
 };
 
 /**
- * Checks a code. On success the code is used up (deleted). Every failure
+ * Checks a code. On success the code is used up (deleted) and its row is returned. Every failure
  * throws a 400 the student can read: expired, too many tries, or wrong.
  * Unknown accounts get the same "isn't right" answer as a wrong code.
  */
@@ -66,4 +66,5 @@ export const useAuthCode = async (userId: string | null, purpose: AuthCodePurpos
   // Used once: deleting it (guarded by id) means a second use finds nothing.
   const { count } = await prisma.authCode.deleteMany({ where: { id: latest.id } });
   if (count === 0) throw new AppError(400, "This code was already used. Ask for a new code.", "CODE_WRONG");
+  return latest;
 };

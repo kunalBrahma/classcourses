@@ -44,12 +44,17 @@ export function SecretInput({
   onChange,
   placeholder,
   hasHint,
+  autoComplete = "new-password",
+  label = "secret",
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   hasHint?: boolean;
+  autoComplete?: string;
+  // What the show/hide button names ("Show secret", "Show password")
+  label?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -60,7 +65,7 @@ export function SecretInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        autoComplete="new-password"
+        autoComplete={autoComplete}
         autoCapitalize="none"
         spellCheck={false}
         aria-describedby={hasHint ? `${id}-hint` : undefined}
@@ -69,7 +74,7 @@ export function SecretInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Hide secret" : "Show secret"}
+        aria-label={visible ? `Hide ${label}` : `Show ${label}`}
         aria-pressed={visible}
         aria-controls={id}
         className="absolute inset-y-0.5 right-0.5 grid w-9 place-items-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import prisma from "../config/prisma";
 import { hashPassword, comparePassword } from "../utils/password";
-import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
+import { issueTokenPair } from "../utils/tokens";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { parseDateOfBirth, profileOptions, profileStatus, requireActiveClass, requireActiveDistrict } from "../services/profile.service";
@@ -24,18 +24,6 @@ const referralSignal = (req: Request) => ({
   ip: req.ip ?? null,
   userAgent: req.get("user-agent") ?? null,
 });
-
-const issueTokenPair = async (userId: string, email: string) => {
-  const { tokenVersion } = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { tokenVersion: true } });
-  const accessToken = generateAccessToken({ userId, email, tv: tokenVersion });
-  const { token: refreshToken, expiresAt } = generateRefreshToken();
-
-  await prisma.refreshToken.create({
-    data: { token: refreshToken, userId, expiresAt },
-  });
-
-  return { accessToken, refreshToken };
-};
 
 const userView = (u: { id: string; email: string; name: string | null; role: string; createdAt: Date }) => ({
   id: u.id,

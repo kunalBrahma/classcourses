@@ -19,6 +19,9 @@ import { recordAdminActivity } from "../middleware/adminActivity";
 import { addHelper, listActivity, listTeam, removeHelper, updateHelper } from "../controllers/adminTeam.controller";
 import { addHelperSchema, adminEditDetailsSchema, eraseSchema, optionalReasonSchema, reasonSchema, recordConsentSchema, suspendSchema, updateHelperSchema, withdrawConsentSchema } from "../validations/users.validation";
 import { validateBody } from "../middleware/validate.middleware";
+import { changeMyPassword, confirmMyEmailChange, getMyAccount, requestMyEmailChange } from "../controllers/adminAccount.controller";
+import { changePasswordSchema, confirmEmailChangeSchema, requestEmailChangeSchema } from "../validations/myAccount.validation";
+import { myAccountLimiter } from "../middleware/rateLimiter";
 import {
   getSettingHandler,
   getSmtpSettings,
@@ -152,6 +155,12 @@ const router = Router();
 // Admins only; helper admins only in their sections (config/adminAccess.ts).
 // Every change is written to the activity log (middleware/adminActivity.ts).
 router.use(authenticate, requireAdmin, recordAdminActivity);
+
+// My account (every admin, helpers too): own password and sign-in email
+router.get("/account", getMyAccount);
+router.post("/account/password", myAccountLimiter, validateBody(changePasswordSchema), changeMyPassword);
+router.post("/account/email", myAccountLimiter, validateBody(requestEmailChangeSchema), requestMyEmailChange);
+router.post("/account/email/confirm", myAccountLimiter, validateBody(confirmEmailChangeSchema), confirmMyEmailChange);
 
 router.get("/settings", listSettings);
 

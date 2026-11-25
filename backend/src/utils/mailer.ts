@@ -1,4 +1,4 @@
-import { authCodeEmail } from "../emails/authCode";
+import { authCodeEmail, emailChangedEmail } from "../emails/authCode";
 import { noticeEmail } from "../emails/notice";
 import { parentConsentEmail } from "../emails/parentConsent";
 import { purchaseReceiptEmail } from "../emails/purchaseReceipt";
@@ -20,6 +20,27 @@ export const sendAuthCodeEmail = async (to: string, purpose: "RESET_PASSWORD" | 
     await sendMail({ to, ...authCodeEmail({ purpose, siteName: site.name, code, expiresInMinutes }) });
   } catch (err) {
     console.error(`[mail] Failed to send ${purpose} code:`, err instanceof Error ? err.message : err);
+  }
+};
+
+// Throws (503): the admin is waiting for this code on the My account page.
+export const sendEmailChangeCode = async (to: string, code: string, expiresInMinutes: number): Promise<void> => {
+  const site = await requireSetting("site");
+  try {
+    await sendMail({ to, ...authCodeEmail({ purpose: "CHANGE_EMAIL", siteName: site.name, code, expiresInMinutes }) });
+  } catch (err) {
+    console.error("[mail] Failed to send email change code:", err instanceof Error ? err.message : err);
+    throw new AppError(503, "We couldn't send the code email right now. Check the address, or try again in a minute.");
+  }
+};
+
+// Never throws: the email has already changed; this only tells the old address.
+export const sendEmailChangedNotice = async (to: string, newEmail: string): Promise<void> => {
+  try {
+    const site = await requireSetting("site");
+    await sendMail({ to, ...emailChangedEmail({ siteName: site.name, newEmail }) });
+  } catch (err) {
+    console.error("[mail] Failed to send email-changed notice:", err instanceof Error ? err.message : err);
   }
 };
 

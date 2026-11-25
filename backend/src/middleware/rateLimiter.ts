@@ -120,6 +120,9 @@ export const otpLimiter = limiter("emailCode", { error: (w) => `Too many attempt
 // "Email me an unlock code" and entering it.
 export const unlockLimiter = limiter("unlockCode", { error: (w) => `Too many attempts. Please wait ${w} and try again.` });
 
+// Admin → My account: changing your own password or sign-in email (each email request sends a code).
+export const myAccountLimiter = limiter("myAccount", { keyGenerator: userOrIpKey, error: (w) => `Too many attempts. Please wait ${w} and try again.` });
+
 // A student asking a parent for consent (each send emails the parent).
 export const parentConsentLimiter = limiter("parentConsent", { keyGenerator: userOrIpKey, error: (w) => `You've sent several emails to your parent. Please wait ${w} and try again.` });
 // The parent's consent page (view + answer), per network.

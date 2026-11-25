@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { ChevronsUpDownIcon, LaptopIcon, LogOutIcon, MoonIcon, SunIcon } from "lucide-react";
+import { ChevronsUpDownIcon, KeyRoundIcon, LaptopIcon, LogOutIcon, MoonIcon, SunIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -90,6 +90,10 @@ export function NavUser() {
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => router.push("/settings/account")}>
+              <KeyRoundIcon />
+              My account
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={handleLogout} variant="destructive">
               <LogOutIcon />
               Log out

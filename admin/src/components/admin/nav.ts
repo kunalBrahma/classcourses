@@ -101,6 +101,7 @@ export const NAV: NavGroup[] = [
         title: "Settings",
         icon: Settings2Icon,
         items: [
+          { title: "My account", url: "/settings/account" },
           { title: "General", url: "/settings/general", access: "super" },
           { title: "Quiz & coins", url: "/settings/quiz", access: "super" },
           { title: "Storage (R2)", url: "/settings/storage", access: "super" },

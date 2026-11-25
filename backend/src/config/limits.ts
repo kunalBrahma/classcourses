@@ -20,6 +20,7 @@ export const REQUEST_LIMITS = {
   emailCode: { limit: 20, windowMinutes: 15, per: "network", label: "Sign-up code entries and resends" },
   googleSignIn: { limit: 30, windowMinutes: 15, per: "network", label: "Google sign-ins" },
   unlockCode: { limit: 10, windowMinutes: 15, per: "network", label: "Unlock code requests and entries" },
+  myAccount: { limit: 10, windowMinutes: 15, per: "student", label: "Admin password and email changes" },
   contact: { limit: 5, windowMinutes: 60, per: "network", label: "Helpline messages" },
   parentConsent: { limit: 5, windowMinutes: 60, per: "student", label: "Parent consent emails" },
   consentLink: { limit: 30, windowMinutes: 15, per: "network", label: "Parent consent link visits and answers" },

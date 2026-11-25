@@ -17,6 +17,7 @@ export const ADMIN_PERMISSION_NAMES = Object.keys(ADMIN_PERMISSIONS) as AdminPer
 // First path segment under /api/admin → section. "dashboard" = every admin.
 const SECTIONS: Record<string, AdminPermission | "dashboard"> = {
   stats: "dashboard",
+  account: "dashboard", // My account: every admin's own password and email
   mediums: "content",
   classes: "content",
   districts: "content",
