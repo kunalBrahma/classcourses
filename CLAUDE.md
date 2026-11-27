@@ -619,6 +619,10 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - **instant refresh:** every successful admin POST/PUT/PATCH/DELETE makes the API call the site's
     `POST /api/revalidate` (`X-Internal-Key`, tags), mapped in `backend/src/services/siteRevalidate.service.ts`
     (`TAGS_BY_SECTION`). A new tag or admin section that feeds the site goes there and in the route's `TAGS`.
+    The route uses `revalidateTag(tag, "max")` (stale-while-revalidate: the change shows from the next
+    visit). **Never `{ expire: 0 }`**: with Cache Components it left the course pages' prebuilt parts as
+    holes that in-app navigation never received, so every tap crashed with React #412 "This page couldn't
+    load" after any admin save (found 27 Nov 2026).
 - **Prices:** checkout sends `expectedAmountPaise` (the amount on screen); `createOrder` refuses a
   different amount with 409 `PRICE_CHANGED` and the buy window shows the new price. Never drop that check.
 - **Client data:** `apiJson()` (with auth and token refresh), `publicJson()`
