@@ -817,6 +817,21 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - Site: `src/lib/referral.ts` (code from `?ref=` kept 30 days, device id), `/refer`, `InviteNote` on /register.
   The API's CORS `allowedHeaders` includes `X-Device-Id`; add any new custom header there too.
 
+### Error monitoring: Sentry (27 Nov 2026)
+- Org **Sitemaker Lab** (`sitemaker-lab-pr`, EU), projects `classcourse-server`, `classcourse-frontend`,
+  `classcourse-admin`. Off when the DSN is unset (tests, fresh checkouts).
+- API: `src/instrument.ts`, imported FIRST in `src/server.ts`; `Sentry.setupExpressErrorHandler(app)`
+  before our error handler in `app.ts` (4xx not reported). Env: `SENTRY_DSN`, `SENTRY_RELEASE`
+  (prod: `docker-compose.prod.yml`, release = image tag).
+- Next apps: `src/instrumentation-client.ts`, `src/instrumentation.ts`, `src/sentry.{server,edge}.config.ts`,
+  `src/app/global-error.tsx` (+ the site's `error.tsx` reports too); `withSentryConfig` in `next.config.ts`.
+  DSN/release are build args (`NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_RELEASE`) from `deploy.yml`;
+  source maps upload only when the `SENTRY_AUTH_TOKEN` repo secret exists.
+- **Privacy (children):** every `Sentry.init` sets `dataCollection` off for user info/IP, cookies, headers,
+  bodies, query values, database values and stack-frame variables. **No Session Replay** (owner's choice).
+  Keep it that way unless the owner and the Privacy Policy say otherwise; never `Sentry.setUser` with
+  a name or email.
+
 ### Roles
 - `User.role` is `STUDENT | ADMIN` (default STUDENT). Admins have `adminLevel`
   SUPER (the Founder; full access; the column default, so every admin from

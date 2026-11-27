@@ -72,6 +72,10 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # After an admin change the API tells the site to refresh its cached pages.
       SITE_INTERNAL_URL: http://frontend:3000
+      # Sentry error monitoring (Sitemaker Lab → classcourse-server). A DSN is a
+      # public key (it only allows sending events), so it can live here.
+      SENTRY_DSN: ${SENTRY_DSN:-https://a80a90ac0a76b00db83b28c3ea4d3171@o4512504769740800.ingest.de.sentry.io/4512504959795280}
+      SENTRY_RELEASE: ${IMAGE_TAG:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-4150}:3000"
     depends_on:

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@sentry/nextjs": "^11.20.0",
     "@tiptap/extension-image": "^3.31.4",
     "@tiptap/extension-subscript": "^3.31.4",
     "@tiptap/extension-superscript": "^3.31.4",

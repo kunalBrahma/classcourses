@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   // Production runs the self-contained server from .next/standalone (see Dockerfile).
@@ -11,4 +12,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry (Sitemaker Lab → classcourse-admin). Source maps are uploaded only when
+// SENTRY_AUTH_TOKEN is set at build time (CI secret), for readable stack traces.
+export default withSentryConfig(nextConfig, {
+  org: "sitemaker-lab-pr",
+  project: "classcourse-admin",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  widenClientFileUpload: true,
+  silent: !process.env.CI,
+});

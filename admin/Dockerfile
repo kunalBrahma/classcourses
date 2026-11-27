@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Admin panel. Built in GitHub Actions and pushed to GHCR; the VPS only pulls
 # and runs it (docker-compose.prod.yml). Never build this on the shared VPS.
 
@@ -13,10 +14,16 @@ COPY . .
 # NEXT_PUBLIC_* are inlined into the browser bundle, so they are build args.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SITE_URL
+# Sentry: DSN (public) and release are inlined into the bundles, so build args.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG NEXT_PUBLIC_SENTRY_RELEASE
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_SENTRY_RELEASE=$NEXT_PUBLIC_SENTRY_RELEASE \
     NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# SENTRY_AUTH_TOKEN (optional secret) uploads source maps for readable stack traces.
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

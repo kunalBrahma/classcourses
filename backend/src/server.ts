@@ -1,3 +1,5 @@
+// Sentry first, so it can instrument Express and the rest (src/instrument.ts).
+import "./instrument";
 import app from "./app";
 import prisma from "./config/prisma";
 import { env } from "./config/env";

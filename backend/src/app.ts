@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -76,6 +77,8 @@ app.use("/api/consent", consentRoutes);
 app.use("/api/reactions", reactionsRoutes);
 app.use("/api/referrals", referralRoutes);
 
+// Sentry reports unexpected (5xx) errors; it passes every error on to our handler.
+Sentry.setupExpressErrorHandler(app);
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 

@@ -31,6 +31,9 @@ env:
   IMAGE_BASE: ghcr.io/kunalbrahma/classcourse
   API_URL: https://api.myclasscourse.in
   SITE_URL: https://myclasscourse.in
+  # Sentry DSNs (public keys: they only allow sending events). Sitemaker Lab org.
+  SENTRY_DSN_FRONTEND: https://554cbaa61bd0aebb01bf9907e39fa1f7@o4512504769740800.ingest.de.sentry.io/4512504960057424
+  SENTRY_DSN_ADMIN: https://17454ff4bae06517ad29257a01cd8b7e@o4512504769740800.ingest.de.sentry.io/4512504960319568
 
 jobs:
   build-api:
@@ -114,8 +117,13 @@ jobs:
             NEXT_PUBLIC_SITE_URL=${{ env.SITE_URL }}
             NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
             API_INTERNAL_URL=${{ env.API_URL }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ matrix.name == 'frontend' && env.SENTRY_DSN_FRONTEND || env.SENTRY_DSN_ADMIN }}
+            NEXT_PUBLIC_SENTRY_RELEASE=sha-${{ github.sha }}
+          # SENTRY_AUTH_TOKEN (optional repo secret): uploads source maps so live
+          # stack traces are readable. Without it the build skips the upload.
           secrets: |
             internal_api_key=${{ secrets.INTERNAL_API_KEY }}
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

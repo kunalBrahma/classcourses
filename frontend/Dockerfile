@@ -21,6 +21,11 @@ ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 # readers' short-lived fallbacks can't be prerendered and the build fails
 # (which leaves the running site alone). CI deploys the API first for this.
 ARG API_INTERNAL_URL
+# Sentry: DSN (public) and release are inlined into the bundles, so build args.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG NEXT_PUBLIC_SENTRY_RELEASE
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_SENTRY_RELEASE=$NEXT_PUBLIC_SENTRY_RELEASE
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
@@ -28,7 +33,10 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_TELEMETRY_DISABLED=1
 # The build's ~400 catalog reads would trip the API's per-IP limit, so they send
 # INTERNAL_API_KEY. A BuildKit secret: never stored in an image layer.
-RUN --mount=type=secret,id=internal_api_key,env=INTERNAL_API_KEY npm run build
+# SENTRY_AUTH_TOKEN (optional secret) uploads source maps for readable stack traces.
+RUN --mount=type=secret,id=internal_api_key,env=INTERNAL_API_KEY \
+    --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+    npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

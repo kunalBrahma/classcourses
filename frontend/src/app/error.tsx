@@ -1,10 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/site/container";
 
 // Shown when the server can't load a page (e.g. the API is down for a moment).
-export default function ErrorPage({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
+export default function ErrorPage({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
+  // Reported to Sentry (classcourse-frontend), so we hear about it without a screenshot
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
   return (
     <Container className="grid flex-1 place-items-center py-16 text-center">
       <div className="card-3d max-w-md rounded-3xl p-8">
