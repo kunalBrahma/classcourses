@@ -20,6 +20,8 @@ export const createQuestionSchema = z.object({
   explanation: richText.nullable().optional(),
   difficulty: difficulty.optional(),
   isPublished: z.boolean().optional(),
+  // Scheduled publishing: ISO time; null clears the schedule
+  publishAt: z.string().datetime({ offset: true }).nullable().optional(),
   // MCQ: may appear in quizzes
   useInQuiz: z.boolean().optional(),
 });

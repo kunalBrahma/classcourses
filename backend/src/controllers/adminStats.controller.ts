@@ -5,7 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { istDayEnd, istDayKey } from "../utils/istDate";
 import { getSetting } from "../services/settings.service";
 import { hasPrivateBucket } from "../services/storage.service";
-import { catalogHref } from "../services/catalog.service";
+import { catalogHref, publicQuestionWhere } from "../services/catalog.service";
 
 // Admin dashboard: one read-only call for the whole page. Days are IST
 // calendar days (like the quiz day); each figure is compared with the period
@@ -86,8 +86,8 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     Promise.all([
       prisma.subject.count({ where: { isActive: true } }),
       prisma.chapter.count({ where: { isPublished: true } }),
-      prisma.question.count({ where: { kind: "QA", isPublished: true } }),
-      prisma.question.count({ where: { kind: "MCQ", isPublished: true } }),
+      prisma.question.count({ where: { kind: "QA", ...publicQuestionWhere() } }),
+      prisma.question.count({ where: { kind: "MCQ", ...publicQuestionWhere() } }),
       prisma.video.count(),
       prisma.note.count({ where: { isPublished: true } }),
       prisma.quiz.count({ where: { isPublished: true } }),

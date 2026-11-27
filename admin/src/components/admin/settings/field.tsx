@@ -1,22 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { CircleAlertIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 // Label + control + hint, with the hint wired to the control for screen readers.
+// `error`: shown in red under the control (id `${id}-error`; point the control's
+// aria-describedby at it and set aria-invalid).
 export function Field({
   id,
   label,
   hint,
+  error,
   children,
   className,
 }: {
   id: string;
   label: React.ReactNode;
   hint?: React.ReactNode;
+  error?: string | null;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -27,6 +31,12 @@ export function Field({
         {label}
       </Label>
       {children}
+      {error && (
+        <p id={`${id}-error`} role="alert" className="flex items-start gap-1.5 text-xs font-medium text-destructive">
+          <CircleAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
+      )}
       {hint && (
         <p id={`${id}-hint`} className="text-xs leading-relaxed text-muted-foreground">
           {hint}
@@ -46,6 +56,9 @@ export function SecretInput({
   hasHint,
   autoComplete = "new-password",
   label = "secret",
+  invalid = false,
+  describedBy,
+  mono = true,
 }: {
   id: string;
   value: string;
@@ -55,6 +68,11 @@ export function SecretInput({
   autoComplete?: string;
   // What the show/hide button names ("Show secret", "Show password")
   label?: string;
+  // Red border + aria-invalid (pair with Field's `error`)
+  invalid?: boolean;
+  // Overrides the default `${id}-hint` link (e.g. "hint and error")
+  describedBy?: string;
+  mono?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -68,8 +86,9 @@ export function SecretInput({
         autoComplete={autoComplete}
         autoCapitalize="none"
         spellCheck={false}
-        aria-describedby={hasHint ? `${id}-hint` : undefined}
-        className="h-10 pr-11 font-mono text-sm"
+        aria-describedby={describedBy ?? (hasHint ? `${id}-hint` : undefined)}
+        aria-invalid={invalid || undefined}
+        className={cn("h-10 pr-11 text-sm", mono && "font-mono")}
       />
       <button
         type="button"

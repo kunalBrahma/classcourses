@@ -21,25 +21,55 @@ const handleAccountRefusal = async (res: Response) => {
   if (!window.location.pathname.startsWith("/login")) window.location.assign("/login");
 };
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
+// Refresh tokens are single-use (rotated on every refresh), so only ONE refresh may
+// run at a time. A page often fires several calls together (me, quiz, notes,
+// notifications); when the access token has expired they all get 401 at once.
+// Before this, each one refreshed with the same token: the first rotated it, the
+// others got an error and signed the student out. Now every caller shares one
+// refresh in this tab, and a Web Lock keeps other tabs from racing it.
+let refreshing: Promise<string | null> | null = null;
 
-  const res = await fetch(`${API_URL}/api/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-  });
+async function doRefresh(usedToken: string): Promise<string | null> {
+  // Another tab (or an earlier refresh here) already rotated the token.
+  const current = getRefreshToken();
+  if (!current) return null;
+  if (current !== usedToken) return getAccessToken();
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: current }),
+    });
+  } catch {
+    return null; // offline / network blip: keep the tokens, the student stays signed in
+  }
 
   if (!res.ok) {
     await handleAccountRefusal(res);
-    clearTokens();
+    // Only a real refusal signs out; a server hiccup (5xx, 429) keeps the tokens.
+    if (res.status === 400 || res.status === 401 || res.status === 403) clearTokens();
     return null;
   }
 
   const data = await res.json();
   setTokens(data.accessToken, data.refreshToken);
   return data.accessToken as string;
+}
+
+function refreshAccessToken(): Promise<string | null> {
+  const usedToken = getRefreshToken();
+  if (!usedToken) return Promise.resolve(null);
+  if (refreshing) return refreshing;
+  const run = (): Promise<string | null> => doRefresh(usedToken);
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  const started: Promise<string | null> = locks ? locks.request("cc-auth-refresh", run).then((r) => r) : run();
+  const shared = started.finally(() => {
+    refreshing = null;
+  });
+  refreshing = shared;
+  return shared;
 }
 
 // Thin fetch wrapper: attaches the access token and, on a single 401,
@@ -55,10 +85,13 @@ export async function api(path: string, options: RequestInit = {}) {
       },
     });
 
-  let res = await doFetch(getAccessToken());
+  const sentToken = getAccessToken();
+  let res = await doFetch(sentToken);
 
   if (res.status === 401) {
-    const newAccessToken = await refreshAccessToken();
+    // A refresh that finished while this call was in flight already gave us a new token.
+    const latest = getAccessToken();
+    const newAccessToken = latest && latest !== sentToken ? latest : await refreshAccessToken();
     if (newAccessToken) {
       res = await doFetch(newAccessToken);
     }

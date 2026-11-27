@@ -34,6 +34,7 @@ export function WelcomeForm() {
     setLoadedFor(me.id);
     setName(me.name ?? "");
     setDraft({
+      gender: me.gender ?? "",
       classLevelId: me.classLevel?.id ?? "",
       districtId: me.district?.id ?? "",
       ...draftFromDob(me.dateOfBirth),
@@ -52,6 +53,8 @@ export function WelcomeForm() {
   const dobLocked = Boolean(me.dateOfBirth);
   const askName = !me.name;
   const firstTime = !me.profileComplete;
+  // Older accounts that only lack the new gender question
+  const onlyGender = me.missingProfile.length === 1 && me.missingProfile[0] === "gender";
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -67,6 +70,7 @@ export function WelcomeForm() {
         method: "PATCH",
         json: {
           ...(askName ? { name: name.trim() } : {}),
+          gender: draft.gender,
           classLevelId: draft.classLevelId,
           districtId: draft.districtId,
           ...(dobLocked ? {} : { dateOfBirth: dobString(draft) }),
@@ -86,8 +90,10 @@ export function WelcomeForm() {
     <form onSubmit={submit} className="grid gap-5" noValidate>
       {firstTime && (
         <p className="rounded-xl bg-accent px-4 py-3 text-[15px] leading-relaxed">
-          <strong>One last step{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</strong> Add your class, district and date of birth to start
-          learning. It takes a few seconds.
+          <strong>{onlyGender ? "Pick your avatar" : "One last step"}{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</strong>{" "}
+          {onlyGender
+            ? "Tell us if you are male, female or other, and you're done."
+            : "Add your class, district and date of birth to start learning. It takes a few seconds."}
         </p>
       )}
       <FormError message={error} />

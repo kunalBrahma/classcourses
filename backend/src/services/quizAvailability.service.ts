@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { publicQuestionWhere } from "./catalog.service";
 import { istDayKey } from "../utils/istDate";
 import { requireSetting } from "./settings.service";
 import { autoPool, checkReadiness, customPool, quizLinksInclude, QuizWithLinks, resolveRules, scheduleStatus } from "./quizBuilder.service";
@@ -121,7 +122,7 @@ export const classQuizCatalog = async (mediumSlug: string, classSlug: string) =>
         // Chapters with at least one quiz MCQ, or a custom quiz of their own.
         where: {
           isPublished: true,
-          OR: [{ questions: { some: { kind: "MCQ", isPublished: true, useInQuiz: true } } }, { homeQuizzes: { some: { isPublished: true } } }],
+          OR: [{ questions: { some: { kind: "MCQ", ...publicQuestionWhere(), useInQuiz: true } } }, { homeQuizzes: { some: { isPublished: true } } }],
         },
         orderBy: [{ number: "asc" }, { order: "asc" }],
         select: { id: true, number: true, title: true, slug: true },

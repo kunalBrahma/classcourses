@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeftIcon, ChevronRightIcon, CoinsIcon, SearchIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { GENDER_LABEL, GenderAvatar } from "@/components/admin/users/gender-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -59,7 +60,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
 
 function IncompleteBadge() {
   return (
-    <Badge variant="outline" className="h-5 border-warning/40 bg-warning/10 px-1.5 text-[10px] text-warning" title="Class, district or date of birth missing">
+    <Badge variant="outline" className="h-5 border-warning/40 bg-warning/10 px-1.5 text-[10px] text-warning" title="Class, district, date of birth or gender missing">
       Needs details
     </Badge>
   );
@@ -74,6 +75,7 @@ function UsersList() {
   const query = params.get("q") ?? "";
   const classFilter = params.get("class") ?? ALL;
   const districtFilter = params.get("district") ?? ALL;
+  const genderFilter = params.get("gender") ?? ALL;
   const profileFilter = params.get("profile") ?? ALL;
   const statusFilter = params.get("status") ?? ALL;
   const consentFilter = params.get("consent") ?? ALL;
@@ -114,6 +116,7 @@ function UsersList() {
     if (query) q.set("search", query);
     if (classFilter !== ALL) q.set("classLevelId", classFilter);
     if (districtFilter !== ALL) q.set("districtId", districtFilter);
+    if (genderFilter !== ALL) q.set("gender", genderFilter);
     if (profileFilter !== ALL) q.set("profile", profileFilter);
     if (statusFilter !== ALL) q.set("status", statusFilter);
     if (consentFilter !== ALL) q.set("consent", consentFilter);
@@ -127,8 +130,8 @@ function UsersList() {
     return () => {
       cancelled = true;
     };
-  }, [role, page, query, classFilter, districtFilter, profileFilter, statusFilter, consentFilter, joinedFilter]);
-  const filtered = Boolean(query) || classFilter !== ALL || districtFilter !== ALL || profileFilter !== ALL || statusFilter !== ALL || consentFilter !== ALL || joinedFilter !== ALL;
+  }, [role, page, query, classFilter, districtFilter, genderFilter, profileFilter, statusFilter, consentFilter, joinedFilter]);
+  const filtered = Boolean(query) || classFilter !== ALL || districtFilter !== ALL || genderFilter !== ALL || profileFilter !== ALL || statusFilter !== ALL || consentFilter !== ALL || joinedFilter !== ALL;
 
   return (
     <div className="space-y-6">
@@ -167,6 +170,12 @@ function UsersList() {
           value={districtFilter}
           onChange={(v) => update({ district: v === ALL ? null : v, page: null })}
           options={[{ value: ALL, label: "All districts" }, ...districts.map((d) => ({ value: d.id, label: d.isActive ? d.name : `${d.name} (hidden)` }))]}
+        />
+        <FilterSelect
+          label="Gender"
+          value={genderFilter}
+          onChange={(v) => update({ gender: v === ALL ? null : v, page: null })}
+          options={[{ value: ALL, label: "Any gender" }, ...(["MALE", "FEMALE", "OTHER"] as const).map((g) => ({ value: g, label: GENDER_LABEL[g] }))]}
         />
         <FilterSelect
           label="Profile"
@@ -242,9 +251,13 @@ function UsersList() {
                 <tr key={u.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => router.push(`/users/${u.id}`)}>
                   <td className="px-4 py-3">
                     <Link href={`/users/${u.id}`} className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                      <Avatar className="size-9 rounded-lg">
-                        <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
-                      </Avatar>
+                      {u.gender ? (
+                        <GenderAvatar gender={u.gender} className="size-9 rounded-lg" title={GENDER_LABEL[u.gender]} />
+                      ) : (
+                        <Avatar className="size-9 rounded-lg">
+                          <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
+                        </Avatar>
+                      )}
                       <span className="min-w-0">
                         <span className="flex items-center gap-2 font-medium group-hover:underline">
                           {u.name || "—"}
@@ -285,9 +298,13 @@ function UsersList() {
             {data.users.map((u) => (
               <li key={u.id}>
                 <Link href={`/users/${u.id}`} className="flex items-center gap-3 px-4 py-3 active:bg-muted/50">
-                  <Avatar className="size-10 rounded-lg">
-                    <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
-                  </Avatar>
+                  {u.gender ? (
+                    <GenderAvatar gender={u.gender} className="size-10 rounded-lg" title={GENDER_LABEL[u.gender]} />
+                  ) : (
+                    <Avatar className="size-10 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-brand-amber-text">{initials(u.name, u.email)}</AvatarFallback>
+                    </Avatar>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 font-medium">
                       <span className="truncate">{u.name || u.email}</span>

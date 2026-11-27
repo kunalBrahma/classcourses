@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { MoreHorizontalIcon, PencilIcon, PlusIcon, TargetIcon, Trash2Icon } from "lucide-react";
+import { CalendarClockIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, SendIcon, TargetIcon, Trash2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { useConfirm } from "@/components/admin/confirm";
 import { formCard } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { move } from "@/lib/catalog";
-import { LETTERS, Question, QuestionKind, QuestionSource, toText } from "@/lib/content";
+import { isScheduled, LETTERS, Question, QuestionKind, QuestionSource, toText, whenLabel } from "@/lib/content";
 import { cn } from "@/lib/utils";
 
 const DIFFICULTY: Record<string, string> = { EASY: "Easy", MEDIUM: "Medium", HARD: "Hard" };
@@ -58,6 +58,18 @@ export function QuestionSection({
     setQuestions((all) => all.map((x) => (x.id === q.id ? { ...x, isPublished } : x)));
     try {
       await apiJson(`/api/admin/questions/${q.id}`, { method: "PATCH", json: { isPublished } });
+    } catch (err) {
+      toast.error((err as ApiError).message);
+      onChanged();
+    }
+  };
+
+  // A scheduled question, live at once (clears its time).
+  const publishNow = async (q: Question) => {
+    setQuestions((all) => all.map((x) => (x.id === q.id ? { ...x, isPublished: true, publishAt: null } : x)));
+    try {
+      await apiJson(`/api/admin/questions/${q.id}`, { method: "PATCH", json: { isPublished: true, publishAt: null } });
+      toast.success("Published");
     } catch (err) {
       toast.error((err as ApiError).message);
       onChanged();
@@ -127,8 +139,9 @@ export function QuestionSection({
             q.kind === "MCQ" && q.options && q.correctIndex !== null
               ? `✓ ${LETTERS[q.correctIndex]}. ${toText(q.options[q.correctIndex])}`
               : toText(q.answer);
+          const scheduled = isScheduled(q);
           return (
-            <li key={q.id} className={cn("flex items-start gap-1.5 px-2 py-2.5 sm:gap-3 sm:px-4", !q.isPublished && "bg-muted/40")}>
+            <li key={q.id} className={cn("flex items-start gap-1.5 px-2 py-2.5 sm:gap-3 sm:px-4", (!q.isPublished || scheduled) && "bg-muted/40")}>
               <ReorderButtons index={index} count={questions.length} onMove={(d) => reorder(index, d)} label={`question ${index + 1}`} />
               <span className="mt-1 grid size-7 shrink-0 place-items-center rounded-lg bg-secondary text-xs font-bold tabular-nums text-secondary-foreground">
                 {index + 1}
@@ -140,9 +153,14 @@ export function QuestionSection({
                 <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground" lang="as">
                   {detail}
                 </span>
-                {(!q.isPublished || q.difficulty || q.explanation) && (
+                {(!q.isPublished || scheduled || q.difficulty || q.explanation) && (
                   <span className="mt-1 flex flex-wrap gap-1">
                     {!q.isPublished && <Badge variant="outline" className="h-4 px-1.5 text-[10px]">Draft</Badge>}
+                    {scheduled && (
+                      <Badge variant="outline" className="h-4 gap-1 border-warning/40 bg-warning/10 px-1.5 text-[10px] text-warning" title="Students can't see it until then">
+                        <CalendarClockIcon className="size-2.5" /> Scheduled · {whenLabel(q.publishAt!)}
+                      </Badge>
+                    )}
                     {q.difficulty && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{DIFFICULTY[q.difficulty]}</Badge>}
                     {q.explanation && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">Explanation</Badge>}
                   </span>
@@ -175,6 +193,14 @@ export function QuestionSection({
                   <DropdownMenuItem onSelect={() => onEdit(q)}>
                     <PencilIcon /> Edit
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onEdit(q)}>
+                    <CalendarClockIcon /> {scheduled ? "Change schedule" : "Schedule…"}
+                  </DropdownMenuItem>
+                  {scheduled && (
+                    <DropdownMenuItem onSelect={() => void publishNow(q)}>
+                      <SendIcon /> Publish now
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onSelect={() => remove(q, index)}>
                     <Trash2Icon /> Delete

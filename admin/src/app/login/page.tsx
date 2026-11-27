@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, Suspense, useId, useState } from "react";
+import { FormEvent, KeyboardEvent, Suspense, useId, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearTokens, setTokens } from "@/lib/auth";
+import { SESSION_NOTICE_KEY } from "@/lib/api";
 import { LogoFull } from "@/components/admin/logo-mark";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -139,8 +140,20 @@ function LoginForm() {
   const [paused, setPaused] = useState(false);
 
   const ids = { email: useId(), password: useId(), error: useId(), caps: useId() };
+  // Why the panel sent them here (blocked by the Super Admin, signed out), if it did.
+  const notice = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return sessionStorage.getItem(SESSION_NOTICE_KEY);
+      } catch {
+        return null;
+      }
+    },
+    () => null
+  );
   // `?denied=1` is set by the (panel) layout when a non-admin token is rejected.
-  const message = error ?? (denied ? "This account doesn't have admin access." : null);
+  const message = error ?? notice ?? (denied ? "This account doesn't have admin access." : null);
 
   const fail = (text: string) => {
     setError(text);
@@ -173,6 +186,11 @@ function LoginForm() {
       }
 
       setTokens(data.accessToken, data.refreshToken);
+      try {
+        sessionStorage.removeItem(SESSION_NOTICE_KEY);
+      } catch {
+        /* nothing stored */
+      }
       router.push("/dashboard");
     } catch {
       fail("Can't reach the server. Check your internet connection and try again.");

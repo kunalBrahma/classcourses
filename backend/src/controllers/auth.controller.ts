@@ -1,3 +1,4 @@
+import type { Gender } from "@prisma/client";
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import prisma from "../config/prisma";
@@ -44,11 +45,12 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(400, "This email is already registered. Please log in.");
   }
 
-  // Class, district and date of birth (rules in profile.service.ts)
+  // Class, district, date of birth and gender (rules in profile.service.ts)
   const profile = {
     classLevelId: await requireActiveClass(req.body.classLevelId),
     districtId: await requireActiveDistrict(req.body.districtId),
     dateOfBirth: parseDateOfBirth(req.body.dateOfBirth),
+    gender: req.body.gender as Gender,
   };
   const hashedPassword = await hashPassword(password);
 
@@ -138,6 +140,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   }
   await clearAccount(email);
   // Right password, but the admin suspended or blocked the account: say so.
+  if (isAdmin && user.status === "BLOCKED") await logAdmin(req, email, user.id, "BLOCKED");
   assertCanSignIn(user);
 
   // Right password, email not verified yet: send a code (unless one just
@@ -178,7 +181,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 
   if (!stored || stored.expiresAt < new Date()) {
     if (stored) {
-      await prisma.refreshToken.delete({ where: { id: stored.id } });
+      await prisma.refreshToken.deleteMany({ where: { id: stored.id } });
     }
     throw new AppError(401, "Invalid or expired refresh token");
   }
@@ -188,7 +191,11 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   // Rotate: delete the used token and issue a brand new pair. If a stolen
   // token is ever replayed after the legitimate client already rotated it,
   // this lookup simply fails (already deleted), which is the desired result.
-  await prisma.refreshToken.delete({ where: { id: stored.id } });
+  // deleteMany + count makes the delete the claim: of two requests racing with
+  // the same token only one gets a new pair; the other is a plain 401 (a
+  // delete() here threw P2025, which the error handler answered as a 404).
+  const { count } = await prisma.refreshToken.deleteMany({ where: { id: stored.id } });
+  if (count === 0) throw new AppError(401, "Invalid or expired refresh token");
 
   const { accessToken, refreshToken: newRefreshToken } = await issueTokenPair(
     stored.user.id,
@@ -287,6 +294,7 @@ export const getMe = asyncHandler(async (req: AuthRequest, res: Response) => {
       districtId: true,
       district: { select: { id: true, name: true, nativeName: true } },
       dateOfBirth: true,
+      gender: true,
       coins: true,
       createdAt: true,
       updatedAt: true,

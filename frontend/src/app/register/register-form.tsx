@@ -23,7 +23,7 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
   const next = safeNext(useSearchParams().get("next"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  // Class, district, date of birth, optional mobile (client, 6 Nov 2026)
+  // Gender, class, district, date of birth, optional mobile (client, 6 Nov 2026)
   const [profile, setProfile] = useState<ProfileDraft>(EMPTY_DRAFT);
   const { options, error: optionsError } = useProfileOptions();
   const [password, setPassword] = useState("");
@@ -59,6 +59,7 @@ export function RegisterForm({ termsPublished, privacyPublished }: { termsPublis
           name: name.trim(),
           email: email.trim(),
           password,
+          gender: profile.gender,
           classLevelId: profile.classLevelId,
           districtId: profile.districtId,
           dateOfBirth: dobString(profile),

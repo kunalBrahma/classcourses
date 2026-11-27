@@ -39,6 +39,16 @@ export const publicChapterWhere = {
   subject: publicSubjectWhere,
 } satisfies Prisma.ChapterWhereInput;
 
+// A question students may see (chapter page, practice check, quizzes, counts):
+// published, and its scheduled time (if any) has come. A function, because
+// "now" moves. Also check the chapter with publicChapterWhere where it matters.
+export const publicQuestionWhere = (now = new Date()) =>
+  ({ isPublished: true, OR: [{ publishAt: null }, { publishAt: { lte: now } }] }) satisfies Prisma.QuestionWhereInput;
+
+/** The same rule for a row already loaded. */
+export const isQuestionLive = (q: { isPublished: boolean; publishAt: Date | null }, now = new Date()) =>
+  q.isPublished && (!q.publishAt || q.publishAt <= now);
+
 // Site link for a catalog level: /medium[/class[/subject[/chapter]]]
 export const catalogHref = (...slugs: string[]) => `/${slugs.join("/")}`;
 

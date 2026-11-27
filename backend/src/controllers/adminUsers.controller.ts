@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Gender, Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { notifyUser, warningCount } from "../services/notification.service";
@@ -15,11 +15,11 @@ import { istDayEnd } from "../utils/istDate";
 import { accountStatus } from "../services/loginThrottle.service";
 import { consentForAdmin, recordConsentByAdmin, requestConsent, withdrawConsentByAdmin } from "../services/consent.service";
 import { ADULT_AGE_YEARS } from "../services/profile.service";
-import { profileStatus } from "../services/profile.service";
+import { completeProfileWhere, GENDERS, incompleteProfileWhere, profileStatus } from "../services/profile.service";
 
 // Shapes a user row for the admin: date of birth as "YYYY-MM-DD", age, under 18,
-// and whether the profile (class, district, date of birth) is complete.
-const withProfile = <T extends { classLevelId: string | null; districtId: string | null; dateOfBirth: Date | null }>(u: T) => {
+// and whether the profile (class, district, date of birth, gender) is complete.
+const withProfile = <T extends { classLevelId: string | null; districtId: string | null; dateOfBirth: Date | null; gender: Gender | null }>(u: T) => {
   const { dateOfBirth: _dob, ...rest } = u;
   return { ...rest, ...profileStatus(u) };
 };
@@ -31,8 +31,9 @@ const listQuery = z.object({
   role: z.enum(["STUDENT", "ADMIN"]).optional(),
   classLevelId: z.string().uuid().optional(),
   districtId: z.string().uuid().optional(),
-  // incomplete = class, district or date of birth missing
+  // incomplete = class, district, date of birth or gender missing
   profile: z.enum(["complete", "incomplete"]).optional(),
+  gender: z.enum(GENDERS).optional(),
   // Deleted (erased) accounts are hidden unless asked for
   status: z.enum(["ACTIVE", "SUSPENDED", "BLOCKED", "DELETED"]).optional(),
   // Under 18: "missing" = no consent yet (none, pending, declined, withdrawn), "granted"
@@ -45,11 +46,11 @@ const listQuery = z.object({
 });
 
 export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) => {
-  const { search, role, classLevelId, districtId, profile, status, consent, joinedFrom, joinedTo, page, pageSize } = listQuery.parse(req.query);
+  const { search, role, classLevelId, districtId, gender, profile, status, consent, joinedFrom, joinedTo, page, pageSize } = listQuery.parse(req.query);
   // Every filter is one condition in AND, so none can overwrite another.
   const and: Prisma.UserWhereInput[] = [];
-  if (profile === "complete") and.push({ classLevelId: { not: null }, districtId: { not: null }, dateOfBirth: { not: null } });
-  if (profile === "incomplete") and.push({ OR: [{ classLevelId: null }, { districtId: null }, { dateOfBirth: null }] });
+  if (profile === "complete") and.push(completeProfileWhere);
+  if (profile === "incomplete") and.push(incompleteProfileWhere);
   if (consent) {
     // Born after this day (India) = under 18 today
     const now = new Date(Date.now() + 5.5 * 3_600_000);
@@ -70,7 +71,7 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
       ],
     });
   }
-  const where: Prisma.UserWhereInput = { role, classLevelId, districtId, status: status ?? { not: "DELETED" }, AND: and };
+  const where: Prisma.UserWhereInput = { role, classLevelId, districtId, gender, status: status ?? { not: "DELETED" }, AND: and };
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
@@ -90,6 +91,7 @@ export const listUsersAdmin = asyncHandler(async (req: Request, res: Response) =
         districtId: true,
         district: { select: { id: true, name: true } },
         dateOfBirth: true,
+        gender: true,
         status: true,
         suspendedUntil: true,
         parentalConsent: { select: { status: true } },
@@ -133,6 +135,7 @@ export const getUserAdmin = asyncHandler(async (req: Request, res: Response) => 
       districtId: true,
       district: { select: { id: true, name: true } },
       dateOfBirth: true,
+      gender: true,
       medium: { select: { id: true, name: true } },
       createdAt: true,
       coinTxns: { orderBy: { createdAt: "desc" }, take: 50, include: { lot: { select: { expiresAt: true, remaining: true, expiredAmount: true } } } },
@@ -282,8 +285,8 @@ export const signOutUserAdmin = asyncHandler(async (req: AuthRequest, res: Respo
 
 // Correcting details when the student (or a parent) asks; before/after kept.
 export const editUserDetailsAdmin = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const body = req.body as { name?: string; phone?: string | null; classLevelId?: string; districtId?: string; dateOfBirth?: string; reason: string };
-  const fields = { name: true, phone: true, classLevelId: true, districtId: true, dateOfBirth: true, status: true, role: true } as const;
+  const body = req.body as { name?: string; phone?: string | null; classLevelId?: string; districtId?: string; dateOfBirth?: string; gender?: Gender; reason: string };
+  const fields = { name: true, phone: true, classLevelId: true, districtId: true, dateOfBirth: true, gender: true, status: true, role: true } as const;
   const before = await prisma.user.findUnique({ where: { id: req.params.id }, select: fields });
   if (!before || before.status === "DELETED") throw new AppError(404, "User not found");
   const after = await prisma.user.update({
@@ -294,6 +297,7 @@ export const editUserDetailsAdmin = asyncHandler(async (req: AuthRequest, res: R
       classLevelId: body.classLevelId === undefined ? undefined : await requireActiveClass(body.classLevelId),
       districtId: body.districtId === undefined ? undefined : await requireActiveDistrict(body.districtId),
       dateOfBirth: body.dateOfBirth === undefined ? undefined : parseDateOfBirth(body.dateOfBirth),
+      gender: body.gender,
     },
     select: fields,
   });

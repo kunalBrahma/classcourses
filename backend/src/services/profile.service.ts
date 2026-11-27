@@ -1,11 +1,13 @@
+import type { Gender } from "@prisma/client";
 import prisma from "../config/prisma";
 import { DISTRICTS } from "../content/districts";
 import { AppError } from "../utils/AppError";
 import { istDayKey } from "../utils/istDate";
 
 // The student profile asked at sign-up and in "complete your profile":
-// class, district and date of birth (phone optional). Client requirements of
-// 6 Nov 2026. Every rule about these fields lives here.
+// class, district, date of birth (client requirements of 6 Nov 2026) and
+// gender (27 Nov 2026, it picks the avatar); phone optional. Every rule about
+// these fields lives here.
 
 type Db = Pick<typeof prisma, "district" | "classLevel">;
 
@@ -62,6 +64,15 @@ export const parseDateOfBirth = (value: string, todayKey: string = istDayKey()):
   return date;
 };
 
+// ---- Gender -----------------------------------------------------------------
+
+// The choices, in the order the forms show them.
+export const GENDERS = ["MALE", "FEMALE", "OTHER"] as const satisfies readonly Gender[];
+
+// Where a profile counts as incomplete (admin "incomplete profile" filter).
+export const incompleteProfileWhere = { OR: [{ classLevelId: null }, { districtId: null }, { dateOfBirth: null }, { gender: null }] };
+export const completeProfileWhere = { classLevelId: { not: null }, districtId: { not: null }, dateOfBirth: { not: null }, gender: { not: null } };
+
 // ---- Class and district -----------------------------------------------------
 
 export const requireActiveClass = async (classLevelId: string, db: Db = prisma) => {
@@ -78,15 +89,17 @@ export const requireActiveDistrict = async (districtId: string, db: Db = prisma)
 
 // ---- Status -----------------------------------------------------------------
 
-export type ProfileField = "classLevel" | "district" | "dateOfBirth";
+export type ProfileField = "classLevel" | "district" | "dateOfBirth" | "gender";
 
-// Complete = class, district and date of birth are all set. Signed-in students
-// with a missing field are sent to "complete your profile" by the site.
-export const profileStatus = (u: { classLevelId: string | null; districtId: string | null; dateOfBirth: Date | null }) => {
+// Complete = class, district, date of birth and gender are all set. Signed-in
+// students with a missing field are sent to "complete your profile" by the site
+// (so older accounts pick a gender once).
+export const profileStatus = (u: { classLevelId: string | null; districtId: string | null; dateOfBirth: Date | null; gender: Gender | null }) => {
   const missing: ProfileField[] = [];
   if (!u.classLevelId) missing.push("classLevel");
   if (!u.districtId) missing.push("district");
   if (!u.dateOfBirth) missing.push("dateOfBirth");
+  if (!u.gender) missing.push("gender");
   const age = u.dateOfBirth ? ageOn(u.dateOfBirth) : null;
   return {
     profileComplete: missing.length === 0,

@@ -1,3 +1,4 @@
+import type { Gender } from "@prisma/client";
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
@@ -71,11 +72,11 @@ export const getMyCoins = asyncHandler(async (req: AuthRequest, res: Response) =
 });
 
 // "Complete your profile" (Google sign-ups, older accounts) and later edits:
-// name, phone, class, district, date of birth. The date of birth can be set
+// name, phone, class, district, date of birth, gender. The date of birth can be set
 // once by the student; changing it goes through the Helpline, because it
 // decides whether parental consent is needed.
 export const updateMyProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const body = req.body as { name?: string; phone?: string | null; classLevelId?: string; districtId?: string; dateOfBirth?: string };
+  const body = req.body as { name?: string; phone?: string | null; classLevelId?: string; districtId?: string; dateOfBirth?: string; gender?: Gender };
   const current = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId }, select: { dateOfBirth: true } });
 
   let dateOfBirth: Date | undefined;
@@ -95,6 +96,7 @@ export const updateMyProfile = asyncHandler(async (req: AuthRequest, res: Respon
       classLevelId: body.classLevelId === undefined ? undefined : await requireActiveClass(body.classLevelId),
       districtId: body.districtId === undefined ? undefined : await requireActiveDistrict(body.districtId),
       dateOfBirth,
+      gender: body.gender,
     },
     select: {
       id: true,
@@ -105,6 +107,7 @@ export const updateMyProfile = asyncHandler(async (req: AuthRequest, res: Respon
       districtId: true,
       district: { select: { id: true, name: true, nativeName: true } },
       dateOfBirth: true,
+      gender: true,
     },
   });
   const { dateOfBirth: _dob, ...rest } = user;

@@ -14,7 +14,7 @@ import { ApiError, apiJson } from "@/lib/api";
 import { formatDate } from "@/lib/people";
 import { cn } from "@/lib/utils";
 
-type Result = "SUCCESS" | "WRONG_PASSWORD" | "LOCKED" | "UNLOCK_CODE_SENT" | "UNLOCKED";
+type Result = "SUCCESS" | "WRONG_PASSWORD" | "LOCKED" | "BLOCKED" | "UNLOCK_CODE_SENT" | "UNLOCKED";
 interface Attempt {
   id: string;
   email: string;
@@ -36,6 +36,7 @@ const RESULT: Record<Result, { label: string; className: string }> = {
   SUCCESS: { label: "Signed in", className: "border-success/30 bg-success/10 text-success" },
   WRONG_PASSWORD: { label: "Wrong password", className: "border-warning/40 bg-warning/10 text-warning" },
   LOCKED: { label: "Paused", className: "border-destructive/30 bg-destructive/10 text-destructive" },
+  BLOCKED: { label: "Blocked (Team)", className: "border-destructive/30 bg-destructive/10 text-destructive" },
   UNLOCK_CODE_SENT: { label: "Unlock code sent", className: "" },
   UNLOCKED: { label: "Unlocked by code", className: "" },
 };
@@ -44,6 +45,7 @@ const FILTERS: { value: Result | null; label: string }[] = [
   { value: "SUCCESS", label: "Signed in" },
   { value: "WRONG_PASSWORD", label: "Wrong password" },
   { value: "LOCKED", label: "Paused" },
+  { value: "BLOCKED", label: "Blocked" },
 ];
 
 // "Chrome on Android", "Safari on iPhone" — enough to recognise a device.

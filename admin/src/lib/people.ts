@@ -1,4 +1,5 @@
 // Shapes from /api/admin/users and quiz/coin settings.
+import type { Gender } from "@/components/admin/users/gender-avatar";
 
 export type Role = "STUDENT" | "ADMIN";
 export type CoinReason = "QUIZ_PASS" | "NOTE_DISCOUNT" | "NOTE_DISCOUNT_REFUND" | "NOTE_DISCOUNT_REAPPLIED" | "ADMIN_ADJUST" | "COIN_EXPIRED" | "REFERRAL_REWARD" | "REFERRAL_BONUS" | "REFERRAL_REVERSED";
@@ -23,7 +24,9 @@ export interface UserRow {
   age: number | null;
   isMinor: boolean | null; // null = no date of birth yet
   profileComplete: boolean;
-  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
+  missingProfile: ("classLevel" | "district" | "dateOfBirth" | "gender")[];
+  // Picks the student's avatar (27 Nov 2026); null for older accounts until they choose
+  gender: Gender | null;
   medium: { name: string } | null;
   createdAt: string;
   quizAttempts: number;
@@ -74,14 +77,17 @@ export const CONSENT_BADGE: Record<ConsentStatus | "NONE", { label: string; vari
   WITHDRAWN: { label: "Withdrawn", variant: "outline", className: "border-destructive/30 bg-destructive/10 text-destructive" },
 };
 
-// "Class 7 · Nagaon · 13 yrs", leaving out what isn't known.
-export const profileLine = (u: Pick<UserRow, "classLevel" | "district" | "age">) =>
-  [u.classLevel?.name, u.district?.name, u.age !== null ? `${u.age} yrs` : null].filter(Boolean).join(" · ");
+const GENDER_WORD: Record<Gender, string> = { MALE: "Male", FEMALE: "Female", OTHER: "Other" };
+
+// "Female · Class 7 · Nagaon · 13 yrs", leaving out what isn't known.
+export const profileLine = (u: Pick<UserRow, "gender" | "classLevel" | "district" | "age">) =>
+  [u.gender ? GENDER_WORD[u.gender] : null, u.classLevel?.name, u.district?.name, u.age !== null ? `${u.age} yrs` : null].filter(Boolean).join(" · ");
 
 export const MISSING_LABEL: Record<UserRow["missingProfile"][number], string> = {
   classLevel: "class",
   district: "district",
   dateOfBirth: "date of birth",
+  gender: "gender",
 };
 
 export interface CoinTxn {
@@ -150,7 +156,9 @@ export interface UserDetail {
   age: number | null;
   isMinor: boolean | null; // null = no date of birth yet
   profileComplete: boolean;
-  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
+  missingProfile: ("classLevel" | "district" | "dateOfBirth" | "gender")[];
+  // Picks the student's avatar (27 Nov 2026); null for older accounts until they choose
+  gender: Gender | null;
   signsInWithGoogle: boolean;
   adminLevel: "SUPER" | "HELPER";
   adminPermissions: string[];

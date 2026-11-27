@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { isQuestionLive } from "../services/catalog.service";
 import { AppError } from "../utils/AppError";
 import { asyncHandler } from "../utils/asyncHandler";
 import { requireSetting } from "../services/settings.service";
@@ -242,9 +243,10 @@ export const quizPool = asyncHandler(async (req: Request, res: Response) => {
   const quiz = draftQuiz(v);
   const all = await prisma.question.findMany({
     where: { chapterId: { in: v.chapterIds }, kind: "MCQ" },
-    select: { source: true, difficulty: true, useInQuiz: true, isPublished: true },
+    select: { source: true, difficulty: true, useInQuiz: true, isPublished: true, publishAt: true },
   });
-  const published = all.filter((q) => q.isPublished);
+  // Scheduled questions join quizzes only once their time comes
+  const published = all.filter((q) => isQuestionLive(q));
   const pool = await customPool(quiz);
   const [readiness, rules] = await Promise.all([checkReadiness(quiz, pool), resolveRules(quiz, pool.length)]);
   res.json({

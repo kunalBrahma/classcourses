@@ -28,13 +28,13 @@ export const api = () => {
 
 let counter = 0;
 
-// Valid class, district and date of birth for sign-up (made if missing).
+// Valid class, district, date of birth and gender for sign-up (made if missing).
 export const signupProfile = async () => {
   const classLevel =
     (await prisma.classLevel.findFirst({ where: { isActive: true }, orderBy: { order: "asc" } })) ??
     (await prisma.classLevel.create({ data: { name: "Test Class", slug: "test-class" } }));
   const district = await prisma.district.upsert({ where: { name: "Test District" }, update: { isActive: true }, create: { name: "Test District" } });
-  return { classLevelId: classLevel.id, districtId: district.id, dateOfBirth: "2012-05-14" };
+  return { classLevelId: classLevel.id, districtId: district.id, dateOfBirth: "2012-05-14", gender: "FEMALE" as const };
 };
 
 // Creates a user directly in the DB and logs in through the real API.

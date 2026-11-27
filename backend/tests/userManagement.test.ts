@@ -120,11 +120,12 @@ describe("sign out everywhere, edit details, export", () => {
     const id = await makeStudent("e1@test.local");
     const profile = await signupProfile();
     expect((await as(founder.auth).patch(`/api/admin/users/${id}/details`, { name: "Riya Das" })).status).toBe(400);
-    const res = await as(founder.auth).patch(`/api/admin/users/${id}/details`, { name: "Riya Das", districtId: profile.districtId, dateOfBirth: "2012-03-04", reason: "Parent asked by email" });
+    const res = await as(founder.auth).patch(`/api/admin/users/${id}/details`, { name: "Riya Das", districtId: profile.districtId, dateOfBirth: "2012-03-04", gender: "FEMALE", reason: "Parent asked by email" });
     expect(res.status).toBe(200);
     const entry = await latestActivity("user.edit_details");
     expect(entry?.reason).toBe("Parent asked by email");
-    expect(entry?.details).toMatchObject({ before: { name: "Riya", dateOfBirth: null }, after: { name: "Riya Das", dateOfBirth: "2012-03-04" } });
+    expect(entry?.details).toMatchObject({ before: { name: "Riya", dateOfBirth: null, gender: null }, after: { name: "Riya Das", dateOfBirth: "2012-03-04", gender: "FEMALE" } });
+    expect((await as(founder.auth).patch(`/api/admin/users/${id}/details`, { gender: "X", reason: "Parent asked by email" })).status).toBe(400);
   });
 
   it("exports everything stored about the student as a readable file, and logs it", async () => {
@@ -215,6 +216,47 @@ describe("helper admins", () => {
     expect((await as(founder.auth).delete(`/api/admin/team/${founder.id}`)).status).toBe(400);
     const team = await as(founder.auth).get("/api/admin/team");
     expect(team.body.permissions.map((p: { key: string }) => p.key)).toEqual(["content", "quiz_reports", "notes_orders", "users", "support"]);
+  });
+
+  it("blocking a team member signs them out, refuses sign-in with 'contact the Super Admin'; unblocking gives access back", async () => {
+    await as(founder.auth).post("/api/admin/team", { email: "helper-b@test.local", password: "HelperPassword123!", permissions: ["content"] });
+    const id = (await prisma.user.findUniqueOrThrow({ where: { email: "helper-b@test.local" } })).id;
+    const session = (await login("helper-b@test.local", "HelperPassword123!")).body;
+    const helper = `Bearer ${session.accessToken}`;
+    expect((await as(helper).get("/api/admin/mediums")).status).toBe(200);
+
+    // Only the Super Admin can block, and not a Super Admin
+    expect((await as(helper).post(`/api/admin/team/${id}/block`)).status).toBe(403);
+    expect((await as(founder.auth).post(`/api/admin/team/${founder.id}/block`)).status).toBe(400);
+
+    const blocked = await as(founder.auth).post(`/api/admin/team/${id}/block`, { reason: "Left the team" });
+    expect(blocked.status).toBe(200);
+    expect((await latestActivity("team.block_helper"))?.targetId).toBe(id);
+    expect((await as(founder.auth).post(`/api/admin/team/${id}/block`)).status).toBe(400); // already blocked
+
+    // Signed out at once: the old token and refresh token stop working
+    expect((await as(helper).get("/api/admin/mediums")).status).toBe(401);
+    expect((await api().post("/api/auth/refresh").send({ refreshToken: session.refreshToken })).status).toBe(401);
+
+    // Signing in: told plainly, with the reason, to contact the Super Admin
+    const refused = await login("helper-b@test.local", "HelperPassword123!");
+    expect(refused.status).toBe(403);
+    expect(refused.body.code).toBe("ACCOUNT_BLOCKED");
+    expect(refused.body.error).toBe("Your admin account has been blocked. Reason: Left the team. Please contact the Super Admin to get access back.");
+    expect(await prisma.adminLoginAttempt.findFirst({ where: { email: "helper-b@test.local", result: "BLOCKED" } })).not.toBeNull();
+    // A wrong password still says only "wrong": nothing reveals the account is blocked
+    expect((await login("helper-b@test.local", "wrong-password")).status).toBe(401);
+
+    // Team shows the state; sections are kept
+    const row = (await as(founder.auth).get("/api/admin/team")).body.admins.find((a: { id: string }) => a.id === id);
+    expect(row).toMatchObject({ status: "BLOCKED", statusReason: "Left the team", adminPermissions: ["content"] });
+
+    // Unblock: same access as before
+    expect((await as(founder.auth).post(`/api/admin/team/${id}/unblock`)).status).toBe(200);
+    expect((await as(founder.auth).post(`/api/admin/team/${id}/unblock`)).status).toBe(400);
+    const back = await login("helper-b@test.local", "HelperPassword123!");
+    expect(back.status).toBe(200);
+    expect((await as(`Bearer ${back.body.accessToken}`).get("/api/admin/mediums")).status).toBe(200);
   });
 
   it("promoting someone from the user page makes a helper with no sections; the last Super Admin stays", async () => {

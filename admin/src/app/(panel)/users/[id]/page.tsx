@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeftIcon, CoinsIcon, Loader2Icon, MinusIcon, PlusIcon, ShieldIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { GENDER_LABEL, GenderAvatar } from "@/components/admin/users/gender-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -260,6 +261,7 @@ function ProfileCard({ user }: { user: UserDetail }) {
     ? new Date(`${user.dateOfBirth}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
     : null;
   const rows: { label: string; value: React.ReactNode }[] = [
+    { label: "Gender", value: user.gender && GENDER_LABEL[user.gender] },
     { label: "Class", value: user.classLevel?.name },
     { label: "District", value: user.district?.name },
     {
@@ -352,9 +354,13 @@ export default function UserDetailPage() {
       </Button>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <Avatar className="size-16 rounded-2xl">
-          <AvatarFallback className="rounded-2xl bg-brand-brown font-heading text-xl font-bold text-white">{initials(user.name, user.email)}</AvatarFallback>
-        </Avatar>
+        {user.gender ? (
+          <GenderAvatar gender={user.gender} className="size-16 rounded-2xl" title={`${GENDER_LABEL[user.gender]} avatar`} />
+        ) : (
+          <Avatar className="size-16 rounded-2xl">
+            <AvatarFallback className="rounded-2xl bg-brand-brown font-heading text-xl font-bold text-white">{initials(user.name, user.email)}</AvatarFallback>
+          </Avatar>
+        )}
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-2 font-heading text-2xl font-bold tracking-tight md:text-3xl">
             {user.name || "No name"}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronDownIcon } from "lucide-react";
 import { Breadcrumbs } from "@/components/kit/breadcrumbs";
 import { Container } from "@/components/site/container";
-import { getFaq, getSiteSettings } from "@/lib/server-api";
+import { getFaqPage, getSiteSettings } from "@/lib/server-api";
 
 export const metadata: Metadata = {
   title: "Questions & answers",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 // FAQ from Admin → FAQ (published items, in the admin's order), as native
 // <details> so it works without JavaScript; also marked up as FAQPage.
 export default async function FaqPage() {
-  const [items, { site }] = await Promise.all([getFaq(), getSiteSettings()]);
+  const [items, { site }] = await Promise.all([getFaqPage(), getSiteSettings()]);
   if (items.length === 0) notFound();
   const plain = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const jsonLd = {

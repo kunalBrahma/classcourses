@@ -68,6 +68,9 @@ model User {
   district           District?               @relation(fields: [districtId], references: [id], onDelete: Restrict)
   // Date only. Used only to know whether the student is under 18.
   dateOfBirth        DateTime?               @db.Date
+  // Asked at sign-up and in "complete your profile" (27 Nov 2026); picks the
+  // student's avatar. Null for older accounts until they choose.
+  gender             Gender?
   // Cached balance; the source of truth is the CoinTransaction ledger
   coins              Int                     @default(0)
   quizAttempts       QuizAttempt[]
@@ -226,6 +229,8 @@ enum AdminLoginResult {
   SUCCESS
   WRONG_PASSWORD
   LOCKED
+  // Right password, but the Super Admin blocked this team member
+  BLOCKED
   UNLOCK_CODE_SENT
   UNLOCKED
 }
@@ -434,6 +439,9 @@ model Question {
   difficulty   Difficulty?
   order        Int            @default(0)
   isPublished  Boolean        @default(true)
+  // Scheduled publishing (27 Nov 2026): a published question stays hidden until
+  // this moment. Null = live as soon as it is published. Rule: publicQuestionWhere().
+  publishAt    DateTime?
   // MCQ only: may appear in quizzes (automatic ones, and random custom ones
   // that use "quiz-marked only"). Off = practice on the chapter page only.
   useInQuiz    Boolean        @default(true)
@@ -1151,4 +1159,11 @@ model Referral {
   @@index([emailHash])
   @@index([signupIp])
   @@index([deviceId])
+}
+
+// A student's gender (sign-up). Shown as their avatar: male, female or other.
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
 }

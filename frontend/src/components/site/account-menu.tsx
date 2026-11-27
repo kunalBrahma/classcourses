@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { apiJson, logout } from "@/lib/api";
 import { Coin3D } from "@/components/kit/coin";
+import { GENDER_LABEL, Gender, GenderAvatar } from "@/components/kit/gender-avatar";
 import { getAccessToken, subscribeAuth } from "@/lib/auth";
 
 export interface Me {
@@ -24,7 +25,9 @@ export interface Me {
   dateOfBirth: string | null; // "YYYY-MM-DD"
   isMinor: boolean | null;
   profileComplete: boolean;
-  missingProfile: ("classLevel" | "district" | "dateOfBirth")[];
+  missingProfile: ("classLevel" | "district" | "dateOfBirth" | "gender")[];
+  // Picks the avatar; null for older accounts until /welcome
+  gender: Gender | null;
   // Quizzes, coins and purchases need a date of birth, and a parent's consent
   // under 18 (backend consent.service.ts)
   access?: Access;
@@ -164,6 +167,16 @@ export function AccountChip() {
   );
 }
 
+// The student's picture: their gender's avatar, or initials until they pick one.
+export function StudentAvatar({ me, className }: { me: Me | null; className?: string }) {
+  if (me?.gender) return <GenderAvatar gender={me.gender} className={className} title={`${GENDER_LABEL[me.gender]} avatar`} />;
+  return (
+    <Avatar className={className}>
+      <AvatarFallback className="rounded-[inherit] bg-primary font-semibold text-primary-foreground">{me ? initials(me.name, me.email) : "…"}</AvatarFallback>
+    </Avatar>
+  );
+}
+
 // Menu sheet: who is signed in + sign out, or Sign in / Join free.
 export function AccountPanel({ onDone }: { onDone?: () => void }) {
   const router = useRouter();
@@ -185,9 +198,7 @@ export function AccountPanel({ onDone }: { onDone?: () => void }) {
 
   return (
     <div className="flex items-center gap-3">
-      <Avatar className="size-11 rounded-xl">
-        <AvatarFallback className="rounded-xl bg-primary font-semibold text-primary-foreground">{me ? initials(me.name, me.email) : "…"}</AvatarFallback>
-      </Avatar>
+      <StudentAvatar me={me} className="size-11 rounded-xl" />
       <Link href="/profile" onClick={onDone} className="min-w-0 flex-1 rounded-lg hover:underline">
         <span className="block truncate font-semibold">{me?.name || "Student"}</span>
         {me && (

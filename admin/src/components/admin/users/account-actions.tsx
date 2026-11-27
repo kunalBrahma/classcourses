@@ -16,6 +16,7 @@ import { formCard, inputClass } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { formatDate, lastDay, STATUS_BADGE, UserDetail } from "@/lib/people";
 import { cn } from "@/lib/utils";
+import { GENDER_LABEL } from "@/components/admin/users/gender-avatar";
 
 interface Account {
   status: UserDetail["status"];
@@ -58,7 +59,7 @@ export function AccountActions({ user, onDone }: { user: UserDetail; onDone: () 
   const [until, setUntil] = useState("");
   const [indefinite, setIndefinite] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
-  const [details, setDetails] = useState({ name: "", phone: "", classLevelId: "", districtId: "", dateOfBirth: "" });
+  const [details, setDetails] = useState({ name: "", phone: "", gender: "", classLevelId: "", districtId: "", dateOfBirth: "" });
   const [options, setOptions] = useState<{ classes: Option[]; districts: Option[] } | null>(null);
 
   const load = useCallback(() => {
@@ -76,7 +77,7 @@ export function AccountActions({ user, onDone }: { user: UserDetail; onDone: () 
     setIndefinite(false);
     setConfirmEmail("");
     if (next === "edit") {
-      setDetails({ name: user.name ?? "", phone: user.phone ?? "", classLevelId: user.classLevel?.id ?? "", districtId: user.district?.id ?? "", dateOfBirth: user.dateOfBirth ?? "" });
+      setDetails({ name: user.name ?? "", phone: user.phone ?? "", gender: user.gender ?? "", classLevelId: user.classLevel?.id ?? "", districtId: user.district?.id ?? "", dateOfBirth: user.dateOfBirth ?? "" });
       // The sign-up lists (public), so a helper without Content can use them
       if (!options) apiJson<{ classes: Option[]; districts: Option[] }>("/api/auth/profile-options").then(setOptions).catch(() => setOptions({ classes: [], districts: [] }));
     }
@@ -272,6 +273,13 @@ export function AccountActions({ user, onDone }: { user: UserDetail; onDone: () 
                     <Input id={`${id}-p`} className={inputClass} inputMode="numeric" value={details.phone} onChange={(e) => setDetails((d) => ({ ...d, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))} />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor={`${id}-g`} className="text-sm font-semibold">Gender</Label>
+                    <select id={`${id}-g`} className={nativeSelect} value={details.gender} onChange={(e) => setDetails((d) => ({ ...d, gender: e.target.value }))}>
+                      <option value="">Not set</option>
+                      {(["MALE", "FEMALE", "OTHER"] as const).map((g) => <option key={g} value={g}>{GENDER_LABEL[g]}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor={`${id}-c`} className="text-sm font-semibold">Class</Label>
                     <select id={`${id}-c`} className={nativeSelect} value={details.classLevelId} onChange={(e) => setDetails((d) => ({ ...d, classLevelId: e.target.value }))}>
                       <option value="">Not set</option>
@@ -329,6 +337,7 @@ export function AccountActions({ user, onDone }: { user: UserDetail; onDone: () 
                   if (details.name.trim() && details.name.trim() !== (user.name ?? "")) changes.name = details.name.trim();
                   if (details.phone !== (user.phone ?? "")) changes.phone = details.phone || null;
                   if (details.classLevelId && details.classLevelId !== user.classLevel?.id) changes.classLevelId = details.classLevelId;
+                  if (details.gender && details.gender !== user.gender) changes.gender = details.gender;
                   if (details.districtId && details.districtId !== user.district?.id) changes.districtId = details.districtId;
                   if (details.dateOfBirth && details.dateOfBirth !== user.dateOfBirth) changes.dateOfBirth = details.dateOfBirth;
                   if (Object.keys(changes).length === 0) return setError("Nothing has changed");

@@ -1,4 +1,4 @@
-import { Prisma, UserStatus } from "@prisma/client";
+import { Prisma, Role, UserStatus } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AppError } from "../utils/AppError";
 import { clearAccount } from "./loginThrottle.service";
@@ -16,6 +16,8 @@ export interface AccountState {
   status: UserStatus;
   suspendedUntil: Date | null;
   statusReason: string | null;
+  // Admins (team members blocked from Team) are told to ask the Super Admin, not the Helpline
+  role?: Role;
 }
 
 /** Is this account allowed in? Null when yes, otherwise the error the student sees. */
@@ -24,6 +26,9 @@ export const accountProblem = (u: AccountState, now = new Date()): AppError | nu
   const reason = u.statusReason ? ` Reason: ${u.statusReason.replace(/[.!?]+$/, "")}.` : "";
   if (u.status === "DELETED") return new AppError(401, "This account no longer exists.", "ACCOUNT_DELETED");
   if (u.status === "BLOCKED") {
+    if (u.role === "ADMIN") {
+      return new AppError(403, `Your admin account has been blocked.${reason} Please contact the Super Admin to get access back.`, "ACCOUNT_BLOCKED");
+    }
     return new AppError(403, `This account has been blocked.${reason} If you think this is a mistake, write to us from the Helpline.`, "ACCOUNT_BLOCKED");
   }
   if (u.status === "SUSPENDED" && (!u.suspendedUntil || u.suspendedUntil > now)) {
@@ -142,6 +147,7 @@ export const eraseUser = async (userId: string, actorId: string, reason: string)
         googleId: null,
         emailVerified: false,
         dateOfBirth: null,
+        gender: null,
         districtId: null,
         classLevelId: null,
         mediumId: null,
@@ -172,6 +178,7 @@ export const exportUser = async (userId: string) => {
       suspendedUntil: true,
       emailVerified: true,
       dateOfBirth: true,
+      gender: true,
       classLevel: { select: { name: true } },
       district: { select: { name: true } },
       medium: { select: { name: true } },

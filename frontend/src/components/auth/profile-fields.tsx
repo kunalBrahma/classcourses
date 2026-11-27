@@ -1,7 +1,8 @@
 "use client";
 
 import { useId } from "react";
-import { LockIcon, PhoneIcon } from "lucide-react";
+import { CheckIcon, LockIcon, PhoneIcon } from "lucide-react";
+import { GENDER_LABEL, GenderAvatar, type Gender } from "@/components/kit/gender-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { birthYears, MONTHS, ProfileDraft, ProfileOptions, validPhone } from "@/lib/profile";
@@ -34,7 +35,45 @@ function Select({ id, value, onChange, placeholder, children, label, disabled }:
   );
 }
 
-// Class, district, date of birth and (optional) mobile number. Used by the
+const GENDERS: Gender[] = ["MALE", "FEMALE", "OTHER"];
+
+// Three big cards with the avatar each choice gives. Real radio buttons
+// underneath, so arrow keys and screen readers work as usual.
+function GenderPicker({ value, onChange }: { value: Gender | ""; onChange: (g: Gender) => void }) {
+  const id = useId();
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-sm font-semibold">I am</legend>
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        {GENDERS.map((g) => {
+          const checked = value === g;
+          return (
+            <label
+              key={g}
+              className={cn(
+                "card-3d relative flex min-h-28 cursor-pointer select-none flex-col items-center justify-center gap-2 rounded-2xl px-2 py-3 transition",
+                "has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+                checked ? "bg-accent ring-2 ring-primary" : "hover:bg-accent/50"
+              )}
+            >
+              <input type="radio" name={`${id}-gender`} value={g} checked={checked} onChange={() => onChange(g)} className="peer sr-only" />
+              <GenderAvatar gender={g} className={cn("size-14 rounded-xl transition sm:size-16", checked && "motion-safe:scale-105")} />
+              <span className={cn("text-[15px] font-semibold", checked && "text-brand-amber-text")}>{GENDER_LABEL[g]}</span>
+              {checked && (
+                <span className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-primary text-brand-ink" aria-hidden="true">
+                  <CheckIcon className="size-4" strokeWidth={3} />
+                </span>
+              )}
+            </label>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">This picks your avatar. You can change it later.</p>
+    </fieldset>
+  );
+}
+
+// Gender, class, district, date of birth and (optional) mobile number. Used by the
 // sign-up form and "complete your profile". `dobLocked`: the date of birth is
 // already saved and can only be corrected through the Helpline.
 export function ProfileFields({ value, onChange, options, dobLocked = false, showPhone = true }: {
@@ -50,6 +89,7 @@ export function ProfileFields({ value, onChange, options, dobLocked = false, sho
 
   return (
     <>
+      <GenderPicker value={value.gender} onChange={(gender) => set({ gender })} />
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="grid content-start gap-2">
           <Label htmlFor={`${id}-class`} className="text-sm font-semibold">

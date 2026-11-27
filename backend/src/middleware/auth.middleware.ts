@@ -17,7 +17,7 @@ export interface AuthRequest extends Request {
 const checkAccount = async (userId: string, tokenVersion: number) => {
   const account = await prisma.user.findUnique({
     where: { id: userId },
-    select: { status: true, suspendedUntil: true, statusReason: true, tokenVersion: true },
+    select: { status: true, suspendedUntil: true, statusReason: true, tokenVersion: true, role: true },
   });
   if (!account || account.tokenVersion !== tokenVersion) return { status: 401, body: { error: "Invalid or expired token" } };
   const problem = accountProblem(account);

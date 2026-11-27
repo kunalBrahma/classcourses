@@ -17,9 +17,19 @@ export interface Question {
   difficulty: Difficulty | null;
   order: number;
   isPublished: boolean;
+  // Scheduled publishing: hidden from students until this time (ISO); null = no schedule
+  publishAt: string | null;
   // MCQ: may appear in quizzes
   useInQuiz: boolean;
 }
+
+/** Published, but its time hasn't come yet (students can't see it). */
+export const isScheduled = (q: Pick<Question, "isPublished" | "publishAt">, now = Date.now()) =>
+  q.isPublished && q.publishAt !== null && new Date(q.publishAt).getTime() > now;
+
+/** "28 Nov, 9:00 am" in India time. */
+export const whenLabel = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
 export type VideoFormat = "LANDSCAPE" | "SHORT";
 

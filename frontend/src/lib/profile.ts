@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { apiJson, publicJson } from "@/lib/api";
+import type { Gender } from "@/components/kit/gender-avatar";
 
 // The student profile asked at sign-up and in "complete your profile"
 // (client requirements of 6 Nov 2026): class, district and date of birth,
-// mobile number optional, no school. The server checks everything again
+// mobile number optional, no school. Gender (27 Nov 2026) picks the avatar. The server checks everything again
 // (backend/src/services/profile.service.ts).
 
 export interface ProfileOption {
@@ -17,6 +18,7 @@ export interface ProfileOptions {
 }
 
 export interface ProfileDraft {
+  gender: Gender | "";
   classLevelId: string;
   districtId: string;
   day: string;
@@ -25,7 +27,7 @@ export interface ProfileDraft {
   phone: string;
 }
 
-export const EMPTY_DRAFT: ProfileDraft = { classLevelId: "", districtId: "", day: "", month: "", year: "", phone: "" };
+export const EMPTY_DRAFT: ProfileDraft = { gender: "", classLevelId: "", districtId: "", day: "", month: "", year: "", phone: "" };
 
 // Same rule as the backend (auth.validation.ts): spaces, dashes and a
 // +91 / 91 / 0 prefix are fine; what's left must be a 10-digit mobile number.
@@ -49,6 +51,7 @@ export const birthYears = (now = new Date()) => {
 
 // The first problem, in plain words, or null. Phone is optional.
 export const draftProblem = (d: ProfileDraft, { needDob = true } = {}): string | null => {
+  if (!d.gender) return "Please choose male, female or other (it picks your avatar).";
   if (!d.classLevelId) return "Please choose your class.";
   if (!d.districtId) return "Please choose your district.";
   if (needDob) {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ADMIN_PERMISSION_NAMES, AdminPermission } from "../config/adminAccess";
+import { genderSchema } from "./auth.validation";
 
 // Admin → Users actions. Every action that changes an account asks for a
 // written reason (it goes into the activity log; the student sees it for a
@@ -30,6 +31,7 @@ export const adminEditDetailsSchema = z
     classLevelId: z.string().uuid().optional(),
     districtId: z.string().uuid().optional(),
     dateOfBirth: dateOnly.optional(),
+    gender: genderSchema.optional(),
     reason,
   })
   .refine((v) => Object.keys(v).some((k) => k !== "reason"), "Change at least one detail");
@@ -45,6 +47,8 @@ export const addHelperSchema = z.object({
   permissions: permissions.min(1, "Tick at least one section"),
 });
 export const updateHelperSchema = z.object({ permissions: permissions.min(1, "Tick at least one section") });
+// Blocking a team member: the reason is optional (they see it when they try to sign in)
+export const blockHelperSchema = z.object({ reason: z.string().trim().max(500).optional() });
 
 // ---- Parental consent ----
 const relationship = z.enum(["parent", "guardian"]);

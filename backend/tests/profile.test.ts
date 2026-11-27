@@ -7,7 +7,8 @@ import { api, createUserAndLogin } from "./helpers";
 
 // Student profile (client requirements of 6 Nov 2026): class, district and
 // date of birth at sign-up, phone optional, and "complete your profile" for
-// Google sign-ups and older accounts.
+// Google sign-ups and older accounts. Gender (27 Nov 2026) is required the same
+// way: it picks the student's avatar.
 
 let admin: string;
 let classId: string;
@@ -25,7 +26,7 @@ const adminApi = {
 const signUp = (email: string, extra: Record<string, unknown> = {}) =>
   api()
     .post("/api/auth/register")
-    .send({ email, password: "Password123!", name: "Riya", classLevelId: classId, districtId, dateOfBirth: "2013-08-20", ...extra });
+    .send({ email, password: "Password123!", name: "Riya", classLevelId: classId, districtId, dateOfBirth: "2013-08-20", gender: "FEMALE", ...extra });
 
 beforeAll(async () => {
   await seedCatalog();
@@ -71,7 +72,7 @@ describe("default districts", () => {
 });
 
 describe("sign-up", () => {
-  it("needs class, district and date of birth; phone and school are not asked", async () => {
+  it("needs class, district, date of birth and gender; phone and school are not asked", async () => {
     expect((await signUp("a1@test.local", { classLevelId: undefined })).status).toBe(400);
     expect((await signUp("a2@test.local", { districtId: undefined })).status).toBe(400);
     expect((await signUp("a3@test.local", { dateOfBirth: undefined })).status).toBe(400);
@@ -80,11 +81,15 @@ describe("sign-up", () => {
     expect(future.status).toBe(400);
     expect(future.body.error).toMatch(/future/);
     expect((await signUp("a6@test.local", { classLevelId: "00000000-0000-4000-8000-000000000000" })).body.error).toMatch(/class/);
+    expect((await signUp("a8@test.local", { gender: undefined })).status).toBe(400);
+    const badGender = await signUp("a9@test.local", { gender: "BOY" });
+    expect(badGender.status).toBe(400);
+    expect(JSON.stringify(badGender.body)).toMatch(/male, female or other/);
 
     const ok = await signUp("riya@test.local");
     expect(ok.status).toBe(201);
     const saved = await prisma.user.findUniqueOrThrow({ where: { email: "riya@test.local" } });
-    expect(saved).toMatchObject({ classLevelId: classId, districtId, phone: null });
+    expect(saved).toMatchObject({ classLevelId: classId, districtId, phone: null, gender: "FEMALE" });
     expect(saved.dateOfBirth?.toISOString()).toBe("2013-08-20T00:00:00.000Z");
   });
 
@@ -103,6 +108,7 @@ describe("sign-up", () => {
       profileComplete: true,
       missingProfile: [],
       dateOfBirth: "2013-08-20",
+      gender: "FEMALE",
       isMinor: true,
       classLevel: { id: classId, name: "Class 7" },
       district: { id: districtId, name: "Nagaon" },
@@ -115,22 +121,28 @@ describe("complete your profile (Google sign-ups, older accounts)", () => {
   it("lists what's missing, then fills it in", async () => {
     const student = await createUserAndLogin("STUDENT", { dateOfBirth: null });
     const me = async () => (await api().get("/api/auth/me").set("Authorization", student.auth)).body.user;
-    expect(await me()).toMatchObject({ profileComplete: false, missingProfile: ["classLevel", "district", "dateOfBirth"], dateOfBirth: null, isMinor: null });
+    expect(await me()).toMatchObject({ profileComplete: false, missingProfile: ["classLevel", "district", "dateOfBirth", "gender"], dateOfBirth: null, gender: null, isMinor: null });
 
     const patch = (body: object) => api().patch("/api/users/me/profile").set("Authorization", student.auth).send(body);
     // One field at a time is fine
-    expect((await patch({ classLevelId: classId })).body.user).toMatchObject({ profileComplete: false, missingProfile: ["district", "dateOfBirth"] });
+    expect((await patch({ classLevelId: classId })).body.user).toMatchObject({ profileComplete: false, missingProfile: ["district", "dateOfBirth", "gender"] });
     expect((await patch({ districtId: "not-a-uuid" })).status).toBe(400);
     expect((await patch({ dateOfBirth: "2099-01-01" })).status).toBe(400);
+    expect((await patch({ gender: "unknown" })).status).toBe(400);
 
-    const done = await patch({ districtId, dateOfBirth: "2005-01-15", phone: "98765 43210", name: "Bitu" });
+    // Everything but the gender: still incomplete (older accounts pick it once)
+    const almost = await patch({ districtId, dateOfBirth: "2005-01-15", phone: "98765 43210", name: "Bitu" });
+    expect(almost.body.user).toMatchObject({ profileComplete: false, missingProfile: ["gender"] });
+    const done = await patch({ gender: "MALE" });
     expect(done.status).toBe(200);
-    expect(done.body.user).toMatchObject({ profileComplete: true, isMinor: false, dateOfBirth: "2005-01-15", phone: "9876543210", name: "Bitu" });
+    expect(done.body.user).toMatchObject({ profileComplete: true, isMinor: false, dateOfBirth: "2005-01-15", phone: "9876543210", name: "Bitu", gender: "MALE" });
     expect(await me()).toMatchObject({ profileComplete: true });
 
     // Class and district can change later; phone kept unless sent, "" removes it
     expect((await patch({ classLevelId: otherClassId })).body.user).toMatchObject({ classLevel: { id: otherClassId }, phone: "9876543210" });
     expect((await patch({ phone: "" })).body.user.phone).toBeNull();
+    // Gender can change later (it's only the avatar)
+    expect((await patch({ gender: "OTHER" })).body.user).toMatchObject({ gender: "OTHER", profileComplete: true });
 
     // The date of birth decides parental consent: set once, then via the Helpline
     expect((await patch({ dateOfBirth: "2005-01-15" })).status).toBe(200);
@@ -182,7 +194,12 @@ describe("admin: users", () => {
   it("shows class, district, date of birth and age; filters by them and by incomplete profiles", async () => {
     const all = (await adminApi.get("/api/admin/users?role=STUDENT")).body;
     const riya = all.users.find((u: { email: string }) => u.email === "riya@test.local");
-    expect(riya).toMatchObject({ district: { name: "Nagaon" }, classLevel: { name: "Class 7" }, dateOfBirth: "2013-08-20", isMinor: true, profileComplete: true });
+    expect(riya).toMatchObject({ district: { name: "Nagaon" }, classLevel: { name: "Class 7" }, dateOfBirth: "2013-08-20", gender: "FEMALE", isMinor: true, profileComplete: true });
+
+    const byGender = (await adminApi.get("/api/admin/users?role=STUDENT&gender=FEMALE")).body.users;
+    expect(byGender.length).toBeGreaterThan(0);
+    expect(byGender.every((u: { gender: string }) => u.gender === "FEMALE")).toBe(true);
+    expect((await adminApi.get("/api/admin/users?gender=BOY")).status).toBe(400);
 
     const byDistrict = (await adminApi.get(`/api/admin/users?districtId=${districtId}`)).body.users;
     expect(byDistrict.every((u: { district: { id: string } }) => u.district.id === districtId)).toBe(true);

@@ -15,7 +15,7 @@ import { assertEmailNotBlocked, signOutEverywhereTx } from "../services/account.
 // of 6 Nov 2026). Super Admins come only from the server (npm run create-admin),
 // so no helper can ever give themselves or anyone full access.
 
-const teamSelect = { id: true, email: true, name: true, adminLevel: true, adminPermissions: true, createdAt: true } as const;
+const teamSelect = { id: true, email: true, name: true, adminLevel: true, adminPermissions: true, createdAt: true, status: true, statusReason: true, statusChangedAt: true } as const;
 
 export const listTeam = asyncHandler(async (_req: Request, res: Response) => {
   const admins = await prisma.user.findMany({ where: { role: "ADMIN", status: { not: "DELETED" } }, orderBy: [{ adminLevel: "asc" }, { createdAt: "asc" }], select: teamSelect });
@@ -50,7 +50,7 @@ export const addHelper = asyncHandler(async (req: AdminRequest, res: Response) =
 
 const requireHelper = async (id: string, req: AdminRequest) => {
   if (id === req.admin!.id) throw new AppError(400, "You can't change your own admin access");
-  const user = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, adminLevel: true, adminPermissions: true, email: true } });
+  const user = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, adminLevel: true, adminPermissions: true, email: true, status: true } });
   if (!user || user.role !== "ADMIN") throw new AppError(404, "Admin not found");
   if (user.adminLevel === "SUPER") throw new AppError(400, "A Super Admin's access can only be changed from the server");
   return user;
@@ -72,6 +72,30 @@ export const removeHelper = asyncHandler(async (req: AdminRequest, res: Response
   });
   noteActivity(res, { action: "team.remove_helper", targetType: "user", targetId: user.id, summary: `${user.email}: admin access removed`, before: { permissions: user.adminPermissions } });
   res.json({ message: "Admin access removed" });
+});
+
+// Block: the helper keeps their account and sections but can't sign in (they're
+// told to contact the Super Admin) and is signed out everywhere at once.
+// Unblock gives the same access back. Not added to BlockedEmail: that list
+// stops sign-ups, and this person still has their account.
+export const blockHelper = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const user = await requireHelper(req.params.id, req);
+  if (user.status === "BLOCKED") throw new AppError(400, "This team member is already blocked");
+  const reason = (req.body.reason as string | undefined)?.trim() || null;
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { status: "BLOCKED", statusReason: reason, suspendedUntil: null, statusChangedAt: new Date() } });
+    await signOutEverywhereTx(tx, user.id);
+  });
+  noteActivity(res, { action: "team.block_helper", targetType: "user", targetId: user.id, summary: `${user.email}: blocked`, before: { status: user.status }, after: { status: "BLOCKED" } });
+  res.json({ message: "Team member blocked" });
+});
+
+export const unblockHelper = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const user = await requireHelper(req.params.id, req);
+  if (user.status !== "BLOCKED") throw new AppError(400, "This team member isn't blocked");
+  await prisma.user.update({ where: { id: user.id }, data: { status: "ACTIVE", statusReason: null, statusChangedAt: new Date() } });
+  noteActivity(res, { action: "team.unblock_helper", targetType: "user", targetId: user.id, summary: `${user.email}: unblocked`, before: { status: "BLOCKED" }, after: { status: "ACTIVE" } });
+  res.json({ message: "Team member unblocked" });
 });
 
 // ---------------------------------------------------------------------------

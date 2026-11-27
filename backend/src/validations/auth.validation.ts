@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GENDERS } from "../services/profile.service";
 
 // Indian mobile number: accepts spaces, dashes and a +91 / 91 / 0 prefix,
 // and is stored as the plain 10 digits.
@@ -13,8 +14,12 @@ const phoneOrNone = z.union([z.literal("").transform(() => null), z.null(), phon
 export const optionalPhoneSchema = phoneOrNone.optional().transform((v) => v ?? null);
 
 // The student profile (rules in src/services/profile.service.ts): class,
-// district and date of birth ("YYYY-MM-DD"). No school name.
+// district, date of birth ("YYYY-MM-DD") and gender. No school name.
+export const genderSchema = z.enum(GENDERS, {
+  errorMap: () => ({ message: "Please choose male, female or other" }),
+});
 const profileFields = {
+  gender: genderSchema,
   classLevelId: z.string({ required_error: "Please choose your class" }).uuid("Please choose your class"),
   districtId: z.string({ required_error: "Please choose your district" }).uuid("Please choose your district"),
   dateOfBirth: z.string({ required_error: "Please enter your date of birth" }).regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a real date of birth"),
@@ -45,6 +50,7 @@ export const updateProfileSchema = z.object({
   classLevelId: profileFields.classLevelId.optional(),
   districtId: profileFields.districtId.optional(),
   dateOfBirth: profileFields.dateOfBirth.optional(),
+  gender: profileFields.gender.optional(),
 });
 
 export const verifyEmailSchema = z.object({

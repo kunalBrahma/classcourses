@@ -71,7 +71,13 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   word there.
 - **Public visibility:** use `publicSubjectWhere` / `publicChapterWhere` and
   `catalogHref()` from `catalog.service.ts` for any new public query, never
-  re-list the active/published rules.
+  re-list the active/published rules. Questions use `publicQuestionWhere()`
+  (`isQuestionLive()` for a loaded row): **scheduled publishing** (27 Nov 2026,
+  `Question.publishAt`) keeps a published question hidden from the page, the
+  practice check, quizzes and counts until its time; never filter questions on
+  `isPublished` alone. The maintenance sweep (`scheduledRefresh.service.ts`)
+  refreshes the site's cache when a scheduled question or blog post goes live.
+  Admin: "Publish now / Schedule / Draft" in `question-dialog.tsx`.
 - **Search:** public `GET /api/catalog/search?q=` (2–60 chars, max 20 results,
   `searchLimiter`). Prisma `contains` + `mode: "insensitive"`, no raw SQL.
 - Practice check `POST /api/catalog/questions/:id/check` has `checkAnswerLimiter`
@@ -504,7 +510,10 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   - `useAdmin()` (`components/admin/session.tsx`)
   - `PageHeader`
   - `Field` / `SecretInput` (with the show/hide toggle), `SourceBadge`,
-    `TestResult` (`components/admin/settings/`)
+    `TestResult` (`components/admin/settings/`). Field problems go under their
+    field: `Field error=` + the control's `aria-invalid` / `aria-describedby`
+    (`SecretInput invalid describedBy`); map the server's `details` / message to
+    the field too (see Team → "Add a helper admin").
   - `pressable` / `actionButton` / `inputClass` / `formCard`
     (`components/admin/styles.ts`; 40 px controls, because Nova's 32 px
     default is too small for touch)
@@ -598,7 +607,10 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - **Prices:** checkout sends `expectedAmountPaise` (the amount on screen); `createOrder` refuses a
   different amount with 409 `PRICE_CHANGED` and the buy window shows the new price. Never drop that check.
 - **Client data:** `apiJson()` (with auth and token refresh), `publicJson()`
-  (no auth), `logout()` in `src/lib/api.ts`. Login state:
+  (no auth), `logout()` in `src/lib/api.ts`. **Token refresh is single-flight** (one shared
+  promise per tab + a Web Lock across tabs; same in the admin): refresh tokens are single-use,
+  and parallel 401s used to race and sign students out (27 Nov 2026). The backend claims a
+  rotation with `deleteMany` + count, so a lost race is a 401, never a 404. Login state:
   `useSignedIn()` / `useMe()` in `components/site/account-menu.tsx`. Tokens
   fire the `cc-auth` event so every component updates. Every fresh `/me` answer is
   shared with every `useMe()` (`cc-me` event), and `/me` is re-read when the tab comes
@@ -733,7 +745,12 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   check for that before comparing. Admins can't use it. An unverified sign-up with the same email loses its password.
 - **Student profile (6 Nov 2026):** class (`User.classLevelId`), district (`District` table,
   admin Catalog → Districts, never an enum) and date of birth (`User.dateOfBirth`, DATE; set once
-  by the student) are asked at `/register`; phone is optional. Rules only in
+  by the student) are asked at `/register`; phone is optional. **Gender** (27 Nov 2026,
+  `User.gender` MALE|FEMALE|OTHER, required, can be changed later) picks the student's avatar:
+  `GenderAvatar` (`frontend/src/components/kit/gender-avatar.tsx`, copy in
+  `admin/src/components/admin/users/`; keep them in step), shown through `StudentAvatar`
+  (`account-menu.tsx`); initials until picked. It counts in `profileComplete`, so older accounts
+  pick it once at `/welcome`. Rules only in
   `backend/src/services/profile.service.ts`. `/me` has `profileComplete`, `missingProfile`,
   `isMinor`. Google sign-ups and older accounts are sent to `/welcome` by `ProfileGate`
   (root layout) and by `whereAfterSignIn()` after any sign-in. Default districts are added by
@@ -786,7 +803,13 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   SUPER (the Founder; full access; the column default, so every admin from
   before helpers is SUPER) or HELPER (only `adminPermissions`: content,
   quiz_reports, notes_orders, users, support). Super Admins are made only from
-  the server (`create-admin`); Team adds helpers.
+  the server (`create-admin`); Team adds helpers. Team can also **block / unblock**
+  a helper (27 Nov 2026, `POST /api/admin/team/:id/block|unblock`): status BLOCKED,
+  signed out everywhere, sections kept, no `BlockedEmail`; sign-in then answers 403
+  `ACCOUNT_BLOCKED` "Your admin account has been blocked… contact the Super Admin"
+  (`accountProblem()` words it by role) and the sign-in log records `BLOCKED`. The
+  admin's `api()` sends a refused or signed-out session to `/login` with the reason
+  (`SESSION_NOTICE_KEY`).
 - Every route under `/api/admin` (`backend/src/routes/admin.routes.ts`) runs
   `authenticate` + `requireAdmin` + `recordAdminActivity`. `requireAdmin` reads
   role, level and permissions from the DB on each request and checks the route's

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Difficulty, Prisma, Quiz, QuestionSource } from "@prisma/client";
 import prisma from "../config/prisma";
+import { publicQuestionWhere } from "./catalog.service";
 import { AppError } from "../utils/AppError";
 import { requireSetting } from "./settings.service";
 
@@ -104,7 +105,7 @@ export const randomPoolWhere = (
 ): Prisma.QuestionWhereInput => ({
   chapterId: { in: chapterIds },
   kind: "MCQ",
-  isPublished: true,
+  ...publicQuestionWhere(),
   ...(f.sources?.length ? { source: { in: f.sources } } : {}),
   ...(f.difficulties?.length ? { difficulty: { in: f.difficulties } } : {}),
   ...(f.onlyQuizMarked ? { useInQuiz: true } : {}),
@@ -119,7 +120,7 @@ export const autoPool = async (chapterId: string) =>
 export const customPool = async (quiz: QuizWithLinks): Promise<PoolQuestion[]> => {
   if (quiz.pickMode === "FIXED") {
     const ids = quiz.questions.map((q) => q.questionId);
-    const rows = await prisma.question.findMany({ where: { id: { in: ids }, kind: "MCQ", isPublished: true }, select: poolSelect });
+    const rows = await prisma.question.findMany({ where: { id: { in: ids }, kind: "MCQ", ...publicQuestionWhere() }, select: poolSelect });
     const byId = new Map(toPool(rows).map((q) => [q.id, q]));
     return ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
   }

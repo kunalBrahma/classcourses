@@ -155,6 +155,7 @@ export interface FaqItem {
   answerHtml: string;
 }
 
+// Header, footer and sitemap: an API error just hides the FAQ link for a moment.
 export async function getFaq(): Promise<FaqItem[]> {
   "use cache";
   cacheTag("pages");
@@ -166,6 +167,16 @@ export async function getFaq(): Promise<FaqItem[]> {
     cacheLife("seconds");
     return [];
   }
+}
+
+// The /faq page itself: no fallback, because the page calls notFound() for an
+// empty list. An API error throws (error page, not cached) instead of a wrong 404.
+export async function getFaqPage(): Promise<FaqItem[]> {
+  "use cache";
+  cacheTag("pages");
+  cacheLife("minutes");
+  const { items } = await getJson<{ items: FaqItem[] }>("/api/content/faq");
+  return items;
 }
 
 // ---- Catalog (Medium → Class → Subject → Chapter) -------------------------

@@ -21,6 +21,8 @@ export interface QuestionInput {
   explanation?: string | null;
   difficulty?: Difficulty | null;
   isPublished?: boolean;
+  // Scheduled publishing: hidden from students until then (null = no schedule)
+  publishAt?: string | Date | null;
   useInQuiz?: boolean;
 }
 
@@ -58,6 +60,8 @@ export const normalizeQuestion = (
     if (input.answer) errors.push("An MCQ uses options + correct answer, not an answer text");
   }
 
+  if (input.publishAt && Number.isNaN(new Date(input.publishAt).getTime())) errors.push("The publish time isn't a real date");
+
   if (errors.length) return { data: null, errors };
 
   return {
@@ -71,6 +75,7 @@ export const normalizeQuestion = (
       explanation,
       difficulty: input.difficulty ?? null,
       isPublished: input.isPublished ?? true,
+      publishAt: input.publishAt ? new Date(input.publishAt) : null,
       useInQuiz: input.useInQuiz ?? true,
     },
     errors: [],

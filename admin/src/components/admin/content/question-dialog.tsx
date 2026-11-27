@@ -2,7 +2,7 @@
 
 import { FormEvent, useId, useState } from "react";
 import { toast } from "sonner";
-import { Loader2Icon, PlusIcon, XIcon } from "lucide-react";
+import { CalendarClockIcon, EyeOffIcon, Loader2Icon, PlusIcon, SendIcon, XIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { RichTextEditor } from "@/components/admin/editor/rich-text-editor";
 import { pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
-import { Difficulty, LETTERS, Question, QuestionKind, QuestionSource, toText } from "@/lib/content";
+import { Difficulty, isScheduled, LETTERS, Question, QuestionKind, QuestionSource, toText, whenLabel } from "@/lib/content";
+import { fromLocalInput, toLocalInput } from "@/lib/engagement";
 import { cn } from "@/lib/utils";
 
 export interface QuestionDialogTarget {
@@ -31,9 +32,27 @@ interface Form {
   correctIndex: number | null;
   explanation: string;
   difficulty: Difficulty | "NONE";
-  isPublished: boolean;
+  // When students see it: now, at a set time, or not yet (draft)
+  publish: PublishMode;
+  publishAt: string; // datetime-local, used when publish = "SCHEDULE"
   useInQuiz: boolean;
 }
+
+type PublishMode = "NOW" | "SCHEDULE" | "DRAFT";
+
+const PUBLISH_MODES: { value: PublishMode; label: string; hint: string; icon: typeof SendIcon }[] = [
+  { value: "NOW", label: "Publish now", hint: "Students see it at once.", icon: SendIcon },
+  { value: "SCHEDULE", label: "Schedule", hint: "Goes live by itself at the time you pick.", icon: CalendarClockIcon },
+  { value: "DRAFT", label: "Draft", hint: "Hidden from students and from quizzes.", icon: EyeOffIcon },
+];
+
+// Quick picks for the schedule (local time).
+const atNine = (daysAhead: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(9, 0, 0, 0);
+  return toLocalInput(d.toISOString());
+};
 
 const toForm = (t: QuestionDialogTarget): Form => {
   const q = t.question;
@@ -47,7 +66,8 @@ const toForm = (t: QuestionDialogTarget): Form => {
     correctIndex: q?.correctIndex ?? null,
     explanation: q?.explanation ?? "",
     difficulty: q?.difficulty ?? "NONE",
-    isPublished: q?.isPublished ?? true,
+    publish: !q ? "NOW" : !q.isPublished ? "DRAFT" : isScheduled(q) ? "SCHEDULE" : "NOW",
+    publishAt: q && isScheduled(q) ? toLocalInput(q.publishAt) : "",
     useInQuiz: q?.useInQuiz ?? true,
   };
 };
@@ -64,6 +84,10 @@ const problems = (f: Form): string[] => {
     if (opts.some((o) => !o)) out.push("Fill in every option (or remove the empty one).");
     if (new Set(opts.map((o) => o.toLowerCase())).size !== opts.length) out.push("Options must be different from each other.");
     if (f.correctIndex === null || f.correctIndex >= opts.length) out.push("Mark the correct option.");
+  }
+  if (f.publish === "SCHEDULE") {
+    if (!f.publishAt) out.push("Pick the date and time to publish.");
+    else if (new Date(f.publishAt).getTime() <= Date.now()) out.push("Pick a time in the future, or choose “Publish now”.");
   }
   return out;
 };
@@ -86,6 +110,9 @@ export function QuestionDialog({
   const [error, setError] = useState<string | null>(null);
   // Remount the rich editors for each opening so they load the right content.
   const [editorKey, setEditorKey] = useState(0);
+  // The clock is read once per opening (never during render): the earliest
+  // allowed time and the quick picks.
+  const [clock, setClock] = useState({ now: "", tomorrow: "", nextWeek: "" });
 
   const [lastTarget, setLastTarget] = useState<QuestionDialogTarget | null>(null);
   if (target !== lastTarget) {
@@ -95,6 +122,7 @@ export function QuestionDialog({
       setShowProblems(false);
       setError(null);
       setEditorKey((k) => k + 1);
+      setClock({ now: toLocalInput(new Date().toISOString()), tomorrow: atNine(1), nextWeek: atNine(7) });
     }
   }
 
@@ -118,13 +146,20 @@ export function QuestionDialog({
       correctIndex: form.kind === "MCQ" ? form.correctIndex : null,
       explanation: form.explanation || null,
       difficulty: form.difficulty === "NONE" ? null : form.difficulty,
-      isPublished: form.isPublished,
+      isPublished: form.publish !== "DRAFT",
+      publishAt: form.publish === "SCHEDULE" ? fromLocalInput(form.publishAt) : null,
       ...(form.kind === "MCQ" ? { useInQuiz: form.useInQuiz } : {}),
     };
     try {
       if (target.question) await apiJson(`/api/admin/questions/${target.question.id}`, { method: "PATCH", json: body });
       else await apiJson(`/api/admin/chapters/${chapterId}/questions`, { method: "POST", json: body });
-      toast.success(target.question ? "Question saved" : "Question added");
+      toast.success(
+        form.publish === "SCHEDULE"
+          ? `Scheduled for ${whenLabel(fromLocalInput(form.publishAt)!)}`
+          : target.question
+            ? "Question saved"
+            : "Question added"
+      );
       onSaved();
       onClose();
     } catch (err) {
@@ -291,13 +326,74 @@ export function QuestionDialog({
               />
             </div>
 
-            <label htmlFor={`${id}-pub`} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">
-              <span>
-                <span className="block text-sm font-semibold">Published</span>
-                <span className="block text-xs text-muted-foreground">Drafts are hidden from students and from quizzes.</span>
-              </span>
-              <Switch id={`${id}-pub`} checked={form.isPublished} onCheckedChange={(v) => set("isPublished", v)} />
-            </label>
+            <fieldset className="grid gap-3 rounded-xl border bg-muted/40 p-3 sm:p-4">
+              <legend className="px-1 text-sm font-semibold">When do students see it?</legend>
+              <div role="radiogroup" aria-label="When do students see it?" className="grid grid-cols-3 gap-2">
+                {PUBLISH_MODES.map((m) => {
+                  const on = form.publish === m.value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => {
+                        set("publish", m.value);
+                        // Opening the schedule for the first time: suggest tomorrow 9 AM
+                        if (m.value === "SCHEDULE" && !form.publishAt) set("publishAt", clock.tomorrow);
+                      }}
+                      className={cn(
+                        "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border bg-card px-2 py-2 text-center text-sm font-semibold transition",
+                        "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                        on ? "border-primary bg-primary/10 text-brand-amber-text ring-1 ring-primary" : "text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <m.icon className="size-4" aria-hidden="true" />
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">{PUBLISH_MODES.find((m) => m.value === form.publish)?.hint}</p>
+
+              {form.publish === "SCHEDULE" && (
+                <div className="grid gap-2">
+                  <Label htmlFor={`${id}-at`}>Publish on</Label>
+                  <Input
+                    id={`${id}-at`}
+                    type="datetime-local"
+                    className="h-10 text-base sm:text-sm"
+                    value={form.publishAt}
+                    min={clock.now}
+                    onChange={(e) => set("publishAt", e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "Tomorrow, 9 AM", value: clock.tomorrow },
+                      { label: "Next week, 9 AM", value: clock.nextWeek },
+                    ].map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => set("publishAt", p.value)}
+                        className={cn(
+                          "h-8 rounded-full border px-3 text-xs font-medium transition",
+                          form.publishAt === p.value ? "border-primary bg-primary/10 text-brand-amber-text" : "bg-card hover:bg-muted"
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  {form.publishAt && form.publishAt > clock.now && (
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-brand-amber-text">
+                      <CalendarClockIcon className="size-3.5" aria-hidden="true" />
+                      Goes live on {whenLabel(fromLocalInput(form.publishAt)!)} (India time). Until then students can&apos;t see it.
+                    </p>
+                  )}
+                </div>
+              )}
+            </fieldset>
 
             {form.kind === "MCQ" && (
               <label htmlFor={`${id}-quiz`} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">

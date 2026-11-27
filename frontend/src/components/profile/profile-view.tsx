@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRightIcon, BookmarkIcon, GiftIcon, CheckIcon, CoinsIcon, FileTextIcon, HistoryIcon, HourglassIcon, Loader2Icon, LogOutIcon, PlayIcon, ReceiptIcon, TimerIcon, XIcon } from "lucide-react";
+import { UserPenIcon, ArrowRightIcon, BookmarkIcon, GiftIcon, CheckIcon, CoinsIcon, FileTextIcon, HistoryIcon, HourglassIcon, Loader2Icon, LogOutIcon, PlayIcon, ReceiptIcon, TimerIcon, XIcon } from "lucide-react";
 import { Coin3D } from "@/components/kit/coin";
 import { SectionTitle } from "@/components/kit/section-title";
-import { useMe, useRequireSignIn } from "@/components/site/account-menu";
+import { StudentAvatar, useMe, useRequireSignIn } from "@/components/site/account-menu";
 import { ApiError, apiJson, logout } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { Attempt, attemptLabel, chapterHrefOf, isFinished, quizHref } from "@/lib/quiz";
@@ -124,27 +124,34 @@ export function ProfileView() {
   return (
     <div className="grid gap-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex items-center gap-4">
+        <StudentAvatar me={me} className="size-16 rounded-2xl shadow-md sm:size-20" />
         <div>
           <p className="text-sm font-bold uppercase tracking-wider text-brand-amber-text">My profile</p>
           <h1 className="font-heading text-3xl font-extrabold tracking-tight">{me?.name || "Hello!"}</h1>
           {me && <p translate="no" className="notranslate text-muted-foreground">{me.email}</p>}
           {me && (me.classLevel || me.district) && (
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px]">
-              <span className="font-semibold">{[me.classLevel?.name, me.district?.name].filter(Boolean).join(" · ")}</span>
-              <Link href="/welcome?next=/profile" className="inline-flex min-h-11 items-center font-semibold text-brand-amber-text hover:underline">
-                Edit my details
-              </Link>
-            </p>
+            <p className="mt-1 text-[15px] font-semibold">{[me.classLevel?.name, me.district?.name].filter(Boolean).join(" · ")}</p>
           )}
         </div>
+        </div>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+        {/* The main thing to change here, so it gets the amber button */}
+        <Link
+          href="/welcome?next=/profile"
+          className="press-3d inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl px-5 font-bold sm:flex-none"
+        >
+          <UserPenIcon className="size-5" aria-hidden="true" /> Edit profile
+        </Link>
         <button
           type="button"
           // logout() clears the tokens; useRequireSignIn() then opens sign in.
           onClick={() => void logout()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border bg-card px-4 font-semibold text-destructive hover:bg-destructive/10"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border bg-card px-4 font-semibold text-destructive hover:bg-destructive/10 sm:flex-none"
         >
           <LogOutIcon className="size-4" /> Sign out
         </button>
+        </div>
       </header>
 
       <section className="flex flex-wrap items-center gap-4 rounded-3xl bg-[image:var(--header-bg)] p-5 text-brand-ink shadow-[var(--header-shadow)] dark:text-brand-cream">

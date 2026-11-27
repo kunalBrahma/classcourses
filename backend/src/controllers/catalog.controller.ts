@@ -11,6 +11,7 @@ import {
   classSelect,
   classSlugFrom,
   publicChapterWhere,
+  publicQuestionWhere,
   publicSubjectWhere,
   sortChaptersInReadingOrder,
 } from "../services/catalog.service";
@@ -168,7 +169,7 @@ export const getChapter = asyncHandler(async (req: Request, res: Response) => {
   const [ordered, questions, videos, notes] = await Promise.all([
     getPublishedChapters(subject.id),
     prisma.question.findMany({
-      where: { chapterId: chapter.id, isPublished: true },
+      where: { chapterId: chapter.id, ...publicQuestionWhere() },
       orderBy: { order: "asc" },
       // correctIndex and explanation are deliberately NOT selected for MCQs:
       // the quiz reuses these questions. Use POST /questions/:id/check to reveal.
@@ -237,7 +238,7 @@ export const checkAnswer = asyncHandler(async (req: Request, res: Response) => {
     where: {
       id: req.params.id,
       kind: "MCQ",
-      isPublished: true,
+      ...publicQuestionWhere(),
       chapter: {
         isPublished: true,
         subject: { isActive: true, medium: { isActive: true }, classLevel: { isActive: true } },
@@ -422,7 +423,7 @@ export const quizPicker = asyncHandler(async (req: Request, res: Response) => {
 // Site-wide totals for the About page ("920 chapters · 600 MCQs …"): only
 // what students can actually see.
 export const catalogStats = asyncHandler(async (_req: Request, res: Response) => {
-  const visibleQuestion = { isPublished: true, chapter: publicChapterWhere };
+  const visibleQuestion = { ...publicQuestionWhere(), chapter: publicChapterWhere };
   const [classes, subjects, chapters, qa, mcq, videos] = await Promise.all([
     prisma.classLevel.count({ where: { isActive: true, subjects: { some: publicSubjectWhere } } }),
     prisma.subject.count({ where: publicSubjectWhere }),
