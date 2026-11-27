@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { CalendarClockIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, SendIcon, TargetIcon, Trash2Icon } from "lucide-react";
+import { CalendarClockIcon, CodeXmlIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, SendIcon, TargetIcon, Trash2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -153,7 +153,7 @@ export function QuestionSection({
                 <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground" lang="as">
                   {detail}
                 </span>
-                {(!q.isPublished || scheduled || q.difficulty || q.explanation) && (
+                {(!q.isPublished || scheduled || q.difficulty || q.explanation || q.figureHtml) && (
                   <span className="mt-1 flex flex-wrap gap-1">
                     {!q.isPublished && <Badge variant="outline" className="h-4 px-1.5 text-[10px]">Draft</Badge>}
                     {scheduled && (
@@ -163,6 +163,11 @@ export function QuestionSection({
                     )}
                     {q.difficulty && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{DIFFICULTY[q.difficulty]}</Badge>}
                     {q.explanation && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">Explanation</Badge>}
+                    {q.figureHtml && (
+                      <Badge variant="secondary" className="h-4 gap-1 px-1.5 text-[10px]">
+                        <CodeXmlIcon className="size-2.5" /> Figure
+                      </Badge>
+                    )}
                   </span>
                 )}
               </button>

@@ -52,8 +52,25 @@ export const socialSettingsSchema = z.object({
   instagram: optionalUrl,
 });
 
+// WhatsApp support (27 Nov 2026, the owner's request; replaces the earlier
+// "email only" rule): off while the number is empty. Stored as digits with
+// the country code ("919876543210"); a plain 10-digit Indian mobile gets 91.
+export const whatsappNumberSchema = z
+  .union([z.literal(""), z.null(), z.string()])
+  .transform((v) => {
+    if (!v) return null;
+    const digits = v.replace(/[\s()+-]/g, "").replace(/^00/, "");
+    return /^[6-9]\d{9}$/.test(digits) ? `91${digits}` : digits.replace(/^0(?=[6-9]\d{9}$)/, "91");
+  })
+  .refine((v) => v === null || /^[1-9]\d{9,14}$/.test(v), "Enter a WhatsApp number with country code, e.g. +91 98765 43210");
+
 export const contactSettingsSchema = z.object({
   email: z.string().trim().email(),
+  whatsappNumber: whatsappNumberSchema.default(null),
+  // Filled in for the student when WhatsApp opens; they can change it
+  whatsappMessage: z.string().trim().max(300).default("Hello Class Course, I need help with "),
+  // The round WhatsApp button at the bottom corner of every page (when a number is set)
+  whatsappFloating: z.boolean().default(true),
 });
 
 // Who runs the site and the Grievance Officer, shown in the footer, About and the
@@ -262,7 +279,7 @@ const SETTINGS = {
 
   contact: {
     schema: contactSettingsSchema,
-    defaults: () => ({ email: "about.classcourse@gmail.com" }),
+    defaults: () => ({ email: "about.classcourse@gmail.com", whatsappNumber: null, whatsappMessage: "Hello Class Course, I need help with ", whatsappFloating: true }),
     secretFields: [],
     genericAdminEdit: true,
     isPublic: true,

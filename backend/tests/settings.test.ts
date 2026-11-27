@@ -61,6 +61,33 @@ describe("generic settings", () => {
   });
 });
 
+describe("WhatsApp support number (contact setting)", () => {
+  const put = (body: object) => api().put("/api/admin/settings/contact").set("Authorization", auth).send(body);
+  const publicContact = async () => (await api().get("/api/settings/public")).body.settings.contact;
+
+  it("is off until the admin sets a number", async () => {
+    expect(await publicContact()).toMatchObject({ whatsappNumber: null, whatsappFloating: true });
+  });
+
+  it("stores digits with the country code; a 10-digit Indian mobile gets 91", async () => {
+    expect((await put({ whatsappNumber: "98765 43210" })).body.setting.value.whatsappNumber).toBe("919876543210");
+    expect((await put({ whatsappNumber: "+91 98765-43210" })).body.setting.value.whatsappNumber).toBe("919876543210");
+    expect((await put({ whatsappNumber: "09876543210" })).body.setting.value.whatsappNumber).toBe("919876543210");
+    expect((await put({ whatsappNumber: "+44 7700 900123" })).body.setting.value.whatsappNumber).toBe("447700900123");
+    // A partial save of something else keeps the number (and doesn't re-add 91)
+    expect((await put({ whatsappFloating: false })).body.setting.value).toMatchObject({ whatsappNumber: "447700900123", whatsappFloating: false });
+    expect(await publicContact()).toMatchObject({ whatsappNumber: "447700900123", whatsappFloating: false, email: expect.any(String) });
+  });
+
+  it("refuses a wrong number and clears with an empty one", async () => {
+    const bad = await put({ whatsappNumber: "12345" });
+    expect(bad.status).toBe(400);
+    expect(JSON.stringify(bad.body)).toMatch(/country code/);
+    expect((await put({ whatsappNumber: "" })).body.setting.value.whatsappNumber).toBeNull();
+    await api().delete("/api/admin/settings/contact").set("Authorization", auth);
+  });
+});
+
 describe("public settings", () => {
   it("exposes only non-secret groups, without auth", async () => {
     const res = await api().get("/api/settings/public");

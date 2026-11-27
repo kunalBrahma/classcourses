@@ -5,6 +5,7 @@ import { CheckIcon, Loader2Icon, RotateCcwIcon, XIcon } from "lucide-react";
 import { DifficultyBadge } from "@/components/chapter/difficulty-badge";
 import { ApiError, publicJson } from "@/lib/api";
 import type { McqItem } from "@/lib/server-api";
+import { QuestionFigure } from "@/components/chapter/question-figure";
 import { cn } from "@/lib/utils";
 
 const LETTERS = "ABCDEF";
@@ -45,6 +46,7 @@ function Mcq({ item, index }: { item: McqItem; index: number }) {
           <div id={`mcq-${item.id}`} className="rich min-w-0 flex-1 font-semibold" lang="as" dangerouslySetInnerHTML={{ __html: item.question }} />
           <DifficultyBadge value={item.difficulty} />
         </div>
+        {item.figure && <QuestionFigure figure={item.figure} />}
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {item.options.map((option, i) => {

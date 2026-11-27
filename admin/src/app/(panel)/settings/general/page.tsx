@@ -27,12 +27,24 @@ interface SettingRow {
 interface FieldDef {
   name: string;
   label: string;
-  type?: "text" | "url" | "email" | "number" | "switch";
+  type?: "text" | "url" | "email" | "number" | "tel" | "switch";
   placeholder?: string;
   hint?: string;
   // Takes the whole row in a two-column card
   wide?: boolean;
+  // How a stored value is shown in the box (e.g. "919876543210" → "+919876543210")
+  display?: (v: string) => string;
+  // A link under the field, from the current (saved) value
+  preview?: (v: Values) => { href: string; label: string } | null;
 }
+
+// wa.me link for the WhatsApp number as saved (digits with country code).
+const waLink = (v: Values) => {
+  const digits = String(v.whatsappNumber ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  const text = String(v.whatsappMessage ?? "").trim();
+  return { href: `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ""}`, label: "Test it on WhatsApp ↗" };
+};
 
 interface GroupDef {
   key: "site" | "contact" | "operator" | "social" | "consent";
@@ -62,9 +74,33 @@ const GROUPS: GroupDef[] = [
   {
     key: "contact",
     title: "Contact",
-    description: "The support email, shown on the Helpline, in the footer and in the policies. No phone number is ever shown.",
+    description: "Support email and WhatsApp, shown on the Helpline and in the footer. WhatsApp stays hidden while its number is empty.",
     icon: MailIcon,
-    fields: [{ name: "email", label: "Support email", type: "email", placeholder: "about.classcourse@gmail.com" }],
+    fields: [
+      { name: "email", label: "Support email", type: "email", placeholder: "about.classcourse@gmail.com", hint: "Also used in the policies." },
+      {
+        name: "whatsappNumber",
+        label: "WhatsApp support number (optional)",
+        type: "tel",
+        placeholder: "+91 98765 43210",
+        hint: "With country code. A 10-digit Indian mobile gets +91 by itself. Leave empty to hide WhatsApp everywhere.",
+        display: (v) => (/^\d+$/.test(v) ? `+${v}` : v),
+        preview: waLink,
+      },
+      {
+        name: "whatsappMessage",
+        label: "Message typed in for the student",
+        placeholder: "Hello Class Course, I need help with ",
+        hint: "WhatsApp opens with this text; the student can change it before sending.",
+      },
+      {
+        name: "whatsappFloating",
+        label: "Show the round WhatsApp button on every page",
+        type: "switch",
+        wide: true,
+        hint: "Bottom corner of the student site (not during a quiz). Off = WhatsApp only on the Helpline and in the footer.",
+      },
+    ],
   },
   {
     key: "operator",
@@ -110,6 +146,8 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
   const id = useId();
   const confirm = useConfirm();
   const [values, setValues] = useState<Values>(initial.value ?? {});
+  // Previews use what is saved, not what is half-typed
+  const saved = initial.value ?? {};
   const [busy, setBusy] = useState<"save" | "reset" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const Icon = group.icon;
@@ -177,14 +215,28 @@ function GroupCard({ group, initial, onSaved }: { group: GroupDef; initial: Sett
                 id={`${id}-${f.name}`}
                 className={inputClass}
                 type={f.type ?? "text"}
-                inputMode={f.type === "url" ? "url" : f.type === "email" ? "email" : f.type === "number" ? "numeric" : undefined}
+                inputMode={f.type === "url" ? "url" : f.type === "email" ? "email" : f.type === "number" ? "numeric" : f.type === "tel" ? "tel" : undefined}
                 min={f.type === "number" ? 1 : undefined}
                 autoCapitalize={f.type ? "none" : undefined}
                 spellCheck={f.type ? false : undefined}
-                value={typeof values[f.name] === "boolean" ? "" : ((values[f.name] as string | number | null) ?? "")}
+                value={
+                  typeof values[f.name] === "boolean"
+                    ? ""
+                    : f.display && typeof values[f.name] === "string"
+                      ? f.display(values[f.name] as string)
+                      : ((values[f.name] as string | number | null) ?? "")
+                }
                 placeholder={f.placeholder ?? (f.type === "url" ? "https://…" : undefined)}
                 onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
               />
+              {(() => {
+                const link = f.preview?.(saved);
+                return link ? (
+                  <a href={link.href} target="_blank" rel="noopener noreferrer" className="justify-self-start text-xs font-semibold text-brand-amber-text hover:underline">
+                    {link.label}
+                  </a>
+                ) : null;
+              })()}
             </Field>
             )
           )}

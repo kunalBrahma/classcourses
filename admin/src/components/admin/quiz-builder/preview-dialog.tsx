@@ -11,11 +11,14 @@ import { ApiError, apiJson } from "@/lib/api";
 import { LETTERS } from "@/lib/content";
 import { LEVELS, QuizRules } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
+import type { Figure } from "@/lib/figure";
+import { QuestionFigure } from "@/components/admin/content/question-figure";
 
 interface Sample {
   questions: {
     id: string;
     question: string;
+    figure?: Figure | null;
     options: string[];
     correctIndex: number | null;
     source: "TEXTBOOK" | "EXTRA";
@@ -74,6 +77,7 @@ export function PreviewDialog({ open, onOpenChange, body }: { open: boolean; onO
                   <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-secondary text-xs font-bold tabular-nums">{i + 1}</span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <RichView html={q.question} className="font-medium" />
+                    {q.figure && <QuestionFigure figure={q.figure} className="my-0" />}
                     <ul className="grid gap-1 sm:grid-cols-2">
                       {q.options.map((o, oi) => (
                         <li key={oi} className={cn("flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm", oi === q.correctIndex && "border-success/40 bg-success/10")}>

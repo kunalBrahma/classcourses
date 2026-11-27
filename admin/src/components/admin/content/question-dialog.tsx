@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { RichTextEditor } from "@/components/admin/editor/rich-text-editor";
+import { FigureDraft, FigureEditor, figureProblem } from "@/components/admin/content/figure-editor";
 import { pressable } from "@/components/admin/styles";
 import { ApiError, apiJson } from "@/lib/api";
 import { Difficulty, isScheduled, LETTERS, Question, QuestionKind, QuestionSource, toText, whenLabel } from "@/lib/content";
@@ -36,6 +37,7 @@ interface Form {
   publish: PublishMode;
   publishAt: string; // datetime-local, used when publish = "SCHEDULE"
   useInQuiz: boolean;
+  figure: FigureDraft;
 }
 
 type PublishMode = "NOW" | "SCHEDULE" | "DRAFT";
@@ -68,6 +70,7 @@ const toForm = (t: QuestionDialogTarget): Form => {
     difficulty: q?.difficulty ?? "NONE",
     publish: !q ? "NOW" : !q.isPublished ? "DRAFT" : isScheduled(q) ? "SCHEDULE" : "NOW",
     publishAt: q && isScheduled(q) ? toLocalInput(q.publishAt) : "",
+    figure: { html: q?.figureHtml ?? "", height: q?.figureHeight ?? 320, alt: q?.figureAlt ?? "" },
     useInQuiz: q?.useInQuiz ?? true,
   };
 };
@@ -85,6 +88,8 @@ const problems = (f: Form): string[] => {
     if (new Set(opts.map((o) => o.toLowerCase())).size !== opts.length) out.push("Options must be different from each other.");
     if (f.correctIndex === null || f.correctIndex >= opts.length) out.push("Mark the correct option.");
   }
+  const figure = figureProblem(f.figure);
+  if (figure) out.push(figure);
   if (f.publish === "SCHEDULE") {
     if (!f.publishAt) out.push("Pick the date and time to publish.");
     else if (new Date(f.publishAt).getTime() <= Date.now()) out.push("Pick a time in the future, or choose “Publish now”.");
@@ -148,6 +153,10 @@ export function QuestionDialog({
       difficulty: form.difficulty === "NONE" ? null : form.difficulty,
       isPublished: form.publish !== "DRAFT",
       publishAt: form.publish === "SCHEDULE" ? fromLocalInput(form.publishAt) : null,
+      // Empty = no figure (the server clears all three)
+      figureHtml: form.figure.html.trim() || null,
+      figureHeight: form.figure.html.trim() ? form.figure.height : null,
+      figureAlt: form.figure.alt.trim() || null,
       ...(form.kind === "MCQ" ? { useInQuiz: form.useInQuiz } : {}),
     };
     try {
@@ -237,6 +246,8 @@ export function QuestionDialog({
                 placeholder="Type the question…"
               />
             </div>
+
+            <FigureEditor key={`f-${editorKey}`} value={form.figure} onChange={(figure) => set("figure", figure)} showErrors={showProblems} />
 
             {form.kind === "QA" ? (
               <div className="grid gap-2">

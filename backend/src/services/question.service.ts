@@ -11,6 +11,13 @@ import { hasVisibleContent, sanitizeOptional, sanitizeRichText } from "../utils/
 
 export const MAX_OPTIONS = 6;
 
+// Interactive figures: stored as pasted (NOT sanitised: it never enters the
+// page, only a sandboxed iframe's srcdoc with a no-network CSP).
+export const FIGURE_MAX_BYTES = 100 * 1024;
+export const FIGURE_MIN_HEIGHT = 120;
+export const FIGURE_MAX_HEIGHT = 720;
+export const FIGURE_DEFAULT_HEIGHT = 320;
+
 export interface QuestionInput {
   kind: QuestionKind;
   source: QuestionSource;
@@ -23,6 +30,10 @@ export interface QuestionInput {
   isPublished?: boolean;
   // Scheduled publishing: hidden from students until then (null = no schedule)
   publishAt?: string | Date | null;
+  // Interactive figure: raw HTML shown only in a sandboxed iframe (see FIGURE_*)
+  figureHtml?: string | null;
+  figureHeight?: number | null;
+  figureAlt?: string | null;
   useInQuiz?: boolean;
 }
 
@@ -62,6 +73,16 @@ export const normalizeQuestion = (
 
   if (input.publishAt && Number.isNaN(new Date(input.publishAt).getTime())) errors.push("The publish time isn't a real date");
 
+  const figureHtml = input.figureHtml?.trim() ? input.figureHtml.trim() : null;
+  if (figureHtml) {
+    if (Buffer.byteLength(figureHtml, "utf8") > FIGURE_MAX_BYTES) errors.push(`The figure is too big (max ${FIGURE_MAX_BYTES / 1024} KB)`);
+    if (!/<[a-z!][\s\S]*>/i.test(figureHtml)) errors.push("The figure must be HTML (e.g. a <div>, <svg> or <canvas>)");
+  }
+  const figureHeight = figureHtml
+    ? Math.min(FIGURE_MAX_HEIGHT, Math.max(FIGURE_MIN_HEIGHT, Math.round(input.figureHeight ?? FIGURE_DEFAULT_HEIGHT)))
+    : null;
+  const figureAlt = figureHtml && input.figureAlt?.trim() ? input.figureAlt.trim().slice(0, 300) : null;
+
   if (errors.length) return { data: null, errors };
 
   return {
@@ -76,6 +97,9 @@ export const normalizeQuestion = (
       difficulty: input.difficulty ?? null,
       isPublished: input.isPublished ?? true,
       publishAt: input.publishAt ? new Date(input.publishAt) : null,
+      figureHtml,
+      figureHeight,
+      figureAlt,
       useInQuiz: input.useInQuiz ?? true,
     },
     errors: [],

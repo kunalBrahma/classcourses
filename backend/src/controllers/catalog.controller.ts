@@ -173,7 +173,7 @@ export const getChapter = asyncHandler(async (req: Request, res: Response) => {
       orderBy: { order: "asc" },
       // correctIndex and explanation are deliberately NOT selected for MCQs:
       // the quiz reuses these questions. Use POST /questions/:id/check to reveal.
-      select: { id: true, kind: true, source: true, question: true, answer: true, options: true, difficulty: true },
+      select: { id: true, kind: true, source: true, question: true, answer: true, options: true, difficulty: true, figureHtml: true, figureHeight: true, figureAlt: true },
     }),
     prisma.video.findMany({
       where: { chapterId: chapter.id },
@@ -214,7 +214,13 @@ type PublicQuestion = {
   answer: string | null;
   options: unknown;
   difficulty: string | null;
+  figureHtml: string | null;
+  figureHeight: number | null;
+  figureAlt: string | null;
 };
+
+// The same shape the quiz sends: shown only in a sandboxed iframe on the site.
+const figureOf = (q: PublicQuestion) => (q.figureHtml ? { html: q.figureHtml, height: q.figureHeight, alt: q.figureAlt } : null);
 
 // { textbook: { qa, mcq }, extra: { qa, mcq } } — the sections of the chapter page.
 const groupContent = (questions: PublicQuestion[]) => {
@@ -223,8 +229,8 @@ const groupContent = (questions: PublicQuestion[]) => {
       .filter((q) => q.source === source && q.kind === kind)
       .map((q) =>
         kind === "QA"
-          ? { id: q.id, question: q.question, answer: q.answer, difficulty: q.difficulty }
-          : { id: q.id, question: q.question, options: q.options as string[], difficulty: q.difficulty }
+          ? { id: q.id, question: q.question, answer: q.answer, difficulty: q.difficulty, figure: figureOf(q) }
+          : { id: q.id, question: q.question, options: q.options as string[], difficulty: q.difficulty, figure: figureOf(q) }
       );
   return {
     textbook: { qa: pick("TEXTBOOK", "QA"), mcq: pick("TEXTBOOK", "MCQ") },

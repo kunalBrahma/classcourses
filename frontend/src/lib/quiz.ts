@@ -1,6 +1,7 @@
 import { API_URL, apiJson } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { catalogHref, chapterName } from "@/lib/catalog";
+import type { Figure } from "@/lib/figure";
 
 // Shapes from the student quiz API (backend/src/services/quiz.service.ts
 // toAttemptView). The server owns every rule: timer, scoring, coins.
@@ -12,6 +13,8 @@ export interface OpenQuestion {
   /** Position only: no question id is sent mid-quiz. */
   index: number;
   question: string;
+  // Interactive HTML figure (sandboxed iframe), if the question has one
+  figure?: Figure | null;
   options: string[];
   deadline: string;
   remainingMs: number;
@@ -20,6 +23,7 @@ export interface OpenQuestion {
 export interface ReviewItem {
   index: number;
   question: string | null;
+  figure?: Figure | null;
   options: string[];
   chosenIndex: number | null;
   correctIndex: number | null;

@@ -89,6 +89,16 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
   store admin HTML without it. Images must be absolute http(s) URLs (uploads
   go to R2's public bucket through `POST /api/admin/uploads/images`, which
   signs the exact type and size).
+- **Interactive figures** (27 Nov 2026): `Question.figureHtml` / `figureHeight` /
+  `figureAlt` hold a whole HTML/CSS/JS file pasted by the admin (≤ 100 KB, rules in
+  `normalizeQuestion()`). It is **raw and unsanitised by design**: never put it through
+  `sanitizeHtml` and never render it with `dangerouslySetInnerHTML`. It is shown only by
+  `QuestionFigure` (`frontend/src/components/chapter/question-figure.tsx`, admin copy in
+  `components/admin/content/`): `<iframe srcdoc sandbox="allow-scripts">` (never add
+  `allow-same-origin`: the site's sign-in tokens are in localStorage) with the document from
+  `buildFigureDoc()` (`src/lib/figure.ts` in both apps, identical), whose no-network CSP
+  comes first. The API sends it as `figure: { html, height, alt }` on the chapter page, the
+  open quiz question, the review and the quiz preview.
 - **Validation rules** live in `normalizeQuestion()`
   (`src/services/question.service.ts`). The admin form and the bulk importer
   (`questionImport.service.ts`) both use it, so never duplicate those rules.
@@ -291,7 +301,12 @@ question-answers, MCQ quizzes, premium PDF notes and videos.
 - A premium note unlocks **only after server-side Razorpay verification**
   (signature check plus webhook). PDFs are served through short-lived signed
   URLs, never a public link.
-- Never show a phone number or WhatsApp number. Contact is email only (Helpline form + support email).
+- Contact is the Helpline form + support email, plus **WhatsApp when the admin sets a number**
+  (owner's request, 27 Nov 2026; replaces the earlier "email only" rule). The `contact` setting
+  has `whatsappNumber` (digits with country code, null = WhatsApp hidden everywhere),
+  `whatsappMessage` and `whatsappFloating`; links via `whatsappHref()` (`frontend/src/lib/whatsapp.ts`).
+  Shown as the floating `WhatsAppButton` (root layout; hidden on quizzes via `data-no-language`,
+  z-40 under dialogs), in the footer and on the Helpline. Never show a phone number to call.
   The operator line, **address** and Grievance Officer ARE shown (client, 6 Nov 2026): footer, About,
   Helpline and policies, all from the `operator` setting (`{{operator.*}}` tokens). The designation is
   "Founder, Class Course", never "CEO".

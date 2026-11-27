@@ -282,7 +282,7 @@ export const previewQuiz = asyncHandler(async (req: Request, res: Response) => {
   const { questionIds, optionOrders } = drawQuestions(quiz, pool, rules.count);
   const rows = await prisma.question.findMany({
     where: { id: { in: questionIds } },
-    select: { id: true, question: true, options: true, correctIndex: true, source: true, difficulty: true, chapter: { select: { number: true, title: true, subject: { select: { name: true } } } } },
+    select: { id: true, question: true, options: true, correctIndex: true, source: true, difficulty: true, figureHtml: true, figureHeight: true, figureAlt: true, chapter: { select: { number: true, title: true, subject: { select: { name: true } } } } },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
   const questions = questionIds.map((id, i) => {
@@ -292,6 +292,7 @@ export const previewQuiz = asyncHandler(async (req: Request, res: Response) => {
     return {
       id,
       question: q.question,
+      figure: q.figureHtml ? { html: q.figureHtml, height: q.figureHeight, alt: q.figureAlt } : null,
       options: order ? order.map((o) => options[o]) : options,
       correctIndex: q.correctIndex === null ? null : order ? order.indexOf(q.correctIndex) : q.correctIndex,
       source: q.source,

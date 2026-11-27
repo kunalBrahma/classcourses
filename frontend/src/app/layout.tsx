@@ -4,6 +4,7 @@ import { Bricolage_Grotesque, Geist, Geist_Mono, Noto_Sans_Bengali } from "next/
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
+import { WhatsAppButton } from "@/components/site/whatsapp-button";
 import { LanguageLoader } from "@/components/site/language-loader";
 import { ProfileGate } from "@/components/auth/profile-gate";
 import { ConsentBanner } from "@/components/consent/consent-banner";
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {children}
           </main>
           <SiteFooter />
+          <WhatsAppButton />
           <LanguageLoader />
           {/* Signed-in students with missing details → /welcome */}
           <Suspense fallback={null}>

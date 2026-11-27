@@ -19,6 +19,10 @@ export interface Question {
   isPublished: boolean;
   // Scheduled publishing: hidden from students until this time (ISO); null = no schedule
   publishAt: string | null;
+  // Interactive figure: raw HTML shown only in a sandboxed iframe (lib/figure.ts)
+  figureHtml: string | null;
+  figureHeight: number | null;
+  figureAlt: string | null;
   // MCQ: may appear in quizzes
   useInQuiz: boolean;
 }

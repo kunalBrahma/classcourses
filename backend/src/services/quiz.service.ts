@@ -139,7 +139,7 @@ const markExpired = async (attempt: QuizAttempt) => {
 const openQuestionView = async (attempt: QuizAttempt) => {
   if (!attempt.questionDeadline || !UNFINISHED.includes(attempt.status)) return null;
   const id = questionIdsOf(attempt)[attempt.currentIndex];
-  const question = await prisma.question.findUnique({ where: { id }, select: { question: true, options: true } });
+  const question = await prisma.question.findUnique({ where: { id }, select: { question: true, options: true, figureHtml: true, figureHeight: true, figureAlt: true } });
   if (!question) return null;
   const options = question.options as string[];
   const order = optionOrderOf(attempt, attempt.currentIndex);
@@ -147,6 +147,8 @@ const openQuestionView = async (attempt: QuizAttempt) => {
     // Position only — no question id, so it can't be looked up elsewhere mid-quiz.
     index: attempt.currentIndex,
     question: question.question,
+    // Interactive figure (sandboxed on the site); reveals nothing about the answer
+    figure: question.figureHtml ? { html: question.figureHtml, height: question.figureHeight, alt: question.figureAlt } : null,
     options: order ? order.map((i) => options[i]) : options,
     deadline: attempt.questionDeadline.toISOString(),
     remainingMs: Math.max(0, attempt.questionDeadline.getTime() - Date.now()),
@@ -159,7 +161,7 @@ const reviewOf = async (attempt: QuizAttempt) => {
   const ids = questionIdsOf(attempt);
   const rows = await prisma.question.findMany({
     where: { id: { in: ids } },
-    select: { id: true, question: true, options: true, correctIndex: true, explanation: true },
+    select: { id: true, question: true, options: true, correctIndex: true, explanation: true, figureHtml: true, figureHeight: true, figureAlt: true },
   });
   const byId = new Map(rows.map((q) => [q.id, q]));
   const answers = new Map(answersOf(attempt).map((a) => [a.index, a]));
@@ -173,6 +175,7 @@ const reviewOf = async (attempt: QuizAttempt) => {
     return {
       index,
       question: q?.question ?? null,
+      figure: q?.figureHtml ? { html: q.figureHtml, height: q.figureHeight, alt: q.figureAlt } : null,
       options: order ? order.map((i) => options[i]) : options,
       chosenIndex: toDisplay(a?.optionIndex),
       correctIndex: toDisplay(q?.correctIndex),

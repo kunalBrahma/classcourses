@@ -1,5 +1,6 @@
 import { DifficultyBadge } from "@/components/chapter/difficulty-badge";
 import type { QaItem } from "@/lib/server-api";
+import { QuestionFigure } from "@/components/chapter/question-figure";
 
 // Question-answers: question, then the answer in a tinted box. The HTML was
 // sanitised by the backend on save (the XSS boundary), so it renders as-is.
@@ -15,6 +16,7 @@ export function QaList({ items }: { items: QaItem[] }) {
             <div className="rich min-w-0 flex-1 font-semibold" lang="as" dangerouslySetInnerHTML={{ __html: q.question }} />
             <DifficultyBadge value={q.difficulty} />
           </div>
+          {q.figure && <QuestionFigure figure={q.figure} />}
           <div className="mt-3 rounded-xl border-l-4 border-brand-amber bg-secondary/70 px-4 py-3">
             <p className="mb-1 text-xs font-bold uppercase tracking-wider text-brand-amber-text">Answer</p>
             <div className="rich" lang="as" dangerouslySetInnerHTML={{ __html: q.answer }} />

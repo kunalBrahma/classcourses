@@ -439,6 +439,14 @@ model Question {
   difficulty   Difficulty?
   order        Int            @default(0)
   isPublished  Boolean        @default(true)
+  // Interactive figure (27 Nov 2026): a whole HTML/CSS/JS file pasted by the
+  // admin, shown under the question ONLY inside a sandboxed iframe with no
+  // network (frontend/src/lib/figure.ts). Never sanitised, never put in the page.
+  figureHtml   String?
+  // Box height in px (120–720); null = 320
+  figureHeight Int?
+  // Short description for screen readers
+  figureAlt    String?
   // Scheduled publishing (27 Nov 2026): a published question stays hidden until
   // this moment. Null = live as soon as it is published. Rule: publicQuestionWhere().
   publishAt    DateTime?

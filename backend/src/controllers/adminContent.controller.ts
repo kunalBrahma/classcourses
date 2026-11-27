@@ -97,6 +97,9 @@ export const updateQuestion = asyncHandler(async (req: Request, res: Response) =
     difficulty: body.difficulty !== undefined ? body.difficulty : existing.difficulty,
     isPublished: body.isPublished ?? existing.isPublished,
     publishAt: body.publishAt !== undefined ? body.publishAt : existing.publishAt,
+    figureHtml: body.figureHtml !== undefined ? body.figureHtml : existing.figureHtml,
+    figureHeight: body.figureHeight !== undefined ? body.figureHeight : existing.figureHeight,
+    figureAlt: body.figureAlt !== undefined ? body.figureAlt : existing.figureAlt,
     useInQuiz: body.useInQuiz ?? existing.useInQuiz,
   };
 

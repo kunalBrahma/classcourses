@@ -20,6 +20,10 @@ export const createQuestionSchema = z.object({
   explanation: richText.nullable().optional(),
   difficulty: difficulty.optional(),
   isPublished: z.boolean().optional(),
+  // Interactive figure (raw HTML; size rule in question.service.ts); null/"" removes it
+  figureHtml: z.string().max(120_000, "The figure is too big (max 100 KB)").nullable().optional(),
+  figureHeight: z.number().int().nullable().optional(),
+  figureAlt: z.string().max(300).nullable().optional(),
   // Scheduled publishing: ISO time; null clears the schedule
   publishAt: z.string().datetime({ offset: true }).nullable().optional(),
   // MCQ: may appear in quizzes

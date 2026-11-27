@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { whatsappHref, whatsappLabel } from "@/lib/whatsapp";
+import { WhatsAppIcon } from "@/components/site/whatsapp-icon";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -308,7 +310,7 @@ export function OperatorCard({ operator, className }: { operator: OperatorDetail
 }
 
 // ---------------------------------------------------------------------------
-// Helpline (the contact form; email only: never a phone number or WhatsApp)
+// Helpline (the contact form, the support email, and WhatsApp when the admin set a number)
 // ---------------------------------------------------------------------------
 
 async function ContactPage({ page }: { page: SitePage | null }) {
@@ -356,6 +358,20 @@ async function ContactPage({ page }: { page: SitePage | null }) {
               </span>
             </span>
           </a>
+
+          {whatsappHref(contact) && (
+            <a href={whatsappHref(contact)!} target="_blank" rel="noopener noreferrer" className="card-3d lift flex items-center gap-4 rounded-2xl p-5">
+              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-[#25d366] text-white" aria-hidden="true">
+                <WhatsAppIcon className="size-7" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm text-muted-foreground">Or chat with us on WhatsApp</span>
+                <span translate="no" className="notranslate block font-heading text-base font-bold text-brand-amber-text">
+                  {whatsappLabel(contact)}
+                </span>
+              </span>
+            </a>
+          )}
 
           <OperatorCard operator={operator} />
 

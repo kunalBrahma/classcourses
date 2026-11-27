@@ -1,4 +1,5 @@
 import "server-only";
+import type { Figure } from "@/lib/figure";
 import { cacheLife, cacheTag } from "next/cache";
 
 // Server-side reads of public backend data, cached with Cache Components.
@@ -40,7 +41,8 @@ export interface SocialLinks {
 
 export interface PublicSettings {
   site: { name: string; frontendUrl: string };
-  contact: { email: string };
+  // WhatsApp (27 Nov 2026): number = digits with country code, null = hidden
+  contact: { email: string; whatsappNumber?: string | null; whatsappMessage?: string; whatsappFloating?: boolean };
   social: SocialLinks;
   quiz: { questionsPerQuiz: number; secondsPerQuestion: number; passMark: number; dailyLimit: number };
   // validityDays: coins expire this many days after they're earned (client: 90)
@@ -63,7 +65,7 @@ export interface OperatorDetails {
 
 const FALLBACK_SETTINGS: PublicSettings = {
   site: { name: "Class Course", frontendUrl: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100" },
-  contact: { email: "about.classcourse@gmail.com" },
+  contact: { email: "about.classcourse@gmail.com", whatsappNumber: null },
   social: { youtube: null, facebook: null, instagram: null, twitter: null, linkedin: null },
   quiz: { questionsPerQuiz: 10, secondsPerQuestion: 10, passMark: 7, dailyLimit: 10 },
   coins: { perPass: 10, coinValuePaise: 10, maxDiscountPercent: 50, awardRule: "firstPassPerChapter", validityDays: 90 },
@@ -263,6 +265,8 @@ export interface QaItem {
   question: string;
   answer: string;
   difficulty: Difficulty;
+  // Interactive HTML figure: only ever shown through <QuestionFigure> (sandboxed)
+  figure?: Figure | null;
 }
 
 /** No correct answer here: practice checks via POST /api/catalog/questions/:id/check. */
@@ -271,6 +275,7 @@ export interface McqItem {
   question: string;
   options: string[];
   difficulty: Difficulty;
+  figure?: Figure | null;
 }
 
 export interface ChapterContent {

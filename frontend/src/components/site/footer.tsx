@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { whatsappHref, whatsappLabel } from "@/lib/whatsapp";
+import { WhatsAppIcon } from "@/components/site/whatsapp-icon";
 import { MailIcon, MapPinIcon, ShieldCheckIcon } from "lucide-react";
 import { getCurrentYear, getFaq, getPublishedPages, getSiteSettings } from "@/lib/server-api";
 import { siteLinks } from "@/lib/site-links";
@@ -33,6 +35,11 @@ export async function SiteFooter() {
         <a href={`mailto:${contact.email}`} className="mt-1 inline-flex min-h-11 items-center gap-2 break-all text-[15px] text-footer-muted hover:text-white hover:underline">
           <MailIcon className="size-4 shrink-0" aria-hidden="true" /> {contact.email}
         </a>
+        {whatsappHref(contact) && (
+          <a href={whatsappHref(contact)!} target="_blank" rel="noopener noreferrer" translate="no" className="notranslate inline-flex min-h-11 items-center gap-2 text-[15px] text-footer-muted hover:text-white hover:underline">
+            <WhatsAppIcon className="size-4 shrink-0 text-[#25d366]" /> WhatsApp {whatsappLabel(contact)}
+          </a>
+        )}
         <address className="mt-4 grid gap-1.5 border-t border-white/10 pt-4 text-sm not-italic leading-relaxed text-footer-muted">
           <p className="font-semibold text-footer-fg">{operator.operatorLine}</p>
           <p className="flex items-start gap-2">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, ClockIcon, Loader2Icon, PauseIcon, PlayIcon, RotateCwIcon, TimerIcon, TrophyIcon, XIcon } from "lucide-react";
 import { Coin3D } from "@/components/kit/coin";
+import { QuestionFigure } from "@/components/chapter/question-figure";
 import { announceCoinsChanged, useRequireSignIn } from "@/components/site/account-menu";
 import { ApiError, apiJson } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -343,6 +344,8 @@ function QuestionView({ live, total, fullMs, disabled, onAnswer }: {
         Question {question.index + 1} of {total}. {seconds} seconds left.
       </p>
       <div className="rich mt-4 text-left font-heading text-xl font-bold sm:text-2xl" lang="as" dangerouslySetInnerHTML={{ __html: question.question }} />
+      {/* Not lazy: the clock is running, so the figure must show at once (srcdoc needs no network) */}
+      {question.figure && <QuestionFigure figure={question.figure} lazy={false} />}
       <div className="mt-5 grid gap-3">
         {question.options.map((option, i) => (
           <button
@@ -542,7 +545,10 @@ function Review({ items }: { items: ReviewItem[] }) {
               <div className="min-w-0 flex-1">
                 <p className="sr-only">{r.correct ? "Correct." : "Wrong."}</p>
                 {r.question ? (
-                  <div className="rich font-semibold" lang="as" dangerouslySetInnerHTML={{ __html: r.question }} />
+                  <>
+                    <div className="rich font-semibold" lang="as" dangerouslySetInnerHTML={{ __html: r.question }} />
+                    {r.figure && <QuestionFigure figure={r.figure} />}
+                  </>
                 ) : (
                   <p className="text-muted-foreground">This question was removed.</p>
                 )}

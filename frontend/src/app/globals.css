@@ -429,3 +429,7 @@ body {
 body:has([data-no-language]) [data-language-button] {
   display: none;
 }
+/* Same for the floating WhatsApp button: no leaving a quiz mid-question. */
+body:has([data-no-language]) [data-whatsapp-button] {
+  display: none;
+}
