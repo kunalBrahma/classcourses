@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useDeferredValue, useId, useRef, useState } from "react";
-import { ChevronDownIcon, CodeXmlIcon, ShieldCheckIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { ChevronDownIcon, CodeXmlIcon, RotateCwIcon, ShieldCheckIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,8 @@ export function FigureEditor({ value, onChange, showErrors }: { value: FigureDra
   // Open when the question already has a figure
   const [open, setOpen] = useState(Boolean(value.html.trim()));
   const [fileError, setFileError] = useState<string | null>(null);
+  // "Reload preview": a fresh box runs the figure again from the start
+  const [previewRun, setPreviewRun] = useState(0);
   // The preview follows typing without restarting the animation on every key
   const previewHtml = useDeferredValue(value.html);
   const set = (patch: Partial<FigureDraft>) => onChange({ ...value, ...patch });
@@ -171,8 +173,13 @@ export function FigureEditor({ value, onChange, showErrors }: { value: FigureDra
               </div>
 
               <div className="grid gap-2">
-                <span className="text-sm font-medium">Preview</span>
-                <QuestionFigure figure={{ html: previewHtml, height: value.height, alt: value.alt }} className="my-0" />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Preview</span>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => setPreviewRun((n) => n + 1)}>
+                    <RotateCwIcon /> Reload preview
+                  </Button>
+                </div>
+                <QuestionFigure key={previewRun} figure={{ html: previewHtml, height: value.height, alt: value.alt }} lazy={false} className="my-0" />
                 <p className="text-xs text-muted-foreground">Exactly what students see, in the same sealed box. On phones it&apos;s at most 70% of the screen tall.</p>
               </div>
 

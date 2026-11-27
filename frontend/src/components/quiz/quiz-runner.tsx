@@ -169,10 +169,16 @@ export function QuizRunner({ coinRule, coinValidityDays }: { coinRule: CoinRule;
         <Progress attempt={attempt} />
         <FeedbackView feedback={feedback} />
         {errorLine}
-        <button type="button" onClick={done ? () => setFeedback(null) : next} disabled={busy} className="press-3d mt-6 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-lg font-bold">
-          {busy ? <Loader2Icon className="size-5 animate-spin" /> : done ? <TrophyIcon className="size-5" /> : <PlayIcon className="size-5 fill-current" />}
-          {done ? "See your result" : "Next question"}
-        </button>
+        <AutoNext
+          // A fresh countdown for every answer
+          key={`${feedback.question.index}-${feedback.result.attempt.currentIndex}`}
+          seconds={readingSeconds(feedback)}
+          onGo={done ? () => setFeedback(null) : next}
+          busy={busy}
+          paused={Boolean(error)}
+          label={done ? "See your result" : "Next question"}
+          icon={done ? <TrophyIcon className="size-5" /> : <PlayIcon className="size-5 fill-current" />}
+        />
       </Panel>
     );
   }
@@ -389,6 +395,89 @@ function Countdown({ remaining, fullMs, seconds }: { remaining: number; fullMs: 
         />
       </svg>
       <span className={cn("col-start-1 row-start-1 font-heading text-2xl font-extrabold tabular-nums", urgent ? "text-destructive" : "text-foreground")}>{seconds}</span>
+    </div>
+  );
+}
+
+// How long the answer stays on screen before moving on: a quick look when it
+// was right, longer to see the right answer, more to read an explanation.
+const readingSeconds = ({ result, chosen }: Feedback) => {
+  const shown = result.correct !== null;
+  const timeUp = result.timedOut || chosen === null;
+  let s = shown && result.correct && !timeUp ? 2.5 : 4;
+  if (shown && result.explanation) s += 3;
+  return s;
+};
+
+// "Next question" that presses itself after `seconds` (the bar fills as it
+// waits). A tap goes on at once; "Wait, let me read" stops it. It never moves on
+// while the page is in the background: the next question's clock would start
+// unseen, so the countdown starts again when the student comes back.
+function AutoNext({ seconds, onGo, busy, paused, label, icon }: { seconds: number; onGo: () => void; busy: boolean; paused: boolean; label: string; icon: React.ReactNode }) {
+  const [held, setHeld] = useState(false);
+  // Bumped when the countdown restarts (back from the background), to restart the bar
+  const [round, setRound] = useState(0);
+  const go = useRef(onGo);
+  useEffect(() => {
+    go.current = onGo;
+  }, [onGo]);
+
+  const waiting = !held && !busy && !paused;
+  useEffect(() => {
+    if (!waiting) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (!document.hidden) timer = setTimeout(() => go.current(), seconds * 1000);
+    };
+    const onVisibility = () => {
+      if (document.hidden) clearTimeout(timer);
+      else {
+        setRound((r) => r + 1);
+        arm();
+      }
+    };
+    arm();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [waiting, seconds]);
+
+  return (
+    <div className="mt-6">
+      <button
+        type="button"
+        onClick={() => go.current()}
+        disabled={busy}
+        className="press-3d relative inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl text-lg font-bold"
+      >
+        {waiting && (
+          <span
+            key={round}
+            aria-hidden="true"
+            className="absolute inset-y-0 left-0 bg-white/30 motion-reduce:hidden"
+            style={{ animation: `cc-auto-next ${seconds}s linear forwards` }}
+          />
+        )}
+        <span className="relative inline-flex items-center gap-2">
+          {busy ? <Loader2Icon className="size-5 animate-spin" /> : icon}
+          {label}
+        </span>
+      </button>
+      <p className="mt-2 min-h-11 text-center text-sm text-muted-foreground" aria-live="polite">
+        {waiting ? (
+          <>
+            Moving on in a moment ·{" "}
+            <button type="button" onClick={() => setHeld(true)} className="inline-flex min-h-11 items-center font-semibold text-brand-amber-text hover:underline">
+              Wait, let me read
+            </button>
+          </>
+        ) : held ? (
+          "Take your time. Tap the button when you're ready."
+        ) : null}
+      </p>
     </div>
   );
 }

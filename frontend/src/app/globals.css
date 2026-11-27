@@ -433,3 +433,9 @@ body:has([data-no-language]) [data-language-button] {
 body:has([data-no-language]) [data-whatsapp-button] {
   display: none;
 }
+
+/* Quiz: the "Next question" button fills while it waits to move on by itself */
+@keyframes cc-auto-next {
+  from { width: 0%; }
+  to { width: 100%; }
+}
