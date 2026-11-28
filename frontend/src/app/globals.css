@@ -439,3 +439,9 @@ body:has([data-no-language]) [data-whatsapp-button] {
   from { width: 0%; }
   to { width: 100%; }
 }
+
+/* With the floating WhatsApp button, the footer ends with room for it, so the
+   button never covers the copyright line or the last links. */
+body:has([data-whatsapp-button]) footer {
+  padding-bottom: 5.5rem;
+}

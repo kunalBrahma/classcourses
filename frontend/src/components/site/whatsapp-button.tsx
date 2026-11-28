@@ -20,9 +20,9 @@ export async function WhatsAppButton() {
       translate="no"
       aria-label="Chat with us on WhatsApp (opens WhatsApp)"
       title="Chat with us on WhatsApp"
-      className="notranslate group fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 grid size-14 place-items-center rounded-full bg-[#25d366] text-white shadow-[0_6px_16px_rgb(0_0_0/0.28),inset_0_-3px_0_rgb(0_0_0/0.12)] transition hover:scale-105 hover:bg-[#1fbe5a] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#25d366]/40 active:scale-95 motion-reduce:transition-none sm:bottom-6 sm:right-6"
+      className="notranslate group fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-3 z-40 grid size-12 place-items-center sm:size-14 rounded-full bg-[#25d366] text-white shadow-[0_6px_16px_rgb(0_0_0/0.28),inset_0_-3px_0_rgb(0_0_0/0.12)] transition hover:scale-105 hover:bg-[#1fbe5a] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#25d366]/40 active:scale-95 motion-reduce:transition-none sm:bottom-6 sm:right-6"
     >
-      <WhatsAppIcon className="size-8" />
+      <WhatsAppIcon className="size-7 sm:size-8" />
     </a>
   );
 }
